@@ -205,45 +205,45 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
 
 
 # ─────────────────────────────────────────────
-# RDS Proxy
+# RDS Proxy (toggle.sh로 별도 관리 — 주석 해제 후 import)
 # ─────────────────────────────────────────────
-resource "aws_db_proxy" "main" {
-  name                   = "aws-rds-proxy-01"
-  debug_logging          = false
-  engine_family          = "POSTGRESQL"
-  idle_client_timeout    = 1800
-  require_tls            = true
-  role_arn               = aws_iam_role.rds_proxy.arn
-  vpc_security_group_ids = [aws_security_group.proxy.id]
-  vpc_subnet_ids         = var.db_subnet_ids
-
-  auth {
-    auth_scheme = "SECRETS"
-    iam_auth    = "DISABLED"
-    secret_arn  = "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-hospital-user"
-  }
-
-  auth {
-    auth_scheme = "SECRETS"
-    iam_auth    = "DISABLED"
-    secret_arn  = "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-api-user"
-  }
-
-  tags = merge(local.common_tags, { Name = "aws-rds-proxy-01" })
-}
-
-resource "aws_db_proxy_default_target_group" "main" {
-  db_proxy_name = aws_db_proxy.main.name
-
-  connection_pool_config {
-    connection_borrow_timeout    = 120
-    max_connections_percent      = 100
-    max_idle_connections_percent = 50
-  }
-}
-
-resource "aws_db_proxy_target" "main" {
-  db_cluster_identifier = aws_rds_cluster.main.id
-  db_proxy_name         = aws_db_proxy.main.name
-  target_group_name     = aws_db_proxy_default_target_group.main.name
-}
+# resource "aws_db_proxy" "main" {
+#   name                   = "aws-rds-proxy-01"
+#   debug_logging          = false
+#   engine_family          = "POSTGRESQL"
+#   idle_client_timeout    = 1800
+#   require_tls            = true
+#   role_arn               = aws_iam_role.rds_proxy.arn
+#   vpc_security_group_ids = [aws_security_group.proxy.id]
+#   vpc_subnet_ids         = var.db_subnet_ids
+#
+#   auth {
+#     auth_scheme = "SECRETS"
+#     iam_auth    = "DISABLED"
+#     secret_arn  = "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-hospital-user"
+#   }
+#
+#   auth {
+#     auth_scheme = "SECRETS"
+#     iam_auth    = "DISABLED"
+#     secret_arn  = "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-api-user"
+#   }
+#
+#   tags = merge(local.common_tags, { Name = "aws-rds-proxy-01" })
+# }
+#
+# resource "aws_db_proxy_default_target_group" "main" {
+#   db_proxy_name = aws_db_proxy.main.name
+#
+#   connection_pool_config {
+#     connection_borrow_timeout    = 120
+#     max_connections_percent      = 100
+#     max_idle_connections_percent = 50
+#   }
+# }
+#
+# resource "aws_db_proxy_target" "main" {
+#   db_cluster_identifier = aws_rds_cluster.main.id
+#   db_proxy_name         = aws_db_proxy.main.name
+#   target_group_name     = aws_db_proxy_default_target_group.main.name
+# }

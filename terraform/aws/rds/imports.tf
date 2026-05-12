@@ -51,7 +51,7 @@ import {
 }
 
 # ── RDS Proxy ─────────────────────────────────────────────────
-import {
-  to = aws_db_proxy.main
-  id = "aws-rds-proxy-01"
-}
+# import {
+#   to = aws_db_proxy.main
+#   id = "aws-rds-proxy-01"
+# }
