@@ -57,7 +57,7 @@ variable "db_instance_class" {
 variable "db_engine_version" {
   description = "Aurora PostgreSQL 엔진 버전"
   type        = string
-  default     = "17.4"   # ap-south-2 지원 버전 확인 후 수정
+  default     = "17.9"
 }
 
 variable "backup_retention_days" {

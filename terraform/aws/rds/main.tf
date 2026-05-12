@@ -12,7 +12,7 @@ data "aws_vpc" "main" {
 # ─────────────────────────────────────────────
 resource "aws_security_group" "proxy" {
   name        = "aws-proxy-sg"
-  description = "RDS Proxy - App/VPN inbound 5432"
+  description = "rds proxy sg"
   vpc_id      = var.vpc_id
 
   dynamic "ingress" {
@@ -50,7 +50,7 @@ resource "aws_security_group" "proxy" {
 # ─────────────────────────────────────────────
 resource "aws_security_group" "rds" {
   name        = "aws-rds-sg"
-  description = "Aurora cluster - Proxy/VPN inbound 5432"
+  description = "rds sg"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -93,69 +93,28 @@ resource "aws_db_subnet_group" "main" {
 
 
 # ─────────────────────────────────────────────
-# Aurora 클러스터 파라미터 그룹
-# ─────────────────────────────────────────────
-resource "aws_rds_cluster_parameter_group" "main" {
-  name        = "aws-pg-aurora17-cluster-01"
-  family      = "aurora-postgresql17"
-  description = "Hospital Aurora PostgreSQL 17 cluster parameter group"
-
-  parameter {
-    name  = "log_connections"
-    value = "1"
-  }
-
-  parameter {
-    name  = "log_disconnections"
-    value = "1"
-  }
-
-  parameter {
-    name  = "log_min_duration_statement"
-    value = "1000"  # 1초 이상 쿼리 로깅
-  }
-
-  tags = merge(local.common_tags, { Name = "aws-pg-aurora17-cluster-01" })
-}
-
-resource "aws_db_parameter_group" "main" {
-  name        = "aws-pg-aurora17-instance-01"
-  family      = "aurora-postgresql17"
-  description = "Hospital Aurora PostgreSQL 17 instance parameter group"
-
-  tags = merge(local.common_tags, { Name = "aws-pg-aurora17-instance-01" })
-}
-
-
-# ─────────────────────────────────────────────
 # Aurora 클러스터
 # ─────────────────────────────────────────────
 resource "aws_rds_cluster" "main" {
   cluster_identifier              = "aws-aurora-01"
   engine                          = "aurora-postgresql"
   engine_version                  = var.db_engine_version
-  database_name                   = var.db_name
   master_username                 = var.db_master_username
   master_password                 = var.db_master_password
 
   db_subnet_group_name            = aws_db_subnet_group.main.name
   vpc_security_group_ids          = [aws_security_group.rds.id]
-  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.main.name
 
-  # 백업 / 복구
   backup_retention_period         = var.backup_retention_days
-  preferred_backup_window         = "17:00-18:00"     # UTC (한국 02:00-03:00)
-  preferred_maintenance_window    = "sun:18:00-sun:19:00"
+  preferred_backup_window         = "07:33-08:03"
+  preferred_maintenance_window    = "tue:13:25-tue:13:55"
 
-  # 보안
-  storage_encrypted               = true
-  deletion_protection             = true
+  storage_encrypted               = false
+  deletion_protection             = false
 
-  # 로그 exports → CloudWatch
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
-  skip_final_snapshot             = false
-  final_snapshot_identifier       = "aws-aurora-01-final-snapshot"
+  skip_final_snapshot             = true
 
   tags = merge(local.common_tags, { Name = "aws-aurora-01" })
 }
@@ -165,45 +124,20 @@ resource "aws_rds_cluster" "main" {
 # Writer 인스턴스
 # ─────────────────────────────────────────────
 resource "aws_rds_cluster_instance" "writer" {
-  identifier              = "aws-aurora-01-instance-1"
+  identifier              = "aws-aurora-01-instance-1-ap-south-2a"
   cluster_identifier      = aws_rds_cluster.main.id
   instance_class          = var.db_instance_class
   engine                  = aws_rds_cluster.main.engine
   engine_version          = aws_rds_cluster.main.engine_version
 
-  db_parameter_group_name = aws_db_parameter_group.main.name
   db_subnet_group_name    = aws_db_subnet_group.main.name
 
   availability_zone       = "${var.aws_region}a"
-  promotion_tier          = 0   # Writer 우선순위
+  promotion_tier          = 0
 
-  monitoring_interval     = 60
-  monitoring_role_arn     = aws_iam_role.enhanced_monitoring.arn
+  monitoring_interval     = 0
 
   tags = merge(local.common_tags, { Name = "aws-aurora-01-writer", Role = "writer" })
-}
-
-
-# ─────────────────────────────────────────────
-# Reader 인스턴스
-# ─────────────────────────────────────────────
-resource "aws_rds_cluster_instance" "reader" {
-  identifier              = "aws-aurora-01-reader"
-  cluster_identifier      = aws_rds_cluster.main.id
-  instance_class          = var.db_instance_class
-  engine                  = aws_rds_cluster.main.engine
-  engine_version          = aws_rds_cluster.main.engine_version
-
-  db_parameter_group_name = aws_db_parameter_group.main.name
-  db_subnet_group_name    = aws_db_subnet_group.main.name
-
-  availability_zone       = "${var.aws_region}b"
-  promotion_tier          = 1   # Failover 우선순위
-
-  monitoring_interval     = 60
-  monitoring_role_arn     = aws_iam_role.enhanced_monitoring.arn
-
-  tags = merge(local.common_tags, { Name = "aws-aurora-01-reader", Role = "reader" })
 }
 
 

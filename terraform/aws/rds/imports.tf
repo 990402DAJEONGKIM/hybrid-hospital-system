@@ -33,16 +33,9 @@ import {
 }
 
 # ── Writer 인스턴스 ───────────────────────────────────────────
-# 콘솔 자동 생성 이름: aws-aurora-01-instance-1
 import {
   to = aws_rds_cluster_instance.writer
-  id = "aws-aurora-01-instance-1"
-}
-
-# ── Reader 인스턴스 ───────────────────────────────────────────
-import {
-  to = aws_rds_cluster_instance.reader
-  id = "aws-aurora-01-reader"
+  id = "aws-aurora-01-instance-1-ap-south-2a"
 }
 
 # ── IAM Role — Enhanced Monitoring ───────────────────────────
@@ -58,12 +51,7 @@ import {
 }
 
 # ── RDS Proxy ─────────────────────────────────────────────────
-# 현재 삭제 상태 — hospital-rds-toggle.sh start 실행 후 주석 해제
-# import {
-#   to = aws_db_proxy.main
-#   id = "aws-rds-proxy-01"
-# }
-
-# ── 파라미터 그룹 ─────────────────────────────────────────────
-# 콘솔에서 기본값 사용 — Terraform이 새로 생성하는 방식으로 관리
-# (기존 기본 파라미터 그룹은 import 대상 아님)
+import {
+  to = aws_db_proxy.main
+  id = "aws-rds-proxy-01"
+}
