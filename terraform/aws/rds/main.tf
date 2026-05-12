@@ -100,7 +100,7 @@ resource "aws_rds_cluster" "main" {
   engine                          = "aurora-postgresql"
   engine_version                  = var.db_engine_version
   master_username                 = var.db_master_username
-  master_password                 = var.db_master_password
+  manage_master_user_password     = true
 
   db_subnet_group_name            = aws_db_subnet_group.main.name
   vpc_security_group_ids          = [aws_security_group.rds.id]
