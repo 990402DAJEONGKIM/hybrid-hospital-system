@@ -52,7 +52,7 @@ resource "aws_iam_instance_profile" "wazuh_profile" {
 
 resource "aws_key_pair" "aws-wazuh-key" {
   key_name   = "aws-wazuh-key"
-  public_key = file(pathexpand("~/.ssh/id_rsa.pub"))
+  public_key = var.ssh_public_key
 
   tags = {
     Name  = "aws-wazuh-key"
