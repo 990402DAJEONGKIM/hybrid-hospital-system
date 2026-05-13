@@ -295,6 +295,7 @@ resource "aws_security_group" "aws_bastion_sg" {
 
 # 5. 베스천 EC2 인스턴스 생성
 resource "aws_instance" "aws_bastion_01" {
+  count                = var.bastion_count # 이 부분이 bash 스크립트와 연동됨, 0이면 생성 안 함, 1이면 생성
   ami                  = "ami-0603dd3984985653f" 
   instance_type        = "t3.micro"
   iam_instance_profile = aws_iam_instance_profile.aws_bastion_profile.name
