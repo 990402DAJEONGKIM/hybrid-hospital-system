@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   // 예약 관리 관련 요소
+  const navHome = document.getElementById('nav-home');
+  const mobileNavHome = document.getElementById('mobile-nav-home');
+  const navHospitalIntro = document.getElementById('nav-hospital-intro');
+  const mobileNavHospitalIntro = document.getElementById('mobile-nav-hospital-intro');
   const manageAppointmentsBtn = document.getElementById('nav-manage-appointments');
   const manageAppointmentsModal = document.getElementById('manageAppointmentsModal');
   const myAppointmentList = document.getElementById('myAppointmentList');
@@ -76,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const saveProfileBtn = document.getElementById('saveProfileBtn');
 
   const patientManagementSection = document.getElementById('patient-management-section');
+  const hospitalIntroSection = document.getElementById('hospital-intro-section');
   const patientTableBody = document.getElementById('patientTableBody');
   const backToCalendarBtn = document.getElementById('backToCalendarBtn');
   const patientSearchInput = document.getElementById('patientSearchInput');
@@ -429,20 +434,23 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   // 섹션 전환 통합 관리 함수
   const showSection = (sectionId) => {
+    // 모든 섹션 숨기기
+    appointmentSection.classList.add('hidden');
+    patientManagementSection.classList.add('hidden');
+    profileEditSection.classList.add('hidden');
+    if (hospitalIntroSection) hospitalIntroSection.classList.add('hidden');
+
     if (sectionId === 'patient-management') {
-      appointmentSection.classList.add('hidden');
-      profileEditSection.classList.add('hidden');
       isMedicalStaffView = false;
       patientManagementSection.classList.remove('hidden');
       renderPatientList();
     } else if (sectionId === 'profile-edit') {
-      appointmentSection.classList.add('hidden');
-      patientManagementSection.classList.add('hidden');
       profileEditSection.classList.remove('hidden');
       renderUserProfile();
+    } else if (sectionId === 'hospital-intro') {
+      hospitalIntroSection.classList.remove('hidden');
     } else {
-      patientManagementSection.classList.add('hidden');
-      profileEditSection.classList.add('hidden');
+      isMedicalStaffView = false;
       appointmentSection.classList.remove('hidden');
       renderCalendar();
     }
@@ -596,6 +604,28 @@ document.addEventListener('DOMContentLoaded', () => {
       openNewAppModal(todayString); // 오늘 날짜로 신규 예약 모달 열기
     });
   }
+
+  // [홈] 메뉴 클릭 시 메인 예약 섹션으로 전환
+  const handleHomeClick = (e) => {
+    e.preventDefault();
+    showSection('calendar');
+    if (mobileMenu.classList.contains('sass-active')) {
+      toggleMenu();
+    }
+  };
+  if (navHome) navHome.addEventListener('click', handleHomeClick);
+  if (mobileNavHome) mobileNavHome.addEventListener('click', handleHomeClick);
+
+  // [병원소개] 메뉴 클릭 시 소개 섹션으로 전환
+  const handleIntroClick = (e) => {
+    e.preventDefault();
+    showSection('hospital-intro');
+    if (mobileMenu.classList.contains('sass-active')) {
+      toggleMenu();
+    }
+  };
+  if (navHospitalIntro) navHospitalIntro.addEventListener('click', handleIntroClick);
+  if (mobileNavHospitalIntro) mobileNavHospitalIntro.addEventListener('click', handleIntroClick);
 
   // [환자] > [개인정보 수정] 메뉴 클릭 시 섹션 전환
   if (navEditProfile) {

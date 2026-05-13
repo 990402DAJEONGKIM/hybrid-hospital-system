@@ -29,7 +29,7 @@
 
                 <nav class="hidden md:block">
                     <ul class="flex items-center space-x-4">
-                        <li><a href="#" class="sass-nav-link">홈</a></li>
+                        <li><a href="#" id="nav-home" class="sass-nav-link">홈</a></li>
                         <li class="sass-dropdown">
                             <a href="#" class="sass-nav-link">진료과 <i class="fas fa-chevron-down text-xs"></i></a>
                             <div class="sass-dropdown-content">
@@ -53,7 +53,7 @@
                                 <a href="#" id="nav-edit-profile" class="sass-dropdown-link">개인정보 수정</a>
                             </div>
                         </li>
-                        <li><a href="#" class="sass-nav-link">병원 소개</a></li>                        
+                        <li><a href="#" id="nav-hospital-intro" class="sass-nav-link">병원 소개</a></li>                        
                         <li id="userWelcomeItem" class="hidden flex items-center"><span id="userWelcome" class="text-sm font-medium text-gray-700 mr-2"></span></li>
                         <li><button id="loginBtn" class="bg-blue-600 text-white px-4 py-2 rounded-full font-bold hover:bg-blue-700 transition-colors hidden">로그인</button></li>
                         <li><button id="logoutBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold hover:bg-gray-300 transition-colors hidden">로그아웃</button></li>
@@ -74,11 +74,11 @@
             <button id="sassMobileMenuClose" class="text-2xl">&times;</button>
         </div>
         <nav class="flex flex-col space-y-4 mt-8">
-            <a href="#" class="text-lg font-medium">홈</a>
+            <a href="#" id="mobile-nav-home" class="text-lg font-medium">홈</a>
             <a href="#" class="text-lg font-medium">진료과</a> <!-- 모바일 메뉴 진료과 링크는 드롭다운이 아니므로 일반 링크로 유지 -->
             <a href="#" class="text-lg font-medium">의료진</a>
             <a href="#" class="text-lg font-medium">환자</a>
-            <a href="#" class="text-lg font-medium">병원 소개</a>
+            <a href="#" id="mobile-nav-hospital-intro" class="text-lg font-medium">병원 소개</a>
             <button id="mobileAppointmentBtn" class="sass-appointment-btn w-full justify-center">예약하기</button>
         </nav>
     </div>
@@ -172,6 +172,46 @@
                 
                 <div class="pt-4">
                     <button id="saveProfileBtn" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">수정사항 저장</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 병원 소개 섹션 -->
+        <section id="hospital-intro-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
+            <div class="mb-8 text-center">
+                <h2 class="text-3xl font-bold text-blue-900 mb-4">병원 소개</h2>
+                <p class="text-xl text-gray-700 font-medium">김이박 종합병원입니다.</p>
+            </div>
+            
+            <div class="max-w-4xl mx-auto w-full">
+                <h3 class="text-xl font-bold text-blue-800 mb-4"><i class="fas fa-history mr-2"></i>병원 연혁</h3>
+                <div class="overflow-x-auto border border-gray-100 rounded-xl shadow-sm">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 w-1/4">연도</th>
+                                <th class="px-6 py-3">주요 연혁</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr class="bg-white hover:bg-gray-50">
+                                <td class="px-6 py-4 font-bold text-gray-900">2020년</td>
+                                <td class="px-6 py-4">김이박 종합병원 개원</td>
+                            </tr>
+                            <tr class="bg-white hover:bg-gray-50">
+                                <td class="px-6 py-4 font-bold text-gray-900">2021년</td>
+                                <td class="px-6 py-4">보건복지부 지정 의료기관 획득</td>
+                            </tr>
+                            <tr class="bg-white hover:bg-gray-50">
+                                <td class="px-6 py-4 font-bold text-gray-900">2022년</td>
+                                <td class="px-6 py-4">최첨단 MRI 및 CT 장비 도입</td>
+                            </tr>
+                            <tr class="bg-white hover:bg-gray-50">
+                                <td class="px-6 py-4 font-bold text-gray-900">2024년</td>
+                                <td class="px-6 py-4">지역 거점 응급의료센터 선정</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </section>
