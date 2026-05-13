@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인 - 김이박 종합병원</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-blue-900 mb-2">김이박 종합병원</h1>
+            <p class="text-gray-500">서비스 이용을 위해 로그인해주세요.</p>
+        </div>
+        
+        <form id="loginForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">아이디</label>
+                <input type="text" id="loginId" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                <input type="password" id="loginPw" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">로그인</button>
+        </form>
+
+        <div class="mt-6 text-center text-sm text-gray-600">
+            계정이 없으신가요? 
+            <a href="signup.html" class="text-blue-600 font-bold hover:underline">회원가입</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = document.getElementById('loginId').value;
+            const pw = document.getElementById('loginPw').value;
+
+            const users = JSON.parse(localStorage.getItem('hospital_users') || '[]');
+            const user = users.find(u => u.id === id && u.pw === pw);
+
+            if (user) {
+                localStorage.setItem('hospital_logged_in_user', JSON.stringify(user));
+                window.location.href = 'index.html';
+            } else {
+                alert('아이디 또는 비밀번호가 일치하지 않습니다.');
+            }
+        });
+    </script>
+</body>
+</html>

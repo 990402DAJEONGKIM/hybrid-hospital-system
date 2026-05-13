@@ -1,0 +1,16 @@
+# 실행 권한 부여 (파일이 실행될 수 있게 허용함)
+
+Bash
+chmod +x hospital-rds-toggle.sh
+현재 상태 확인 (작동 여부 테스트)
+
+Bash
+./hospital-rds-toggle.sh status
+RDS 시작 또는 중지
+
+Bash
+./hospital-rds-toggle.sh start   # 시작할 때
+./hospital-rds-toggle.sh stop    # 끌 때
+
+
+# aws cli 로그인
