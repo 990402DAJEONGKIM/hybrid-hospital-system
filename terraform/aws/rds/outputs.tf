@@ -42,3 +42,14 @@ output "start_command" {
   description = "클러스터 시작 명령어"
   value       = "aws rds start-db-cluster --db-cluster-identifier ${aws_rds_cluster.main.id} --region ${var.aws_region}"
 }
+
+# bastion host 용 (by 김다정 2026.05.13)
+# =========================================================================================
+output "aws_bastion_01" {
+  value = aws_instance.aws_bastion_01.id
+}
+
+output "aws_rds_endpoint" {
+  value = data.aws_rds_cluster.aws_aurora_01.endpoint
+}
+# =========================================================================================

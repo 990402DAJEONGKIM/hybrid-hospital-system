@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>회원가입 - 김이박 종합병원</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-start p-4 sm:p-8">
+    <div class="bg-white p-5 sm:p-6 rounded-2xl shadow-xl w-full max-w-md my-auto">
+        <div class="text-center mb-4 sm:mb-5">
+            <h1 class="text-2xl sm:text-3xl font-bold text-blue-900 mb-1">회원가입</h1>
+            <p class="text-xs text-gray-500">병원 시스템 이용을 위한 정보를 입력해주세요.</p>
+        </div>
+        
+        <form id="signupForm" class="space-y-2.5">
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">성함</label>
+                <input type="text" id="userName" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">아이디</label>
+                <input type="text" id="userId" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">비밀번호</label>
+                <input type="password" id="userPw" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">주민등록번호</label>
+                <input type="text" id="userRrn" placeholder="예: 900101-1234567" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">생년월일</label>
+                    <input type="date" id="userBirth" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">성별</label>
+                    <select id="userGender" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <option value="">선택</option>
+                        <option value="1">남성 (2000년 이전 출생)</option>
+                        <option value="2">여성 (2000년 이전 출생)</option>
+                        <option value="3">남성 (2000년 이후 출생)</option>
+                        <option value="4">여성 (2000년 이후 출생)</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">연락처</label>
+                <input type="tel" id="userContact" placeholder="예: 010-1234-5678" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            </div>
+            
+            <div class="mt-2">
+                <label class="block text-xs font-medium text-gray-700 mb-1">개인정보 수집 및 이용 동의</label>
+                <div class="w-full h-16 p-2 text-[10px] text-gray-600 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto mb-2 leading-tight">
+                    [개인정보 수집 및 이용 안내]<br>
+                    1. 수집 항목: 성함, 아이디, 비밀번호<br>
+                    2. 이용 목적: 회원 식별 및 병원 서비스(예약, 조회 등) 제공<br>
+                    3. 보유 및 이용 기간: 회원 탈퇴 시까지<br>
+                    * 귀하는 동의를 거부할 권리가 있으나, 거부 시 서비스 이용이 제한됩니다.
+                </div>
+                <label class="flex items-center text-xs text-gray-700 cursor-pointer">
+                    <input type="checkbox" id="privacyConsent" class="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    위의 내용에 동의합니다. (필수)
+                </label>
+            </div>
+
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors mt-2">가입하기</button>
+        </form>
+
+        <div class="mt-6 text-center text-sm text-gray-600">
+            이미 계정이 있으신가요? 
+            <a href="login.html" class="text-blue-600 font-bold hover:underline">로그인</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('signupForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('userName').value;
+            const id = document.getElementById('userId').value;
+            const pw = document.getElementById('userPw').value;
+            const rrn = document.getElementById('userRrn').value;
+            const birth = document.getElementById('userBirth').value;
+            const gender = document.getElementById('userGender').value;
+            const contact = document.getElementById('userContact').value;
+            const consent = document.getElementById('privacyConsent').checked;
+
+            if (!consent) {
+                alert('개인정보 수집 및 이용에 동의해 주세요.');
+                return;
+            }
+
+            const users = JSON.parse(localStorage.getItem('hospital_users') || '[]');
+            
+            if (users.some(u => u.id === id)) {
+                alert('이미 존재하는 아이디입니다.');
+                return;
+            }
+
+            users.push({ name, id, pw, rrn, birth, gender, contact });
+            localStorage.setItem('hospital_users', JSON.stringify(users));
+            
+            alert('회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.');
+            window.location.href = 'login.html';
+        });
+    </script>
+</body>
+</html>
