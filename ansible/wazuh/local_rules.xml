@@ -1,0 +1,78 @@
+```xml
+<group name="local,sudo,after_hours,fim">
+
+  <!-- ───────────────────────────────────── -->
+  <!-- sudo 사용 탐지 -->
+  <!-- ───────────────────────────────────── -->
+
+  <rule id="100001" level="6">
+    <if_sid>5402</if_sid>
+    <description>sudo 명령어 실행 탐지 - 사용자: $(user)</description>
+    <group>sudo_usage,privilege_escalation</group>
+  </rule>
+
+  <!-- 새벽 sudo 사용 -->
+  <rule id="100002" level="8">
+    <if_sid>100001</if_sid>
+    <time>00:00 - 06:00</time>
+    <description>업무 시간 외 sudo 사용 탐지</description>
+    <group>after_hours,sudo_usage</group>
+  </rule>
+
+  <!-- root 권한 상승 -->
+  <rule id="100003" level="10">
+    <if_sid>5402</if_sid>
+    <match>to=root</match>
+    <description>root 권한 전환 탐지</description>
+    <group>sudo_usage,root_access,privilege_escalation</group>
+  </rule>
+
+  <!-- ───────────────────────────────────── -->
+  <!-- 파일 권한 변경 -->
+  <!-- ───────────────────────────────────── -->
+
+  <rule id="100004" level="8">
+    <if_group>syscheck</if_group>
+    <field name="changed_attributes">permission</field>
+    <description>파일 권한 변경 탐지 - $(file)</description>
+    <group>fim,permission_change</group>
+  </rule>
+
+  <!-- ───────────────────────────────────── -->
+  <!-- 중요 시스템 파일 변조 -->
+  <!-- ───────────────────────────────────── -->
+
+  <rule id="100005" level="12">
+    <if_group>syscheck</if_group>
+    <field name="file">/etc/passwd</field>
+    <description>중요 파일 변조 탐지 - /etc/passwd</description>
+    <group>fim,critical_file</group>
+  </rule>
+
+  <rule id="100006" level="12">
+    <if_group>syscheck</if_group>
+    <field name="file">/etc/shadow</field>
+    <description>중요 파일 변조 탐지 - /etc/shadow</description>
+    <group>fim,critical_file</group>
+  </rule>
+
+  <rule id="100007" level="12">
+    <if_group>syscheck</if_group>
+    <field name="file">/etc/sudoers</field>
+    <description>sudoers 파일 변경 탐지 - 권한 상승 공격 의심</description>
+    <group>fim,privilege_escalation</group>
+  </rule>
+
+  <!-- ───────────────────────────────────── -->
+  <!-- SSH 설정 변경 -->
+  <!-- ───────────────────────────────────── -->
+
+  <rule id="100008" level="10">
+    <if_group>syscheck</if_group>
+    <field name="file">/etc/ssh/sshd_config</field>
+    <description>SSH 설정 변경 탐지</description>
+    <group>fim,ssh</group>
+  </rule>
+
+</group>
+```

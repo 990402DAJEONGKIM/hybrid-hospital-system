@@ -80,16 +80,19 @@ resource "aws_instance" "aws-wazuh-01" {
 }
 
 # hosts.ini 자동 생성
-resource "local_file" "ansible_hosts" {
+resource "aws_s3_object" "ansible_hosts" {
+  bucket  = "wazuh-ansible-ssm"
+  key     = "hosts.ini"
   content = <<-EOT
     [wazuh]
     ${aws_instance.aws-wazuh-01.id}
 
     [wazuh:vars]
     ansible_connection=community.aws.aws_ssm
-    ansible_aws_ssm_region=ap-south-2
+    ansible_aws_ssm_region=${var.aws_region}
     ansible_aws_ssm_bucket_name=wazuh-ansible-ssm
     ansible_aws_ssm_plugin_path=/usr/local/bin/session-manager-plugin
+    ansible_aws_ssm_timeout=3600
     wazuh_node_name=wazuh-01
     wazuh_node_type=master
     wazuh_master_ip=${aws_instance.aws-wazuh-01.private_ip}
@@ -97,11 +100,4 @@ resource "local_file" "ansible_hosts" {
     wazuh_cluster_disabled=yes
     slack_webhook_url=${var.slack_webhook_url}
   EOT
-  filename = "./ansible/hosts.ini"
 }
-
-output "wazuh_instance_id" {
-  value = aws_instance.aws-wazuh-01.id
-}
-
-

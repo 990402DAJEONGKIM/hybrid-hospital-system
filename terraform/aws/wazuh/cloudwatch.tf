@@ -11,7 +11,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-recovery-01" {
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
   alarm_actions = [
-    "arn:aws:automate:ap-south-2:ec2:recover"
+  "arn:aws:automate:${var.aws_region}:ec2:recover"
   ]
 
   tags = {
