@@ -7,3 +7,4 @@ variable "wazuh_cluster_key" {
 
 
 
+
