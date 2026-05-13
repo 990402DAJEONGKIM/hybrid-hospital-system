@@ -12,7 +12,7 @@
 REGION="ap-south-2"
 CLUSTER_ID="aws-aurora-01"
 PROXY_NAME="aws-rds-proxy-01"
-PROXY_ROLE_NAME="aws-iam-role-rds-proxy-01"
+PROXY_ROLE_NAME="aws-rds-proxy-role"
 SUBNET_GROUP_NAME="aws-db-subnet-group-01"
 PROXY_SG_NAME="aws-proxy-sg"
 SECRET_NAME_HOSPITAL="aws-secret-rds-hospital-user"
