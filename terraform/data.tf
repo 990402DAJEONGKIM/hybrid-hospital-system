@@ -15,6 +15,6 @@ data "aws_subnet" "aws-pub-sub-2a" {
 }
 
 # Aurora 클러스터 정보 가져오기
-data "aws_db_cluster" "aws_aurora_01" {
+data "aws_rds_cluster" "aws_aurora_01" {
   cluster_identifier = "aws-aurora-01"
 }

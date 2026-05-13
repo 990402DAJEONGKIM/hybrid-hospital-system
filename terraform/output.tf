@@ -3,5 +3,5 @@ output "aws_bastion_01" {
 }
 
 output "aws_rds_endpoint" {
-  value = data.aws_db_cluster.aws_aurora_01.endpoint
+  value = data.aws_rds_cluster.aws_aurora_01.endpoint
 }
