@@ -7,9 +7,7 @@ variable "wazuh_cluster_key" {
 variable "ssh_public_key" {
   sensitive = true
 }
-variable "ssh_public_key" {
-  sensitive = true
-}
+
 
 
 
