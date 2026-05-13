@@ -70,3 +70,13 @@ variable "aws_account_id" {
   description = "AWS 계정 ID (Secrets Manager ARN 구성용)"
   type        = string
 }
+
+# bastion host 용 (by 김다정 2026.05.13)
+# =========================================================================================
+# bastion 서버의 켜짐(1)" 또는 "꺼짐(0)" 신호를 받아줄 변수를 선언.
+variable "bastion_count" {
+  description = "Bastion 서버 가동 여부 (0 또는 1)"
+  type        = number
+  default     = 0 # 기본적으로는 꺼진 상태 유지
+}
+# =========================================================================================
