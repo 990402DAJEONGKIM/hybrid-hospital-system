@@ -14,3 +14,4 @@ Bash
 
 
 # aws cli 로그인
+aws configure
