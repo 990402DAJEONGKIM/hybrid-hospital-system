@@ -5,3 +5,4 @@ variable "wazuh_cluster_key" {
   sensitive = true
 }
 
+
