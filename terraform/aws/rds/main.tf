@@ -295,7 +295,7 @@ resource "aws_security_group" "aws_bastion_sg" {
 
 # 5. 베스천 EC2 인스턴스 생성
 resource "aws_instance" "aws_bastion_01" {
-  ami                  = "ami-040c33c6a51fd5d96" # ap-south-2 리전 Amazon Linux 2023
+  ami                  = "ami-0603dd3984985653f" 
   instance_type        = "t3.micro"
   iam_instance_profile = aws_iam_instance_profile.aws_bastion_profile.name
   
