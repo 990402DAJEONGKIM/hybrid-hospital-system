@@ -1,3 +1,8 @@
+resource "aws_sns_topic" "aws-wazuh-alerts-01" {
+  name = "aws-wazuh-alerts-01"
+}
+
+
 resource "aws_cloudwatch_metric_alarm" "aws-wazuh-recovery-01" {
   alarm_name          = "aws-wazuh-recovery-01"
   namespace           = "AWS/EC2"
@@ -11,7 +16,8 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-recovery-01" {
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
   alarm_actions = [
-  "arn:aws:automate:${var.aws_region}:ec2:recover"
+  "arn:aws:automate:${var.aws_region}:ec2:recover",
+  aws_sns_topic.aws-wazuh-alerts-01.arn
   ]
 
   tags = {
