@@ -1,15 +1,13 @@
-#cloudwatch.tf
-resource "aws_sns_topic" "aws-wazuh-alerts-01" {
+data "aws_sns_topic" "aws-wazuh-alerts-01" {
   name = "aws-wazuh-alerts-01"
 }
 
-
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-recovery-01" {
-  alarm_name          = "aws-wazuh-recovery-01"
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-recovery-02" {
+  alarm_name          = "aws-wazuh-recovery-02"
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed_System"
   dimensions = {
-    InstanceId = aws_instance.aws-wazuh-01.id
+    InstanceId = aws_instance.aws-wazuh-02.id
   }
   period              = 60
   evaluation_periods  = 2
@@ -17,12 +15,12 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-recovery-01" {
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
   alarm_actions = [
-  "arn:aws:automate:${var.aws_region}:ec2:recover",
-  aws_sns_topic.aws-wazuh-alerts-01.arn
+    "arn:aws:automate:${var.aws_region}:ec2:recover",
+    data.aws_sns_topic.aws-wazuh-alerts-01.arn
   ]
 
   tags = {
-    Name  = "aws-wazuh-recovery-01"
+    Name  = "aws-wazuh-recovery-02"
     Owner = "st2"
   }
 }

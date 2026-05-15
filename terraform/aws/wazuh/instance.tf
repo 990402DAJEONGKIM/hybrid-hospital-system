@@ -1,3 +1,5 @@
+#instance.tf
+
 # IAM Role
 resource "aws_iam_role" "wazuh_ssm_role" {
   name = "aws-wazuh-ssm-role"
@@ -82,7 +84,7 @@ resource "aws_instance" "aws-wazuh-01" {
 # hosts.ini 자동 생성
 resource "aws_s3_object" "ansible_hosts" {
   bucket  = "wazuh-ansible-ssm"
-  key     = "hosts.ini"
+  key = "wazuh1/hosts.ini"
   content = <<-EOT
     [wazuh]
     ${aws_instance.aws-wazuh-01.id}
@@ -97,7 +99,7 @@ resource "aws_s3_object" "ansible_hosts" {
     wazuh_node_type=master
     wazuh_master_ip=${aws_instance.aws-wazuh-01.private_ip}
     wazuh_cluster_key=${var.wazuh_cluster_key}
-    wazuh_cluster_disabled=yes
+    wazuh_cluster_disabled=no
     slack_webhook_url=${var.slack_webhook_url}
   EOT
 }

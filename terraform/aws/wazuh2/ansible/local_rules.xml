@@ -37,8 +37,8 @@ al rules · XML
   <!-- ───────────────────────────────────── -->
  
   <rule id="100004" level="8">
-    <if_sid>550</if_sid>
-    <field name="changed_fields">^permission$</field>
+    <if_sid>550,554,553</if_sid>
+    <field name="changed_attributes">permission</field>
     <description>파일 권한 변경 탐지</description>
     <group>fim,permission_change</group>
   </rule>
@@ -95,14 +95,16 @@ al rules · XML
  
   <rule id="100010" level="12">
     <if_sid>554</if_sid>
-    <field name="file" type="pcre2">(?i)^/var/www/.*\.(php|phtml|phar|sh|py|pl)$</field>
+    <match>/var/www/</match>
+    <regex>\.php$|\.phtml$|\.phar$|\.sh$|\.py$|\.pl$</regex>
     <description>웹 서버 경로에 실행 파일 생성됨 (웹쉘 의심)</description>
     <group>web_attack,fim,webshell</group>
   </rule>
  
   <rule id="100022" level="12">
     <if_sid>554</if_sid>
-    <field name="file" type="pcre2">(?i)^/usr/share/nginx/.*\.(php|phtml|phar|sh|py|pl)$</field>
+    <match>/usr/share/nginx/</match>
+    <regex>\.php$|\.phtml$|\.phar$|\.sh$|\.py$|\.pl$</regex>
     <description>nginx 경로에 실행 파일 생성됨 (웹쉘 의심)</description>
     <group>web_attack,fim,webshell</group>
   </rule>

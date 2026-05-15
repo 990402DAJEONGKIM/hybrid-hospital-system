@@ -1,0 +1,357 @@
+---
+- name: Wazuh All-in-One 설치
+  hosts: wazuh
+  become: yes
+  vars_files:
+    - vault.yml
+
+  handlers:
+    - name: systemd reload
+      command: systemctl daemon-reload
+      changed_when: false
+
+  tasks:
+
+    # ──────────────────────────────────────────
+    # 시스템 기본 설정
+    # ──────────────────────────────────────────
+    - name: swap 생성
+      shell: |
+        fallocate -l 4G /swapfile
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+      args:
+        creates: /swapfile
+
+    - name: vm.swappiness 설정
+      sysctl:
+        name: vm.swappiness
+        value: '10'
+        state: present
+        reload: yes
+
+    - name: vm.max_map_count 설정
+      sysctl:
+        name: vm.max_map_count
+        value: '262144'
+        state: present
+        reload: yes
+    # ──────────────────────────────────────────
+    # Wazuh 버전 고정 (apt upgrade 전에 반드시 먼저)
+    # ──────────────────────────────────────────
+    - name: Wazuh 버전 고정
+      copy:
+        dest: /etc/apt/preferences.d/wazuh
+        content: |
+          Package: wazuh-indexer wazuh-manager wazuh-dashboard
+          Pin: version 4.14.5*
+          Pin-Priority: 1001
+
+    - name: 시스템 업데이트
+      apt:
+        update_cache: yes
+        upgrade: safe
+      timeout: 300
+
+    - name: 필수 패키지 설치
+      apt:
+        name:
+          - curl
+          - apt-transport-https
+          - gnupg
+          - python3
+          - libxml2-utils
+        state: present
+
+    # ──────────────────────────────────────────
+    # 설치 여부 확인 (indexer 기준)
+    # ──────────────────────────────────────────
+    - name: Wazuh 설치 여부 확인
+      stat:
+        path: /etc/wazuh-indexer/opensearch.yml
+      register: wazuh_installed
+
+    # ──────────────────────────────────────────
+    # 1. 설치 블록 (최초 1회 또는 indexer 깨진 경우)
+    # ──────────────────────────────────────────
+    - name: Wazuh 신규 설치
+      when: not wazuh_installed.stat.exists
+      block:
+        - name: Wazuh 잔재 정리
+          shell: |
+            systemctl stop wazuh-manager 2>/dev/null || true
+            systemctl stop wazuh-dashboard 2>/dev/null || true
+            systemctl stop wazuh-indexer 2>/dev/null || true
+            apt purge wazuh-indexer wazuh-manager wazuh-dashboard -y || true
+            apt autoremove -y || true
+            dpkg --configure -a || true
+            apt-get install -f -y || true
+            rm -rf /etc/wazuh-indexer || true
+            rm -rf /etc/wazuh-dashboard || true
+            rm -rf /var/ossec || true
+            rm -rf /usr/share/wazuh-indexer || true
+            rm -rf /usr/share/wazuh-dashboard || true
+            rm -rf /var/lib/wazuh-indexer || true
+            systemctl daemon-reload || true
+            systemctl reset-failed || true
+
+        - name: Wazuh 설치 스크립트 및 설정파일 다운로드
+          get_url:
+            url: "{{ item.url }}"
+            dest: "{{ item.dest }}"
+            mode: "{{ item.mode }}"
+          loop:
+            - { url: 'https://packages.wazuh.com/4.14/wazuh-install.sh', dest: '/tmp/wazuh-install.sh', mode: '0755' }
+            - { url: 'https://packages.wazuh.com/4.14/config.yml', dest: '/tmp/config.yml', mode: '0644' }
+
+        - name: config.yml IP 자동 설정
+          replace:
+            path: /tmp/config.yml
+            regexp: "{{ item.regexp }}"
+            replace: "{{ ansible_default_ipv4.address }}"
+          loop:
+            - { regexp: '<indexer-node-ip>' }
+            - { regexp: '<wazuh-manager-ip>' }
+            - { regexp: '<dashboard-node-ip>' }
+
+        - name: Wazuh installer 찌꺼기 제거
+          file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/wazuh-install-files
+            - /tmp/wazuh-install-files.tar
+
+        - name: Wazuh 인증서 생성
+          shell: bash /tmp/wazuh-install.sh --generate-config-files
+          args:
+            chdir: /tmp/
+          async: 600
+          poll: 30
+
+        - name: Wazuh Indexer 설치
+          shell: bash /tmp/wazuh-install.sh --wazuh-indexer node-1 --overwrite
+          args:
+            chdir: /tmp/
+          async: 1800
+          poll: 30
+
+        - name: Wazuh Cluster 시작
+          shell: bash /tmp/wazuh-install.sh --start-cluster
+          args:
+            chdir: /tmp/
+          async: 600
+          poll: 30
+
+        - name: Wazuh Server 설치
+          shell: bash /tmp/wazuh-install.sh --wazuh-server wazuh-1 --overwrite
+          args:
+            chdir: /tmp/
+          async: 1800
+          poll: 30
+
+        - name: Wazuh Dashboard 설치
+          shell: bash /tmp/wazuh-install.sh --wazuh-dashboard dashboard --overwrite
+          args:
+            chdir: /tmp/
+          async: 1800
+          poll: 30
+
+      rescue:
+        - name: 설치 실패 로그 출력
+          shell: tail -50 /var/log/wazuh-install.log
+          register: wazuh_log
+          failed_when: false
+
+        - name: 에러 로그 출력
+          debug:
+            var: wazuh_log.stdout_lines
+
+        - name: 설치 실패 처리
+          fail:
+            msg: "Wazuh 설치 실패. 위 로그를 확인하세요."
+
+    # ──────────────────────────────────────────
+    # 2. 설정 및 적용 블록 (항상 실행)
+    # ──────────────────────────────────────────
+    - name: ossec.conf 템플릿 배포
+      template:
+        src: ossec.conf.j2
+        dest: /var/ossec/etc/ossec.conf
+        owner: root
+        group: wazuh
+        mode: '0640'
+
+    - name: 커스텀 룰 배포
+      copy:
+        src: local_rules.xml
+        dest: /var/ossec/etc/rules/local_rules.xml
+        owner: root
+        group: wazuh
+        mode: '0640'
+
+    - name: Agent 중앙 설정 배포
+      copy:
+        src: agent.conf      # ← 로컬에 파일 따로 만들기
+        dest: /var/ossec/etc/shared/default/agent.conf
+        owner: wazuh
+        group: wazuh
+        mode: '0640'
+
+    - name: ossec.conf XML 검증
+      shell: |
+        python3 -c "
+        import xml.etree.ElementTree as ET
+        ET.parse('/var/ossec/etc/ossec.conf')
+        print('XML OK')
+        "
+      register: xml_check
+      failed_when: "'XML OK' not in xml_check.stdout"
+
+    - name: Wazuh 설정 파서 검증
+      command: /var/ossec/bin/wazuh-analysisd -t
+      register: analysisd_check
+      failed_when: analysisd_check.rc != 0
+
+    - name: analysisd 검증 결과 출력
+      debug:
+        var: analysisd_check.stdout_lines
+      when: analysisd_check.stdout_lines is defined
+
+
+    - name: Dashboard server.host 설정 (SSM 포트포워딩용)
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^server.host:'
+        line: 'server.host: 0.0.0.0'
+
+    - name: JVM 힙 메모리 설정
+      replace:
+        path: /etc/wazuh-indexer/jvm.options
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - { regexp: '^-Xms.*', replace: '-Xms4g' }
+        - { regexp: '^-Xmx.*', replace: '-Xmx4g' }
+
+    - name: Indexer 메모리 lock 설정
+      lineinfile:
+        path: /etc/wazuh-indexer/opensearch.yml
+        regexp: '^bootstrap.memory_lock:'
+        line: 'bootstrap.memory_lock: true'
+        state: present
+
+    # ──────────────────────────────────────────
+    # systemd override 디렉토리 생성 후 설정 배포
+    # ──────────────────────────────────────────
+    - name: systemd override 디렉토리 생성
+      file:
+        path: "/etc/systemd/system/{{ item }}.service.d"
+        state: directory
+        mode: '0755'
+      loop:
+        - wazuh-indexer
+        - wazuh-manager
+        - wazuh-dashboard
+
+    - name: Indexer systemd 재시작 설정
+      copy:
+        dest: /etc/systemd/system/wazuh-indexer.service.d/restart.conf
+        content: |
+          [Unit]
+          StartLimitIntervalSec=300
+          StartLimitBurst=5
+
+          [Service]
+          Restart=always
+          RestartSec=30
+          LimitMEMLOCK=infinity
+      notify: systemd reload
+
+    - name: Manager systemd 재시작 설정
+      copy:
+        dest: /etc/systemd/system/wazuh-manager.service.d/restart.conf
+        content: |
+          [Unit]
+          StartLimitIntervalSec=300
+          StartLimitBurst=5
+
+          [Service]
+          Restart=always
+          RestartSec=10
+      notify: systemd reload
+
+    - name: Dashboard systemd 재시작 설정
+      copy:
+        dest: /etc/systemd/system/wazuh-dashboard.service.d/restart.conf
+        content: |
+          [Unit]
+          StartLimitIntervalSec=300
+          StartLimitBurst=5
+
+          [Service]
+          Restart=always
+          RestartSec=10
+      notify: systemd reload
+
+    # ──────────────────────────────────────────
+    # handler 즉시 실행 (daemon-reload가 restart 전에 완료되도록)
+    # ──────────────────────────────────────────
+    - meta: flush_handlers
+
+    # ──────────────────────────────────────────
+    # 3. 서비스 재시작 (설정 반영)
+    # ──────────────────────────────────────────
+    - name: Wazuh 서비스 재시작
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+        enabled: yes
+      loop:
+        - wazuh-indexer
+        - wazuh-manager
+        - wazuh-dashboard
+
+    - name: Wazuh Indexer API 응답 대기
+      wait_for:
+        port: 9200
+        host: "{{ ansible_default_ipv4.address }}" 
+        delay: 15
+        timeout: 300
+        msg: "Indexer가 제한 시간 내에 시작되지 않았습니다."
+
+
+    - name: Wazuh admin 비밀번호 고정
+      shell: >
+        timeout 60
+        /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh
+        -u admin -p '{{ wazuh_admin_password }}'
+      no_log: true
+      changed_when: false
+      register: pwd_change
+      until: pwd_change.rc == 0
+      retries: 5
+      delay: 10               
+    # ──────────────────────────────────────────
+    # 결과 확인
+    # ──────────────────────────────────────────
+    - name: 서비스 상태 확인
+      shell: |
+        echo "=== Indexer ===" && systemctl is-active wazuh-indexer
+        echo "=== Manager ===" && systemctl is-active wazuh-manager
+        echo "=== Dashboard ===" && systemctl is-active wazuh-dashboard
+      register: service_status
+
+    - name: 서비스 상태 출력
+      debug:
+        var: service_status.stdout_lines
+
+    - name: 메모리 상태 확인
+      command: free -h
+      register: memory_status
+
+    - name: 메모리 상태 출력
+      debug:
+        var: memory_status.stdout_lines
