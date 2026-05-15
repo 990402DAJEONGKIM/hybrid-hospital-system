@@ -73,7 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // 개인정보 수정 섹션 관련 요소
   const profileEditSection = document.getElementById('profile-edit-section');
   const profileNameInput = document.getElementById('profileName');
-  const profileRrnInput = document.getElementById('profileRrn');
   const profileBirthInput = document.getElementById('profileBirth');
   const profileGenderInput = document.getElementById('profileGender');
   const profileContactInput = document.getElementById('profileContact');
@@ -122,10 +121,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // (김철수)는 환자 본인 예약, (이영희)는 다른 환자 예약으로 가정
   // 의료진 탭에서는 모든 예약을 볼 수 있어야 함
   const mockPatientsList = [
-    { id: 1, name: "김철수", rrn: "910512-1******", birthDate: "1991-05-12", genderCode: "1", age: 35, address: "서울시 강남구 테헤란로 123", contact: "010-1234-5678", diagnosis: "고혈압 (비식별화)" },
-    { id: 2, name: "이영희", rrn: "980324-2******", birthDate: "1998-03-24", genderCode: "2", age: 28, address: "서울시 서초구 반포대로 456", contact: "010-5678-1234", diagnosis: "당뇨 (비식별화)" },
-    { id: 3, name: "박지성", rrn: "850715-1******", birthDate: "1985-07-15", genderCode: "1", age: 41, address: "경기도 수원시 팔달구 789", contact: "010-1111-2222", diagnosis: "부정맥 (비식별화)" },
-    { id: 4, name: "최소아", rrn: "191201-4******", birthDate: "2019-12-01", genderCode: "4", age: 7, address: "서울시 송파구 올림픽로 101", contact: "010-9999-8888", diagnosis: "천식 (비식별화)" }
+    { id: 1, name: "김철수", birthDate: "1991-05-12", genderCode: "1", age: 35, address: "서울시 강남구 테헤란로 123", contact: "010-1234-5678", diagnosis: "고혈압 (비식별화)" },
+    { id: 2, name: "이영희", birthDate: "1998-03-24", genderCode: "2", age: 28, address: "서울시 서초구 반포대로 456", contact: "010-5678-1234", diagnosis: "당뇨 (비식별화)" },
+    { id: 3, name: "박지성", birthDate: "1985-07-15", genderCode: "1", age: 41, address: "경기도 수원시 팔달구 789", contact: "010-1111-2222", diagnosis: "부정맥 (비식별화)" },
+    { id: 4, name: "최소아", birthDate: "2019-12-01", genderCode: "4", age: 7, address: "서울시 송파구 올림픽로 101", contact: "010-9999-8888", diagnosis: "천식 (비식별화)" }
   ];
 
   const mockAppointments = {
@@ -479,14 +478,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (patient) {
       profileNameInput.value = patient.name;
-      profileRrnInput.value = patient.rrn;
       profileBirthInput.value = patient.birthDate;
       profileGenderInput.value = patient.genderCode;
       profileContactInput.value = patient.contact;
     } else {
       // 환자 리스트에 없는 신규 회원일 경우 기본값 처리
       profileNameInput.value = loggedInUser.name;
-      profileRrnInput.value = loggedInUser.rrn || "미등록";
       profileBirthInput.value = loggedInUser.birth || "미등록";
       profileGenderInput.value = loggedInUser.gender || "미등록";
       profileContactInput.value = loggedInUser.contact || "";
@@ -516,7 +513,6 @@ document.addEventListener('DOMContentLoaded', () => {
     patientTableBody.innerHTML = filtered.map(p => `
       <tr class="bg-white border-b hover:bg-gray-50">
         <td class="px-4 py-3 font-medium text-gray-900">${p.name}</td>
-        <td class="px-4 py-3">${p.rrn}</td>
         <td class="px-4 py-3">${p.contact}</td>
         <td class="px-4 py-3">${p.birthDate}</td>
         <td class="px-4 py-3">${p.genderCode}</td>
