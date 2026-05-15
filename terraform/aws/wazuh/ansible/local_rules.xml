@@ -56,14 +56,14 @@ al rules · XML
  
   <rule id="100006" level="12">
     <if_sid>550,554,553</if_sid>
-    <match>/etc/shadow</match>
+    <field name="file">/etc/shadow</field>
     <description>중요 파일 변조 탐지 - /etc/shadow</description>
     <group>fim,critical_file</group>
   </rule>
  
   <rule id="100007" level="12">
     <if_sid>550,554,553</if_sid>
-    <match>/etc/sudoers$</match>
+    <field name="file">/etc/sudoers$</field>
     <description>sudoers 파일 변경 탐지 - 권한 상승 의심</description>
     <group>fim,privilege_escalation</group>
   </rule>
@@ -71,7 +71,7 @@ al rules · XML
   <!-- sudoers.d persistence -->
   <rule id="100019" level="12">
     <if_sid>550,554,553</if_sid>
-    <match>/etc/sudoers.d/</match>
+    <field name="file">/etc/sudoers.d/</field>
     <description>sudoers.d 파일 변경 탐지 - persistence 의심</description>
     <group>fim,privilege_escalation,persistence</group>
   </rule>
@@ -79,7 +79,7 @@ al rules · XML
   <!-- SSH 설정 변경 -->
   <rule id="100008" level="10">
     <if_sid>550,554,553</if_sid>
-    <match>/etc/ssh/sshd_config</match>
+    <field name="file">/etc/ssh/sshd_config</field>
     <description>SSH 설정 변경 탐지</description>
     <group>fim,ssh</group>
   </rule>
