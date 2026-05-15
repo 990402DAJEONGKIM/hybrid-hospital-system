@@ -8,6 +8,7 @@
   handlers:
     - name: systemd reload
       command: systemctl daemon-reload
+      changed_when: false
 
   tasks:
 
@@ -24,22 +25,19 @@
       args:
         creates: /swapfile
 
-    - name: swappiness 영구 설정
-      lineinfile:
-        path: /etc/sysctl.conf
-        line: 'vm.swappiness=10'
+    - name: vm.swappiness 설정
+      sysctl:
+        name: vm.swappiness
+        value: '10'
         state: present
+        reload: yes
 
     - name: vm.max_map_count 설정
-      lineinfile:
-        path: /etc/sysctl.conf
-        line: 'vm.max_map_count=262144'
+      sysctl:
+        name: vm.max_map_count
+        value: '262144'
         state: present
-
-    - name: sysctl 전체 적용
-      command: sysctl -p
-      changed_when: false
-
+        reload: yes
     # ──────────────────────────────────────────
     # Wazuh 버전 고정 (apt upgrade 전에 반드시 먼저)
     # ──────────────────────────────────────────
@@ -48,7 +46,7 @@
         dest: /etc/apt/preferences.d/wazuh
         content: |
           Package: wazuh-indexer wazuh-manager wazuh-dashboard
-          Pin: version 4.7.5*
+          Pin: version 4.14.5*
           Pin-Priority: 1001
 
     - name: 시스템 업데이트
@@ -105,8 +103,8 @@
             dest: "{{ item.dest }}"
             mode: "{{ item.mode }}"
           loop:
-            - { url: 'https://packages.wazuh.com/4.7/wazuh-install.sh', dest: '/tmp/wazuh-install.sh', mode: '0755' }
-            - { url: 'https://packages.wazuh.com/4.7/config.yml', dest: '/tmp/config.yml', mode: '0644' }
+            - { url: 'https://packages.wazuh.com/4.14/wazuh-install.sh', dest: '/tmp/wazuh-install.sh', mode: '0755' }
+            - { url: 'https://packages.wazuh.com/4.14/config.yml', dest: '/tmp/config.yml', mode: '0644' }
 
         - name: config.yml IP 자동 설정
           replace:
@@ -186,6 +184,22 @@
         group: wazuh
         mode: '0640'
 
+    - name: 커스텀 룰 배포
+      copy:
+        src: local_rules.xml
+        dest: /var/ossec/etc/rules/local_rules.xml
+        owner: root
+        group: wazuh
+        mode: '0640'
+
+    - name: Agent 중앙 설정 배포
+      copy:
+        src: agent.conf      # ← 로컬에 파일 따로 만들기
+        dest: /var/ossec/etc/shared/default/agent.conf
+        owner: wazuh
+        group: wazuh
+        mode: '0640'
+
     - name: ossec.conf XML 검증
       shell: |
         python3 -c "
@@ -196,13 +210,16 @@
       register: xml_check
       failed_when: "'XML OK' not in xml_check.stdout"
 
-    - name: 커스텀 룰 배포
-      copy:
-        src: local_rules.xml
-        dest: /var/ossec/etc/rules/local_rules.xml
-        owner: root
-        group: wazuh
-        mode: '0640'
+    - name: Wazuh 설정 파서 검증
+      command: /var/ossec/bin/wazuh-analysisd -t
+      register: analysisd_check
+      failed_when: analysisd_check.rc != 0
+
+    - name: analysisd 검증 결과 출력
+      debug:
+        var: analysisd_check.stdout_lines
+      when: analysisd_check.stdout_lines is defined
+
 
     - name: Dashboard server.host 설정 (SSM 포트포워딩용)
       lineinfile:
@@ -216,8 +233,8 @@
         regexp: "{{ item.regexp }}"
         replace: "{{ item.replace }}"
       loop:
-        - { regexp: '^-Xms.*', replace: '-Xms2g' }
-        - { regexp: '^-Xmx.*', replace: '-Xmx2g' }
+        - { regexp: '^-Xms.*', replace: '-Xms4g' }
+        - { regexp: '^-Xmx.*', replace: '-Xmx4g' }
 
     - name: Indexer 메모리 lock 설정
       lineinfile:
@@ -244,7 +261,8 @@
         dest: /etc/systemd/system/wazuh-indexer.service.d/restart.conf
         content: |
           [Unit]
-          StartLimitIntervalSec=0
+          StartLimitIntervalSec=300
+          StartLimitBurst=5
 
           [Service]
           Restart=always
@@ -257,7 +275,8 @@
         dest: /etc/systemd/system/wazuh-manager.service.d/restart.conf
         content: |
           [Unit]
-          StartLimitIntervalSec=0
+          StartLimitIntervalSec=300
+          StartLimitBurst=5
 
           [Service]
           Restart=always
@@ -269,7 +288,8 @@
         dest: /etc/systemd/system/wazuh-dashboard.service.d/restart.conf
         content: |
           [Unit]
-          StartLimitIntervalSec=0
+          StartLimitIntervalSec=300
+          StartLimitBurst=5
 
           [Service]
           Restart=always
@@ -294,13 +314,26 @@
         - wazuh-manager
         - wazuh-dashboard
 
+    - name: Wazuh Indexer API 응답 대기
+      wait_for:
+        port: 9200
+        host: "{{ ansible_default_ipv4.address }}" 
+        delay: 15
+        timeout: 300
+        msg: "Indexer가 제한 시간 내에 시작되지 않았습니다."
 
 
     - name: Wazuh admin 비밀번호 고정
       shell: >
+        timeout 60
         /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh
         -u admin -p '{{ wazuh_admin_password }}'
       no_log: true
+      changed_when: false
+      register: pwd_change
+      until: pwd_change.rc == 0
+      retries: 5
+      delay: 10               
     # ──────────────────────────────────────────
     # 결과 확인
     # ──────────────────────────────────────────

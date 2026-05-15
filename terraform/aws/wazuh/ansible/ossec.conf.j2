@@ -60,6 +60,7 @@
   <ruleset>
     <decoder_dir>ruleset/decoders</decoder_dir>
     <rule_dir>ruleset/rules</rule_dir>
+    <rule_dir>etc/rules</rule_dir> 
     <rule_exclude>0215-policy_rules.xml</rule_exclude>
     <list>etc/lists/audit-keys</list>
     <list>etc/lists/amazon/aws-eventnames</list>
@@ -77,7 +78,7 @@
     <!-- realtime 모니터링 -->
     <directories realtime="yes" check_all="yes">/etc</directories>
     <directories realtime="yes" check_all="yes" report_changes="yes">/var/ossec/etc</directories>
-    <directories realtime="yes" check_all="yes" report_changes="yes">/var/www</directories>
+   
 
     <!-- 주기 모니터링 (6시간) -->
     <directories check_all="yes">/usr/bin,/usr/sbin</directories>
@@ -89,6 +90,9 @@
     <ignore>/etc/random-seed</ignore>
     <ignore>/etc/adjtime</ignore>
     <ignore>/etc/resolv.conf</ignore>
+    <ignore>/etc/wazuh-indexer/backup</ignore>
+    <ignore>/var/ossec/logs/alerts</ignore>      
+    <ignore>/var/ossec/logs/archives</ignore>   
 
     <skip_nfs>yes</skip_nfs>
   </syscheck>
@@ -162,7 +166,7 @@
   <integration>
     <name>slack</name>
     <hook_url>{{ slack_webhook_url }}</hook_url>
-    <level>7</level>
+    <level>10</level>
     <alert_format>json</alert_format>
   </integration>
   {% endif %}
