@@ -1,3 +1,4 @@
+#instance.tf
 data "aws_iam_instance_profile" "wazuh_profile" {
   name = "aws-wazuh-instance-profile"
 }
