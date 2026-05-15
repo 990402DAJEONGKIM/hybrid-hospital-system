@@ -10,7 +10,7 @@ data "aws_key_pair" "aws-wazuh-key" {
 resource "aws_instance" "aws-wazuh-02" {
   ami                    = data.aws_ami.ubuntu_22_04.id
   instance_type          = "t3.xlarge"
-  subnet_id              = data.aws_subnet.aws-app-sub-2a.id
+  subnet_id              = data.aws_subnet.aws-app-sub-2b.id
   vpc_security_group_ids = [data.aws_security_group.aws-wazuh-sg.id]
   key_name               = data.aws_key_pair.aws-wazuh-key.key_name
   iam_instance_profile   = data.aws_iam_instance_profile.wazuh_profile.name

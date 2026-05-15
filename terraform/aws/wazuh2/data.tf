@@ -1,8 +1,8 @@
 data "aws_vpc" "aws-vpc-01" {
   tags = { Name = "aws-vpc-01" }
 }
-data "aws_subnet" "aws-app-sub-2a" {
-  tags = { Name = "aws-app-sub-2a" }
+data "aws_subnet" "aws-app-sub-2b" {
+  tags = { Name = "aws-app-sub-2b" }
 }
 data "aws_ami" "ubuntu_22_04" {
   most_recent = true
