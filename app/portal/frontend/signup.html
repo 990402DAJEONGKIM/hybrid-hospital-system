@@ -27,10 +27,6 @@
                 <label class="block text-xs font-medium text-gray-700 mb-1">비밀번호</label>
                 <input type="password" id="userPw" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
             </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-700 mb-1">주민등록번호</label>
-                <input type="text" id="userRrn" placeholder="예: 900101-1234567" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-            </div>
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">생년월일</label>
@@ -82,7 +78,6 @@
             const name = document.getElementById('userName').value;
             const id = document.getElementById('userId').value;
             const pw = document.getElementById('userPw').value;
-            const rrn = document.getElementById('userRrn').value;
             const birth = document.getElementById('userBirth').value;
             const gender = document.getElementById('userGender').value;
             const contact = document.getElementById('userContact').value;
@@ -100,7 +95,7 @@
                 return;
             }
 
-            users.push({ name, id, pw, rrn, birth, gender, contact });
+            users.push({ name, id, pw, birth, gender, contact });
             localStorage.setItem('hospital_users', JSON.stringify(users));
             
             alert('회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.');
