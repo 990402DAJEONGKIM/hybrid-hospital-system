@@ -1,0 +1,54 @@
+variable "vpc_cidr" {
+  description = "뭄바이 VPC CIDR"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+variable "db_subnet_cidr_1a" {
+  description = "DB 서브넷 CIDR (ap-south-1a)"
+  type        = string
+  default     = "10.1.21.0/24"
+}
+
+variable "db_subnet_cidr_1b" {
+  description = "DB 서브넷 CIDR (ap-south-1b)"
+  type        = string
+  default     = "10.1.22.0/24"
+}
+
+variable "hyderabad_vpc_cidr" {
+  description = "하이데라바드 VPC CIDR"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "hyderabad_vpc_id" {
+  description = "하이데라바드 VPC ID"
+  type        = string
+}
+
+variable "hyderabad_db_route_table_id" {
+  description = "하이데라바드 DB Route Table ID"
+  type        = string
+}
+
+variable "hyderabad_rds_arn" {
+  description = "하이데라바드 Aurora 클러스터 ARN"
+  type        = string
+}
+
+variable "aurora_engine_version" {
+  description = "Aurora PostgreSQL 엔진 버전"
+  type        = string
+  default     = "15.4"
+}
+
+variable "kms_key_arn" {
+  description = "RDS 암호화 KMS 키 ARN"
+  type        = string
+}
+
+variable "rds_monitoring_role_arn" {
+  description = "RDS 모니터링 IAM Role ARN"
+  type        = string
+}
