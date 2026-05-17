@@ -22,15 +22,15 @@ variable "hyderabad_vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "hyderabad_vpc_id" {
-  description = "하이데라바드 VPC ID"
-  type        = string
-}
+# variable "hyderabad_vpc_id" {
+#   description = "하이데라바드 VPC ID"
+#   type        = string
+# }
 
-variable "hyderabad_db_route_table_id" {
-  description = "하이데라바드 DB Route Table ID"
-  type        = string
-}
+# variable "hyderabad_db_route_table_id" {
+#   description = "하이데라바드 DB Route Table ID"
+#   type        = string
+# }
 
 variable "hyderabad_rds_arn" {
   description = "하이데라바드 Aurora 클러스터 ARN"

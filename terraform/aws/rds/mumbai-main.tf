@@ -156,9 +156,6 @@ resource "aws_security_group" "rds" {
 # ─────────────────────────────────────────
 # VPC Peering
 # ─────────────────────────────────────────
-
-
-
 resource "aws_vpc_peering_connection" "hyderabad_to_mumbai" {
   provider    = aws
   vpc_id      = data.aws_vpc.aws_vpc-01.id
@@ -184,7 +181,7 @@ resource "aws_vpc_peering_connection_accepter" "mumbai_accept" {
 # Peering 경로 추가 (하이데라바드 → 뭄바이)
 resource "aws_route" "hyderabad_to_mumbai" {
   provider                  = aws
-  route_table_id            = var.hyderabad_db_route_table_id
+  route_table_id            = data.aws_route_table.hyderabad_db.id
   destination_cidr_block    = var.vpc_cidr
   vpc_peering_connection_id = aws_vpc_peering_connection.hyderabad_to_mumbai.id
 }
@@ -208,9 +205,7 @@ resource "aws_rds_global_cluster" "global" {
   source_db_cluster_identifier     = var.hyderabad_rds_arn
   force_destroy                    = false
 
-  tags = {
-    Name = "aws-aurora-global"
-  }
+  
 }
 
 # ─────────────────────────────────────────

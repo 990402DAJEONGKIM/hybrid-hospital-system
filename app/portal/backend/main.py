@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, portal
+from routers import admin, auth, portal
 
 app = FastAPI(title="김이박 병원 API")
 
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(portal.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

@@ -96,8 +96,8 @@ async function requireLogin() {
     if (!res) return null;
     const me = await res.json();
     if (me.password_expired) {
-        alert('비밀번호가 만료되었습니다. 비밀번호를 변경해주세요.');
-        // TODO: 비밀번호 변경 페이지로 이동 (구현 시 경로 교체)
+        window.location.href = 'change-password.html';
+        return null;
     }
     return me; // { user_id, role, patient_id_hash, password_expired }
 }
@@ -110,6 +110,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!me) return;
 
     const { role, patient_id_hash: patientIdHash } = me;
+
+    // ── role 기반 메뉴 표시/숨김 ─────────────────────────────
+    const navMedicalStaffMenu   = document.getElementById('nav-medical-staff-menu');
+    const navPatientMenu        = document.getElementById('nav-patient-menu');
+    const navAppointmentBtnWrap = document.getElementById('nav-appointment-btn-wrap');
+
+    if (role === 'patient') {
+        navPatientMenu?.classList.remove('hidden');
+        navAppointmentBtnWrap?.classList.remove('hidden');
+        // 의료진 메뉴는 hidden 유지
+    } else if (role === 'doctor' || role === 'nurse') {
+        navMedicalStaffMenu?.classList.remove('hidden');
+        // 환자 메뉴, 예약하기 버튼은 hidden 유지
+    } else if (role === 'admin') {
+        navMedicalStaffMenu?.classList.remove('hidden');
+        navPatientMenu?.classList.remove('hidden');
+        navAppointmentBtnWrap?.classList.remove('hidden');
+    }
 
     const header = document.querySelector('.sass-header');
     const mobileMenuBtn   = document.getElementById('sassMobileMenuBtn');
@@ -151,11 +169,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const editAppointmentModal  = document.getElementById('editAppointmentModal');
     const editAppDateInput      = document.getElementById('editAppDate');
-    const editAppTimeSelect     = document.getElementById('editAppTime');
-    const editAppContentInput   = document.getElementById('editAppContent');
+    const editAppDeptSelect     = document.getElementById('editAppDept');
     const closeEditModal        = document.getElementById('closeEditModal');
     const cancelEditBtn         = document.getElementById('cancelEditBtn');
     const saveEditBtn           = document.getElementById('saveEditBtn');
+    let currentEditEncounterId  = null;
 
     const newAppointmentModal = document.getElementById('newAppointmentModal');
     const newAppDateInput     = document.getElementById('newAppDate');
@@ -228,7 +246,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadAppointments() {
         appointmentsMap = {};
         try {
-            const res = await apiCall('/portal/appointments');
+            const endpoint = (role === 'patient')
+                ? '/portal/appointments'
+                : '/portal/doctor/schedule';
+
+            const res = await apiCall(endpoint);
             if (!res || !res.ok) return;
             const list = await res.json();
             list.forEach(appt => {
@@ -299,7 +321,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 item.className = 'p-3 bg-blue-50 border-l-4 border-blue-500 text-blue-800 text-sm rounded';
                 const deptLabel   = DEPT_LABEL[appt.department_code] || appt.department_code;
                 const statusLabel = STATUS_LABEL[appt.status_code]   || appt.status_code;
-                item.innerText = `${deptLabel} · ${statusLabel}`;
+                if (role !== 'patient' && appt.patient_id_hash) {
+                    // 의료진 모드: 환자 식별자 앞 8자 표시
+                    item.innerText = `${deptLabel} · ${statusLabel} | 환자 ${appt.patient_id_hash.slice(0, 8)}…`;
+                } else {
+                    item.innerText = `${deptLabel} · ${statusLabel}`;
+                }
                 modalAppointmentList.appendChild(item);
             });
         } else {
@@ -339,14 +366,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             item.className = 'flex justify-between items-center p-4 bg-gray-50 border border-gray-100 rounded-lg';
             const deptLabel   = DEPT_LABEL[appt.department_code] || appt.department_code;
             const statusLabel = STATUS_LABEL[appt.status_code]   || appt.status_code;
+            const isOpen      = appt.status_code === 'OPEN';
+            const isPatient   = role === 'patient';
+
             item.innerHTML = `
                 <div>
                     <p class="text-xs text-gray-500 font-bold">${appt.visit_date}</p>
                     <p class="text-gray-800 font-medium">${deptLabel}</p>
                     <p class="text-xs text-gray-500">${statusLabel}</p>
                 </div>
+                ${isPatient && isOpen ? `
+                <div class="flex gap-2 ml-4 shrink-0">
+                    <button data-id="${appt.encounter_id}" class="edit-appt-btn px-3 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded text-xs font-bold hover:bg-blue-100">수정</button>
+                    <button data-id="${appt.encounter_id}" class="del-appt-btn px-3 py-1 bg-red-50 text-red-600 border border-red-200 rounded text-xs font-bold hover:bg-red-100">취소</button>
+                </div>` : ''}
             `;
             myAppointmentList.appendChild(item);
+        });
+
+        myAppointmentList.querySelectorAll('.edit-appt-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const encounterId = btn.dataset.id;
+                const appt = allAppts.find(a => a.encounter_id === encounterId);
+                if (appt) openEditModalFn(appt);
+            });
+        });
+        myAppointmentList.querySelectorAll('.del-appt-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteAppointment(btn.dataset.id));
         });
     };
 
@@ -367,7 +413,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (closeManageModal)      closeManageModal.addEventListener('click', closeManageModalFn);
     if (manageModalCloseBtn)   manageModalCloseBtn.addEventListener('click', closeManageModalFn);
 
-    // ── 신규 예약 모달 (등록 기능은 추후 API 확정 후 연동) ──
+    // ── 신규 예약 모달 ──────────────────────────────────────
     const openNewAppModal = (date) => {
         newAppDateInput.value = date;
         newAppointmentModal.classList.remove('hidden');
@@ -380,27 +426,86 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (closeNewAppModal) closeNewAppModal.addEventListener('click', closeNewAppModalFn);
     if (cancelNewAppBtn)  cancelNewAppBtn.addEventListener('click', closeNewAppModalFn);
     if (saveNewAppBtn) {
-        saveNewAppBtn.addEventListener('click', () => {
-            // TODO: 예약 등록 API 연동 (현재 미제공)
-            alert('예약 신청이 접수되었습니다. (API 연동 후 실제 저장됩니다.)');
+        saveNewAppBtn.addEventListener('click', async () => {
+            const visitDate = newAppDateInput.value;
+            const deptCode  = newAppDeptSelect.value;
+            if (!visitDate) { alert('날짜를 선택해주세요.'); return; }
+
+            saveNewAppBtn.disabled = true;
+            const res = await apiCall('/portal/appointments', {
+                method: 'POST',
+                body: JSON.stringify({ department_code: deptCode, visit_date: visitDate }),
+            });
+            saveNewAppBtn.disabled = false;
+
+            if (!res || !res.ok) {
+                const err = await res?.json().catch(() => ({}));
+                alert(err.detail || '예약 등록에 실패했습니다.');
+                return;
+            }
             closeNewAppModalFn();
+            await loadAppointments();
+            renderCalendar();
+            alert('예약이 등록되었습니다.');
         });
     }
 
-    // ── 예약 수정 모달 (수정 기능은 추후 API 확정 후 연동) ──
+    // ── 예약 수정 모달 ──────────────────────────────────────
+    const openEditModalFn = (appt) => {
+        currentEditEncounterId = appt.encounter_id;
+        editAppDateInput.value = appt.visit_date;
+        if (editAppDeptSelect) editAppDeptSelect.value = appt.department_code || 'ORTHO';
+        editAppointmentModal.classList.remove('hidden');
+        editAppointmentModal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    };
     const closeEditModalFn = () => {
+        currentEditEncounterId = null;
         editAppointmentModal.classList.add('hidden');
         editAppointmentModal.classList.remove('flex');
+        document.body.style.overflow = '';
     };
     if (closeEditModal) closeEditModal.addEventListener('click', closeEditModalFn);
     if (cancelEditBtn)  cancelEditBtn.addEventListener('click', closeEditModalFn);
     if (saveEditBtn) {
-        saveEditBtn.addEventListener('click', () => {
-            // TODO: 예약 수정 API 연동 (현재 미제공)
-            alert('수정 기능은 준비 중입니다.');
+        saveEditBtn.addEventListener('click', async () => {
+            if (!currentEditEncounterId) return;
+            const body = {};
+            if (editAppDateInput.value)           body.visit_date      = editAppDateInput.value;
+            if (editAppDeptSelect?.value)         body.department_code = editAppDeptSelect.value;
+
+            saveEditBtn.disabled = true;
+            const res = await apiCall(`/portal/appointments/${currentEditEncounterId}`, {
+                method: 'PATCH',
+                body: JSON.stringify(body),
+            });
+            saveEditBtn.disabled = false;
+
+            if (!res || !res.ok) {
+                const err = await res?.json().catch(() => ({}));
+                alert(err.detail || '수정에 실패했습니다.');
+                return;
+            }
             closeEditModalFn();
+            await loadAppointments();
+            renderCalendar();
+            renderMyAppointments();
         });
     }
+
+    // ── 예약 삭제 ────────────────────────────────────────────
+    window.deleteAppointment = async (encounterId) => {
+        if (!confirm('예약을 취소하시겠습니까?')) return;
+        const res = await apiCall(`/portal/appointments/${encounterId}`, { method: 'DELETE' });
+        if (!res || !res.ok) {
+            const err = await res?.json().catch(() => ({}));
+            alert(err.detail || '취소에 실패했습니다.');
+            return;
+        }
+        await loadAppointments();
+        renderCalendar();
+        renderMyAppointments();
+    };
 
     // ── 의사용 환자 목록 ────────────────────────────────────
     let patientsList = [];
