@@ -84,11 +84,9 @@
                     });
                     const meData = await meRes.json();
 
-                    // 비밀번호 만료 시 변경 안내 (ISMS-P 2.5.4)
+                    // 비밀번호 만료 시 변경 페이지로 이동 (ISMS-P 2.5.4)
                     if (meData.password_expired) {
-                        alert('비밀번호가 만료되었습니다. 비밀번호를 변경해주세요.');
-                        // TODO: 비밀번호 변경 페이지로 이동 (구현 시 경로 교체)
-                        window.location.href = 'index.html';
+                        window.location.href = 'change-password.html';
                         return;
                     }
 
