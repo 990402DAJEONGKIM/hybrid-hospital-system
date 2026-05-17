@@ -15,7 +15,7 @@ resource "aws_vpc" "mumbai" {
 # ─────────────────────────────────────────
 # DB 서브넷
 # ─────────────────────────────────────────
-resource "aws_subnet" "db_1a" {
+resource "aws_subnet" "mumbai_db_1a" {
   provider          = aws.mumbai
   vpc_id            = aws_vpc.mumbai.id
   cidr_block        = var.db_subnet_cidr_1a
@@ -26,7 +26,7 @@ resource "aws_subnet" "db_1a" {
   }
 }
 
-resource "aws_subnet" "db_1b" {
+resource "aws_subnet" "mumbai_db_1b" {
   provider          = aws.mumbai
   vpc_id            = aws_vpc.mumbai.id
   cidr_block        = var.db_subnet_cidr_1b
@@ -40,7 +40,7 @@ resource "aws_subnet" "db_1b" {
 # ─────────────────────────────────────────
 # Route Table
 # ─────────────────────────────────────────
-resource "aws_route_table" "db" {
+resource "aws_route_table" "mumbai_db_rt" {
   provider = aws.mumbai
   vpc_id   = aws_vpc.mumbai.id
 
@@ -49,25 +49,25 @@ resource "aws_route_table" "db" {
   }
 }
 
-resource "aws_route_table_association" "db_1a" {
+resource "aws_route_table_association" "mumbai_db_rta_1a" {
   provider       = aws.mumbai
-  subnet_id      = aws_subnet.db_1a.id
-  route_table_id = aws_route_table.db.id
+  subnet_id      = aws_subnet.mumbai_db_1a.id
+  route_table_id = aws_route_table.mumbai_db_rt.id
 }
 
-resource "aws_route_table_association" "db_1b" {
+resource "aws_route_table_association" "mumbai_db_rta_1b" {
   provider       = aws.mumbai
-  subnet_id      = aws_subnet.db_1b.id
-  route_table_id = aws_route_table.db.id
+  subnet_id      = aws_subnet.mumbai_db_1b.id
+  route_table_id = aws_route_table.mumbai_db_rt.id
 }
 
 # ─────────────────────────────────────────
 # NACL
 # ─────────────────────────────────────────
-resource "aws_network_acl" "db" {
+resource "aws_network_acl" "mumbai_db_nacl" {
   provider   = aws.mumbai
   vpc_id     = aws_vpc.mumbai.id
-  subnet_ids = [aws_subnet.db_1a.id, aws_subnet.db_1b.id]
+  subnet_ids = [aws_subnet.mumbai_db_1a.id, aws_subnet.mumbai_db_1b.id]
 
   # 인바운드: 하이데라바드 → PostgreSQL 허용
   ingress {
@@ -127,7 +127,7 @@ resource "aws_network_acl" "db" {
 # ─────────────────────────────────────────
 # Security Group
 # ─────────────────────────────────────────
-resource "aws_security_group" "rds" {
+resource "aws_security_group" "mumbai_rds_sg" {
   provider    = aws.mumbai
   name        = "aws-db-sg-mumbai"
   description = "Mumbai RDS Security Group"
@@ -189,7 +189,7 @@ resource "aws_route" "hyderabad_to_mumbai" {
 # Peering 경로 추가 (뭄바이 → 하이데라바드)
 resource "aws_route" "mumbai_to_hyderabad" {
   provider                  = aws.mumbai
-  route_table_id            = aws_route_table.db.id
+  route_table_id            = aws_route_table.mumbai_db_rt.id
   destination_cidr_block    = var.hyderabad_vpc_cidr
   vpc_peering_connection_id = aws_vpc_peering_connection.hyderabad_to_mumbai.id
 }
@@ -214,7 +214,7 @@ resource "aws_rds_global_cluster" "global" {
 resource "aws_db_subnet_group" "mumbai" {
   provider   = aws.mumbai
   name       = "aws-db-subnet-group-mumbai"
-  subnet_ids = [aws_subnet.db_1a.id, aws_subnet.db_1b.id]
+  subnet_ids = [aws_subnet.mumbai_db_1a.id, aws_subnet.mumbai_db_1b.id]
 
   tags = {
     Name = "aws-db-subnet-group-mumbai"
@@ -231,7 +231,7 @@ resource "aws_rds_cluster" "mumbai_secondary" {
   engine_version = var.aurora_engine_version
 
   db_subnet_group_name   = aws_db_subnet_group.mumbai.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
+  vpc_security_group_ids = [aws_security_group.mumbai_rds_sg.id] 
 
   # Secondary 클러스터는 마스터 계정 불필요
   skip_final_snapshot = true
@@ -257,7 +257,7 @@ resource "aws_rds_cluster" "mumbai_secondary" {
 }
 
 # 뭄바이 Aurora 인스턴스 (1a - Primary)
-resource "aws_rds_cluster_instance" "mumbai_1a" {
+resource "aws_rds_cluster_instance" "mumbai_cluster_instance_1a" {
   provider = aws.mumbai
 
   identifier         = "aws-aurora-mumbai-1a"
@@ -279,7 +279,7 @@ resource "aws_rds_cluster_instance" "mumbai_1a" {
 }
 
 # 뭄바이 Aurora 인스턴스 (1b - Standby)
-resource "aws_rds_cluster_instance" "mumbai_1b" {
+resource "aws_rds_cluster_instance" "mumbai_cluster_instance_1b" {
   provider = aws.mumbai
 
   identifier         = "aws-aurora-mumbai-1b"
