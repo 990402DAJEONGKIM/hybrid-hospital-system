@@ -125,35 +125,6 @@ resource "aws_network_acl" "mumbai_db_nacl" {
 }
 
 # ─────────────────────────────────────────
-# Security Group
-# ─────────────────────────────────────────
-resource "aws_security_group" "mumbai_rds_sg" {
-  provider    = aws.mumbai
-  name        = "aws-db-sg-mumbai"
-  description = "Mumbai RDS Security Group"
-  vpc_id      = aws_vpc.mumbai.id
-
-  ingress {
-    description = "PostgreSQL from Hyderabad VPC"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [var.hyderabad_vpc_cidr]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "aws-db-sg-mumbai"
-  }
-}
-
-# ─────────────────────────────────────────
 # VPC Peering
 # ─────────────────────────────────────────
 resource "aws_vpc_peering_connection" "hyderabad_to_mumbai" {
