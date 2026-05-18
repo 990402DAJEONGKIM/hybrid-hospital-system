@@ -1,0 +1,195 @@
+<ossec_config>
+
+  <!-- ======================================= -->
+  <!-- 글로벌 설정                              -->
+  <!-- ======================================= -->
+  <global>
+    <jsonout_output>yes</jsonout_output>
+    <alerts_log>yes</alerts_log>
+    <logall>no</logall>
+    <logall_json>no</logall_json>
+    <email_notification>no</email_notification>
+    <smtp_server>localhost</smtp_server>
+    <email_from>wazuh@localhost</email_from>
+    <email_to>root@localhost</email_to>
+    <email_maxperhour>12</email_maxperhour>
+    <email_log_source>alerts.log</email_log_source>
+    <agents_disconnection_time>10m</agents_disconnection_time>
+    <agents_disconnection_alert_time>0</agents_disconnection_alert_time>
+  </global>
+
+  <!-- ======================================= -->
+  <!-- 클러스터 설정 (1516 포트 내부 통신)       -->
+  <!-- wazuh-01: master / wazuh-02: worker     -->
+  <!-- ======================================= -->
+  <cluster>
+    <name>wazuh-cluster</name>
+    <node_name>{{ wazuh_node_name }}</node_name>
+    <node_type>{{ wazuh_node_type }}</node_type>
+    <key>{{ wazuh_cluster_key }}</key>
+    <port>1516</port>
+    <bind_addr>0.0.0.0</bind_addr>
+    <nodes>
+      <node>{{ wazuh_master_ip }}</node>
+    </nodes>
+    <hidden>no</hidden>
+    <disabled>{{ wazuh_cluster_disabled | default('yes') }}</disabled>
+  </cluster>
+
+  <!-- ======================================= -->
+  <!-- 알림 레벨                               -->
+  <!-- ======================================= -->
+  <alerts>
+    <log_alert_level>3</log_alert_level>
+    <email_alert_level>12</email_alert_level>
+  </alerts>
+
+  <!-- ======================================= -->
+  <!-- Agent 수신 설정                          -->
+  <!-- ======================================= -->
+  <remote>
+    <connection>secure</connection>
+    <port>1514</port>
+    <protocol>tcp</protocol>
+    <queue_size>131072</queue_size>
+  </remote>
+
+  <!-- ======================================= -->
+  <!-- 룰셋 & 디코더                            -->
+  <!-- ======================================= -->
+  <ruleset>
+    <decoder_dir>ruleset/decoders</decoder_dir>
+    <rule_dir>ruleset/rules</rule_dir>
+    <rule_dir>etc/rules</rule_dir> 
+    <rule_exclude>0215-policy_rules.xml</rule_exclude>
+    <list>etc/lists/audit-keys</list>
+    <list>etc/lists/amazon/aws-eventnames</list>
+    <list>etc/lists/security-eventchannel</list>
+  </ruleset>
+
+  <!-- ======================================= -->
+  <!-- FIM (파일 무결성 모니터링)                -->
+  <!-- ======================================= -->
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>3600</frequency>
+    <scan_on_start>yes</scan_on_start>
+
+    <!-- realtime 모니터링 -->
+    <directories realtime="yes" check_all="yes">/etc</directories>
+    <directories realtime="yes" check_all="yes" report_changes="yes">/var/ossec/etc</directories>
+   
+
+    <!-- 주기 모니터링 (6시간) -->
+    <directories check_all="yes">/usr/bin,/usr/sbin</directories>
+
+    <!-- 무시 목록 -->
+    <ignore>/etc/mtab</ignore>
+    <ignore>/etc/hosts.deny</ignore>
+    <ignore>/etc/mail/statistics</ignore>
+    <ignore>/etc/random-seed</ignore>
+    <ignore>/etc/adjtime</ignore>
+    <ignore>/etc/resolv.conf</ignore>
+    <ignore>/etc/wazuh-indexer/backup</ignore>
+    <ignore>/var/ossec/logs/alerts</ignore>      
+    <ignore>/var/ossec/logs/archives</ignore>   
+
+    <skip_nfs>yes</skip_nfs>
+  </syscheck>
+
+  <!-- ======================================= -->
+  <!-- Rootcheck                               -->
+  <!-- ======================================= -->
+  <rootcheck>
+    <disabled>no</disabled>
+    <check_files>yes</check_files>
+    <check_trojans>yes</check_trojans>
+    <check_dev>yes</check_dev>
+    <check_sys>yes</check_sys>
+    <check_pids>yes</check_pids>
+    <check_ports>yes</check_ports>
+    <check_if>yes</check_if>
+    <frequency>43200</frequency>
+    <rootkit_files>etc/shared/rootkit_files.txt</rootkit_files>
+    <rootkit_trojans>etc/shared/rootkit_trojans.txt</rootkit_trojans>
+    <system_audit>etc/shared/system_audit_rcl.txt</system_audit>
+    <system_audit>etc/shared/system_audit_ssh.txt</system_audit>
+    <system_audit>etc/shared/cis_debian_linux_rcl.txt</system_audit>
+    <ignore>/bin/diff</ignore>
+    <ignore>/bin/ls</ignore>
+  </rootcheck>
+
+  <!-- ======================================= -->
+  <!-- 취약점 탐지                              -->
+  <!-- ======================================= -->
+  <vulnerability-detection>
+    <enabled>yes</enabled>
+    <interval>6h</interval>
+    <min_full_scan_interval>6h</min_full_scan_interval>
+    <run_on_start>yes</run_on_start>
+    <provider name="canonical">
+      <enabled>yes</enabled>
+      <os>bionic</os>
+      <os>focal</os>
+      <os>jammy</os>
+      <update_interval>1h</update_interval>
+    </provider>
+    <provider name="nvd">
+      <enabled>yes</enabled>
+      <update_from_year>2010</update_from_year>
+      <update_interval>1h</update_interval>
+    </provider>
+  </vulnerability-detection>
+
+  <!-- ======================================= -->
+  <!-- 로그 수집 (journald 제외 - 4.7.5 미지원) -->
+  <!-- ======================================= -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/syslog</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/ossec/logs/ossec.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/filebeat/filebeat</location>
+  </localfile>
+
+  <!-- ======================================= -->
+  <!-- Slack 연동 (level 7 이상)               -->
+  <!-- ======================================= -->
+  {% if slack_webhook_url is defined and slack_webhook_url %}
+  <integration>
+    <name>slack</name>
+    <hook_url>{{ slack_webhook_url }}</hook_url>
+    <level>10</level>
+    <alert_format>json</alert_format>
+  </integration>
+  {% endif %}
+
+<!-- ======================================= -->
+<!-- Agent 등록 설정                          -->
+<!-- ======================================= -->
+  <auth>
+    <disabled>no</disabled>
+    <port>1515</port>
+    <use_source_ip>no</use_source_ip>
+    <purge>yes</purge>
+    <use_password>no</use_password>
+    <ssl_verify_host>no</ssl_verify_host>
+    <ssl_manager_cert>etc/sslmanager.cert</ssl_manager_cert>
+    <ssl_manager_key>etc/sslmanager.key</ssl_manager_key>
+    <ssl_auto_negotiate>no</ssl_auto_negotiate>
+  </auth>
+
+
+</ossec_config>

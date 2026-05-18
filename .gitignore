@@ -8,6 +8,13 @@ crash.log
 override.tf
 override.tf.json
 .terraform.lock.hcl
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.backup
+**/*.tfvars
+**/terraform.tfstate.d/
+
+
 
 # OS
 .DS_Store
@@ -17,3 +24,15 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Ansible 지뢰 제거
+**/hosts.ini
+**/vault.yml
+**/.vault_pass
+**/*.retry
+
+# 기타 불필요한 파일
+**/*.deb
+**/*.pem
+**/*.key
+.DS_Store

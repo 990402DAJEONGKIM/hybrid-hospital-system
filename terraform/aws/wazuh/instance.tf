@@ -1,3 +1,5 @@
+#instance.tf
+
 # IAM Role
 resource "aws_iam_role" "wazuh_ssm_role" {
   name = "aws-wazuh-ssm-role"
@@ -62,7 +64,7 @@ resource "aws_key_pair" "aws-wazuh-key" {
 
 resource "aws_instance" "aws-wazuh-01" {
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.large"
+  instance_type          = "t3.xlarge"
   subnet_id              = data.aws_subnet.aws-app-sub-2a.id
   vpc_security_group_ids = [aws_security_group.aws-wazuh-sg.id]
   key_name               = aws_key_pair.aws-wazuh-key.key_name
@@ -80,28 +82,24 @@ resource "aws_instance" "aws-wazuh-01" {
 }
 
 # hosts.ini 자동 생성
-resource "local_file" "ansible_hosts" {
+resource "aws_s3_object" "ansible_hosts" {
+  bucket  = "wazuh-ansible-ssm"
+  key = "wazuh1/hosts.ini"
   content = <<-EOT
     [wazuh]
     ${aws_instance.aws-wazuh-01.id}
 
     [wazuh:vars]
     ansible_connection=community.aws.aws_ssm
-    ansible_aws_ssm_region=ap-south-2
+    ansible_aws_ssm_region=${var.aws_region}
     ansible_aws_ssm_bucket_name=wazuh-ansible-ssm
     ansible_aws_ssm_plugin_path=/usr/local/bin/session-manager-plugin
+    ansible_aws_ssm_timeout=3600
     wazuh_node_name=wazuh-01
     wazuh_node_type=master
     wazuh_master_ip=${aws_instance.aws-wazuh-01.private_ip}
     wazuh_cluster_key=${var.wazuh_cluster_key}
-    wazuh_cluster_disabled=yes
+    wazuh_cluster_disabled=no
     slack_webhook_url=${var.slack_webhook_url}
   EOT
-  filename = "./ansible/hosts.ini"
 }
-
-output "wazuh_instance_id" {
-  value = aws_instance.aws-wazuh-01.id
-}
-
-

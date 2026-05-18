@@ -1,3 +1,4 @@
+#securtiygroup.tf
 resource "aws_security_group" "aws-wazuh-sg" {
   name        = "aws-wazuh-sg"
   vpc_id      = data.aws_vpc.aws-vpc-01.id

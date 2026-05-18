@@ -2,7 +2,7 @@ terraform {
   cloud {
     organization = "k2p"
     workspaces {
-      name = "TC-wazuh"
+      name = "TC-wazuh2"
     }
   }
   required_providers {
