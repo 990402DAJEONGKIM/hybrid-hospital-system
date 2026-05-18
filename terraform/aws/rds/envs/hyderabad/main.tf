@@ -6,7 +6,6 @@ data "aws_vpc" "main" {
   id = var.vpc_id
 }
 
-
 # ─────────────────────────────────────────────
 # 보안 그룹 1: Proxy용 (aws-sg-proxy-01)
 # ─────────────────────────────────────────────
@@ -96,20 +95,19 @@ resource "aws_db_subnet_group" "main" {
 # Aurora 클러스터
 # ─────────────────────────────────────────────
 
-
 # =========================================================================================
 # Aurora 클러스터용 KMS  (by 김다정 2026.05.18)
-resource "aws_kms_key" "hyderabad_rds" {
+resource "aws_kms_key" "kms" {
   description             = "하이데라바드 RDS 암호화 KMS Key"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 }
 
-resource "aws_kms_alias" "hyderabad_rds" {
+resource "aws_kms_alias" "rds_alias" {
   name          = "alias/hyderabad-rds"
-  target_key_id = aws_kms_key.hyderabad_rds.key_id
+  target_key_id = aws_kms_key.kms.key_id
 }
-# =========================================================================================
+# ==================================================================================
 
 
 resource "aws_rds_cluster" "main" {
@@ -128,7 +126,7 @@ resource "aws_rds_cluster" "main" {
 
   storage_encrypted               = false
   deletion_protection             = false
-  kms_key_id        = aws_kms_key.rds.arn  # KMS 키 참조 (by 김다정 2026.05.18)
+  kms_key_id        = aws_kms_key.hyderabad_kms.arn  # KMS 키 참조 (by 김다정 2026.05.18)
 
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
@@ -273,7 +271,7 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
 # bastion host 용 (by 김다정 2026.05.13)
 # =========================================================================================
 # ssm 연결을 위한 IAM Role (EC2가 SSM 서비스를 쓸 수 있게 허용)
-resource "aws_iam_role" "aws_bastion_role" {
+resource "aws_iam_role" "bastion_role" {
   name = "aws-bastion-role"
 
   assume_role_policy = jsonencode({
@@ -287,19 +285,19 @@ resource "aws_iam_role" "aws_bastion_role" {
 }
 
 # SSM 관리형 정책 연결
-resource "aws_iam_role_policy_attachment" "aws_ssm_attachment" {
-  role       = aws_iam_role.aws_bastion_role.name
+resource "aws_iam_role_policy_attachment" "ssm_attachment" {
+  role       = aws_iam_role.bastion_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 # 3. EC2 인스턴스 프로파일
-resource "aws_iam_instance_profile" "aws_bastion_profile" {
-  name = "aws-bastion-profile"
-  role = aws_iam_role.aws_bastion_role.name
+resource "aws_iam_instance_profile" "bastion_profile" {
+  name = "bastion-profile"
+  role = aws_iam_role.bastion_role.name
 }
 
 # 베스천 전용 보안 그룹
-resource "aws_security_group" "aws_bastion_sg" {
+resource "aws_security_group" "bastion_sg" {
   name   = "aws-bastion-sg"
   vpc_id = data.aws_vpc.aws_vpc-01.id
 
@@ -313,14 +311,14 @@ resource "aws_security_group" "aws_bastion_sg" {
 }
 
 # 5. 베스천 EC2 인스턴스 생성
-resource "aws_instance" "aws_bastion_01" {
+resource "aws_instance" "bastion_01" {
   count                = var.bastion_count # 이 부분이 bash 스크립트와 연동됨, 0이면 생성 안 함, 1이면 생성
   ami                  = "ami-0603dd3984985653f" 
   instance_type        = "t3.micro"
-  iam_instance_profile = aws_iam_instance_profile.aws_bastion_profile.name
+  iam_instance_profile = aws_iam_instance_profile.bastion_profile.name
   
   subnet_id              = data.aws_subnet.aws-pub-sub-2a.id
-  vpc_security_group_ids = [aws_security_group.aws_bastion_sg.id]
+  vpc_security_group_ids = [aws_security_group.bastion_sg.id]
 
   tags = {
     Name = "aws-bastion-01"
