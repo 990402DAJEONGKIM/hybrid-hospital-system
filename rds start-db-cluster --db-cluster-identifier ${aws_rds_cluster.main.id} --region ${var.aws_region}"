@@ -1,0 +1,13 @@
+[1mdiff --git a/terraform/aws/rds/outputs.tf b/terraform/aws/rds/outputs.tf[m
+[1mindex 81519f3..a3eec17 100644[m
+[1m--- a/terraform/aws/rds/outputs.tf[m
+[1m+++ b/terraform/aws/rds/outputs.tf[m
+[36m@@ -43,7 +43,7 @@[m [moutput "start_command" {[m
+   value       = "aws rds start-db-cluster --db-cluster-identifier ${aws_rds_cluster.main.id} --region ${var.aws_region}"[m
+ }[m
+ [m
+[31m-# bastion host 용 (by 김다정 2026.05.13)[m
+[32m+[m[32m# bastion host 용 (by 김다정 2026.05.13).[m
+ # =========================================================================================[m
+ output "aws_bastion_01" {[m
+   value = aws_instance.aws_bastion_01[*].id # bastion 서버를 켜고 끄고 하는 variables 변수에 count 를 사용했으므로 [m
