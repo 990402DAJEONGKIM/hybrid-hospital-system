@@ -45,11 +45,11 @@ output "start_command" {
 
 # bastion host 용 (by 김다정 2026.05.13)
 # =========================================================================================
-output "aws_bastion_01" {
-  value = aws_instance.aws_bastion_01[*].id # bastion 서버를 켜고 끄고 하는 variables 변수에 count 를 사용했으므로 
+output "bastion_01" {
+  value = aws_instance.bastion_01[*].id
 }
 
-output "aws_rds_endpoint" {
+output "rds_endpoint" {
   value = data.aws_rds_cluster.aws_aurora_01.endpoint
 }
 # =========================================================================================
@@ -57,18 +57,23 @@ output "aws_rds_endpoint" {
 
 # 뭄바이 RDS 복제용 (by 김다정 2026.05.18)
 # =========================================================================================
-output "hyderabad_rds_arn" {
+output "rds_arn" {
   description = "Hyderabad RDS 클러스터 ARN"
   value       = aws_rds_cluster.main.arn
 }
 
 output "kms_key_arn" {
   description = "RDS 암호화 KMS Key ARN"
-  value       = aws_kms_key.main.arn  # 팀원 코드의 실제 리소스명 확인 필요
+  value       = aws_kms_key.rds.arn
 }
 
-output "rds_monitoring_role_arn" {
-  description = "RDS 모니터링 IAM Role ARN"
-  value       = aws_iam_role.rds_monitoring.arn  # 팀원 코드의 실제 리소스명 확인 필요
+output "vpc_id" {
+  description = "하이데라바드 VPC ID"
+  value       = data.aws_vpc.vpc.id
+}
+
+output "vpc_cidr" {
+  description = "하이데라바드 VPC CIDR"
+  value       = data.aws_vpc.vpc.cidr_block
 }
 # =========================================================================================

@@ -1,3 +1,10 @@
+variable "aws_region" {
+  description = "AWS 뭄바이 리전"
+  type        = string
+  default     = "ap-south-1"
+}
+
+
 variable "vpc_cidr" {
   description = "뭄바이 VPC CIDR"
   type        = string
@@ -16,7 +23,7 @@ variable "db_subnet_cidr_1b" {
   default     = "10.1.22.0/24"
 }
 
-variable "hyderabad_vpc_cidr" {
+variable "vpc_cidr" {
   description = "하이데라바드 VPC CIDR"
   type        = string
   default     = "10.0.0.0/16"

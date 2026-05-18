@@ -1,5 +1,5 @@
 variable "aws_region" {
-  description = "AWS 리전"
+  description = "AWS 하이데라바드 리전"
   type        = string
   default     = "ap-south-2"
 }

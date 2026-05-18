@@ -13,6 +13,7 @@ terraform {
   }
 }
 
+# Hyderabad 리전용 AWS Provider
 provider "aws" {
   region = var.aws_region
 }
