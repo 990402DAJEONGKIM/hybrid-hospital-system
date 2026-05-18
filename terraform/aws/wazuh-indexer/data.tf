@@ -38,6 +38,3 @@ data "terraform_remote_state" "wazuh2" {
   }
 }
 
-output "indexer_eip" {
-  value = aws_eip.wazuh_indexer.public_ip
-}

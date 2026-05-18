@@ -13,8 +13,7 @@ variable "ssh_public_key" {
 }
 
 
-
 variable "wazuh_indexer_ip" {
-  description = "Wazuh Indexer EIP"
+  description = "Wazuh Indexer Private IP"  # EIP → Private IP로 수정
   type        = string
 }

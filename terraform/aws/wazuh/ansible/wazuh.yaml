@@ -204,11 +204,13 @@
         regexp: '^server.host:'
         line: 'server.host: 0.0.0.0'
 
-    - name: Filebeat output → 외부 Indexer EIP
-      replace:
-        path: /etc/filebeat/filebeat.yml
-        regexp: 'hosts: \["https://.*:9200"\]'
-        replace: 'hosts: ["https://{{ wazuh_indexer_ip }}:9200"]'
+    - name: Filebeat 설정 배포
+      template:
+        src: filebeat.yml.j2
+        dest: /etc/filebeat/filebeat.yml
+        owner: root
+        group: root
+        mode: '0600'
 
     - name: Dashboard opensearch.hosts → 외부 Indexer EIP
       replace:
@@ -262,6 +264,7 @@
         state: restarted
         enabled: yes
       loop:
+        - filebeat
         - wazuh-manager
         - wazuh-dashboard
 

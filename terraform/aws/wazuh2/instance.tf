@@ -47,5 +47,6 @@ resource "aws_s3_object" "ansible_hosts" {
     wazuh_cluster_key=${var.wazuh_cluster_key}
     slack_webhook_url=${var.slack_webhook_url}
     wazuh_indexer_ip=${var.wazuh_indexer_ip}
+    wazuh_cert_name=wazuh-2
   EOT
 }
