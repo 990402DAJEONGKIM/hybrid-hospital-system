@@ -21,34 +21,3 @@ variable "hyderabad_vpc_cidr" {
   type        = string
   default     = "10.0.0.0/16"
 }
-
-# variable "hyderabad_vpc_id" {
-#   description = "하이데라바드 VPC ID"
-#   type        = string
-# }
-
-# variable "hyderabad_db_route_table_id" {
-#   description = "하이데라바드 DB Route Table ID"
-#   type        = string
-# }
-
-variable "hyderabad_rds_arn" {
-  description = "하이데라바드 Aurora 클러스터 ARN"
-  type        = string
-}
-
-variable "aurora_engine_version" {
-  description = "Aurora PostgreSQL 엔진 버전"
-  type        = string
-  default     = "15.4"
-}
-
-variable "kms_key_arn" {
-  description = "RDS 암호화 KMS 키 ARN"
-  type        = string
-}
-
-variable "rds_monitoring_role_arn" {
-  description = "RDS 모니터링 IAM Role ARN"
-  type        = string
-}

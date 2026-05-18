@@ -53,3 +53,22 @@ output "aws_rds_endpoint" {
   value = data.aws_rds_cluster.aws_aurora_01.endpoint
 }
 # =========================================================================================
+
+
+# 뭄바이 RDS 복제용 (by 김다정 2026.05.18)
+# =========================================================================================
+output "hyderabad_rds_arn" {
+  description = "Hyderabad RDS 클러스터 ARN"
+  value       = aws_rds_cluster.main.arn
+}
+
+output "kms_key_arn" {
+  description = "RDS 암호화 KMS Key ARN"
+  value       = aws_kms_key.main.arn  # 팀원 코드의 실제 리소스명 확인 필요
+}
+
+output "rds_monitoring_role_arn" {
+  description = "RDS 모니터링 IAM Role ARN"
+  value       = aws_iam_role.rds_monitoring.arn  # 팀원 코드의 실제 리소스명 확인 필요
+}
+# =========================================================================================
