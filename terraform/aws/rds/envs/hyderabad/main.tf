@@ -124,9 +124,9 @@ resource "aws_rds_cluster" "main" {
   preferred_backup_window         = "07:33-08:03"
   preferred_maintenance_window    = "tue:13:25-tue:13:55"
 
-  storage_encrypted               = false
+  storage_encrypted               = true   # KMS 암호화 활성화
   deletion_protection             = false
-  kms_key_id        = aws_kms_key.hyderabad_kms.arn  # KMS 키 참조 (by 김다정 2026.05.18)
+  kms_key_id        = aws_kms_key.kms.arn  # KMS 키 참조 (by 김다정 2026.05.18)
 
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
@@ -299,7 +299,7 @@ resource "aws_iam_instance_profile" "bastion_profile" {
 # 베스천 전용 보안 그룹
 resource "aws_security_group" "bastion_sg" {
   name   = "aws-bastion-sg"
-  vpc_id = data.aws_vpc.aws_vpc-01.id
+  vpc_id = data.aws_vpc.main.id
 
   # 아웃바운드는 RDS(5432) 접근을 위해 전체 허용
   egress {
@@ -317,7 +317,7 @@ resource "aws_instance" "bastion_01" {
   instance_type        = "t3.micro"
   iam_instance_profile = aws_iam_instance_profile.bastion_profile.name
   
-  subnet_id              = data.aws_subnet.aws-pub-sub-2a.id
+  subnet_id              = data.aws_subnet.pub-sub-2a.id
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
 
   tags = {

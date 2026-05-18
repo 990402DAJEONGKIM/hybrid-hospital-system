@@ -1,5 +1,5 @@
 # VPC 정보 가져오기
-data "aws_vpc" "vpc" {
+data "aws_vpc" "main" {
   filter {
     name   = "tag:Name"
     values = ["aws-vpc-01"]

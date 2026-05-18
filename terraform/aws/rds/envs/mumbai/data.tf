@@ -2,9 +2,9 @@
 data "terraform_remote_state" "hyderabad" {
   backend = "remote"
   config = {
-    organization = "rds-hyderabad" # 하이데라바드 워크스페이스가 속한 Terraform Cloud 조직 이름
+    organization = "TC-RDS-Hyderabad" # 하이데라바드 워크스페이스가 속한 Terraform Cloud 조직 이름
     workspaces = {
-      name = "rds-hyderabad"
+      name = "TC-RDS-Hyderabad"
     }
   }
 }
