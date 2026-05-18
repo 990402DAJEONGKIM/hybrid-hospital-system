@@ -69,6 +69,15 @@ resource "aws_security_group" "rds" {
     description = "On-premises direct access"
   }
 
+  # ✅ 추가: 베스천 호스트 → Aurora 직접 접근
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.aws_bastion_sg.id]
+    description     = "Bastion Host to Aurora"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -96,25 +105,27 @@ resource "aws_db_subnet_group" "main" {
 # Aurora 클러스터
 # ─────────────────────────────────────────────
 resource "aws_rds_cluster" "main" {
-  cluster_identifier              = "aws-aurora-01"
-  engine                          = "aurora-postgresql"
-  engine_version                  = var.db_engine_version
-  master_username                 = var.db_master_username
-  manage_master_user_password     = true
+  cluster_identifier          = "aws-aurora-01"
+  engine                      = "aurora-postgresql"
+  engine_version              = var.db_engine_version
+  master_username             = var.db_master_username
+  manage_master_user_password = true
 
-  db_subnet_group_name            = aws_db_subnet_group.main.name
-  vpc_security_group_ids          = [aws_security_group.rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
 
-  backup_retention_period         = var.backup_retention_days
-  preferred_backup_window         = "07:33-08:03"
-  preferred_maintenance_window    = "tue:13:25-tue:13:55"
+  backup_retention_period      = var.backup_retention_days
+  preferred_backup_window      = "07:33-08:03"
+  preferred_maintenance_window = "tue:13:25-tue:13:55"
 
-  storage_encrypted               = false
-  deletion_protection             = false
+  storage_encrypted = false
+
+  # ✅ 삭제 방지 설정
+  deletion_protection = true  # AWS 콘솔/CLI에서도 삭제 불가
+  skip_final_snapshot = false # 삭제 시 스냅샷 강제 생성
+  final_snapshot_identifier = "aws-aurora-01-final-snapshot" # 스냅샷 이름
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
-
-  skip_final_snapshot             = true
 
   tags = merge(local.common_tags, { Name = "aws-aurora-01" })
 }
