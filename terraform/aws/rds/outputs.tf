@@ -43,7 +43,7 @@ output "start_command" {
   value       = "aws rds start-db-cluster --db-cluster-identifier ${aws_rds_cluster.main.id} --region ${var.aws_region}"
 }
 
-# bastion host 용 (by 김다정 2026.05.13).
+# bastion host 용 (by 김다정 2026.05.13)
 # =========================================================================================
 output "aws_bastion_01" {
   value = aws_instance.aws_bastion_01[*].id # bastion 서버를 켜고 끄고 하는 variables 변수에 count 를 사용했으므로 
