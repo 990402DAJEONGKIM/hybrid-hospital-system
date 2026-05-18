@@ -50,7 +50,7 @@ output "bastion_01" {
 }
 
 output "rds_endpoint" {
-  value = data.aws_rds_cluster.aws_aurora_01.endpoint
+  value = data.aws_rds_cluster.aurora_01.endpoint
 }
 # =========================================================================================
 
@@ -64,16 +64,16 @@ output "rds_arn" {
 
 output "kms_key_arn" {
   description = "RDS 암호화 KMS Key ARN"
-  value       = aws_kms_key.rds.arn
+  value       = aws_kms_key.kms.arn
 }
 
 output "vpc_id" {
   description = "하이데라바드 VPC ID"
-  value       = data.aws_vpc.vpc.id
+  value       = data.aws_vpc.main.id
 }
 
 output "vpc_cidr" {
   description = "하이데라바드 VPC CIDR"
-  value       = data.aws_vpc.vpc.cidr_block
+  value       = data.aws_vpc.main.cidr_block
 }
 # =========================================================================================
