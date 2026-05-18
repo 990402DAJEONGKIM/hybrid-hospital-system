@@ -173,10 +173,8 @@ resource "aws_route" "mumbai_to_hyderabad" {
 resource "aws_rds_global_cluster" "global" {
   provider                         = aws
   global_cluster_identifier        = "aws-aurora-global"
-  source_db_cluster_identifier     = var.hyderabad_rds_arn
+  source_db_cluster_identifier     = aws_rds_cluster.main.arn
   force_destroy                    = false
-
-  
 }
 
 # ─────────────────────────────────────────
@@ -269,4 +267,20 @@ resource "aws_rds_cluster_instance" "mumbai_cluster_instance_1b" {
     Name = "aws-aurora-mumbai-1b"
     Role = "standby"
   }
+}
+
+
+# ─────────────────────────────────────────
+# 뭄바이 Aurora KMS
+# ─────────────────────────────────────────
+
+resource "aws_kms_key" "mumbai_rds" {
+  description             = "뭄바이 RDS 암호화 KMS Key"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
+resource "aws_kms_alias" "mumbai_rds" {
+  name          = "alias/mumbai-rds"
+  target_key_id = aws_kms_key.mumbai_rds.key_id
 }

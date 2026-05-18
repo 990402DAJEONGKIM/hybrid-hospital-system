@@ -95,6 +95,23 @@ resource "aws_db_subnet_group" "main" {
 # ─────────────────────────────────────────────
 # Aurora 클러스터
 # ─────────────────────────────────────────────
+
+
+# =========================================================================================
+# Aurora 클러스터용 KMS  (by 김다정 2026.05.18)
+resource "aws_kms_key" "hyderabad_rds" {
+  description             = "하이데라바드 RDS 암호화 KMS Key"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
+resource "aws_kms_alias" "hyderabad_rds" {
+  name          = "alias/hyderabad-rds"
+  target_key_id = aws_kms_key.hyderabad_rds.key_id
+}
+# =========================================================================================
+
+
 resource "aws_rds_cluster" "main" {
   cluster_identifier              = "aws-aurora-01"
   engine                          = "aurora-postgresql"
@@ -111,6 +128,8 @@ resource "aws_rds_cluster" "main" {
 
   storage_encrypted               = false
   deletion_protection             = false
+  kms_key_id        = aws_kms_key.rds.arn  # KMS 키 참조 (by 김다정 2026.05.18)
+
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
@@ -308,3 +327,4 @@ resource "aws_instance" "aws_bastion_01" {
   }
 }
 # =========================================================================================
+
