@@ -12,6 +12,9 @@ variable "ssh_public_key" {
   sensitive = true
 }
 
-variable "wazuh_admin_password" {
-  sensitive = true
+
+
+variable "wazuh_indexer_ip" {
+  description = "Wazuh Indexer EIP"
+  type        = string
 }

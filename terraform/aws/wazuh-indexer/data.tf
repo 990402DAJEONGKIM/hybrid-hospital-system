@@ -2,16 +2,20 @@
 data "aws_vpc" "aws-vpc-01" {
   tags = { Name = "aws-vpc-01" }
 }
-data "aws_subnet" "aws-app-sub-2b" {
-  tags = { Name = "aws-app-sub-2b" }
+
+data "aws_subnet" "aws-app-sub-2a" {
+  tags = { Name = "aws-app-sub-2a" }
 }
+
 data "aws_ami" "ubuntu_22_04" {
   most_recent = true
   owners      = ["099720109477"]
+
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
+
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -22,17 +26,18 @@ data "terraform_remote_state" "wazuh" {
   backend = "remote"
   config = {
     organization = "k2p"
-    workspaces = {
-      name = "TC-wazuh"
-    }
+    workspaces = { name = "TC-wazuh" }
   }
 }
 
-data "aws_security_group" "aws-wazuh-sg" {
-  name = "aws-wazuh-sg"
-}
-output "wazuh_private_ip" {
-  value = aws_instance.aws-wazuh-02.private_ip
+data "terraform_remote_state" "wazuh2" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-wazuh2" }
+  }
 }
 
-
+output "indexer_eip" {
+  value = aws_eip.wazuh_indexer.public_ip
+}

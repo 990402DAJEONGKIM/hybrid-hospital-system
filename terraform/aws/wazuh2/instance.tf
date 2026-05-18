@@ -10,7 +10,7 @@ data "aws_key_pair" "aws-wazuh-key" {
 # EC2
 resource "aws_instance" "aws-wazuh-02" {
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.xlarge"
+  instance_type          = "t3.large"
   subnet_id              = data.aws_subnet.aws-app-sub-2b.id
   vpc_security_group_ids = [data.aws_security_group.aws-wazuh-sg.id]
   key_name               = data.aws_key_pair.aws-wazuh-key.key_name
@@ -43,9 +43,9 @@ resource "aws_s3_object" "ansible_hosts" {
     ansible_aws_ssm_timeout=3600
     wazuh_node_name=wazuh-02
     wazuh_node_type=worker
-    wazuh_master_ip=${var.wazuh_master_ip}
+    wazuh_master_ip=${data.terraform_remote_state.wazuh.outputs.wazuh_private_ip}
     wazuh_cluster_key=${var.wazuh_cluster_key}
-    wazuh_cluster_disabled=no
     slack_webhook_url=${var.slack_webhook_url}
+    wazuh_indexer_ip=${var.wazuh_indexer_ip}
   EOT
 }

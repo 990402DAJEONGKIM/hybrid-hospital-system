@@ -1,6 +1,6 @@
 ---
-- name: Wazuh Manager + Dashboard 설치
-  hosts: wazuh
+- name: Wazuh Indexer 설치
+  hosts: wazuh-indexer
   become: yes
   vars_files:
     - vault.yml
@@ -40,13 +40,13 @@
         reload: yes
 
     # ──────────────────────────────────────────
-    # Wazuh 버전 고정 (indexer 제외)
+    # Wazuh 버전 고정
     # ──────────────────────────────────────────
     - name: Wazuh 버전 고정
       copy:
         dest: /etc/apt/preferences.d/wazuh
         content: |
-          Package: wazuh-manager wazuh-dashboard
+          Package: wazuh-indexer
           Pin: version 4.14.5*
           Pin-Priority: 1001
 
@@ -63,35 +63,33 @@
           - apt-transport-https
           - gnupg
           - python3
-          - libxml2-utils
           - awscli
         state: present
 
     # ──────────────────────────────────────────
-    # 설치 여부 확인 (manager 기준)
+    # 설치 여부 확인 (indexer 기준)
     # ──────────────────────────────────────────
-    - name: Wazuh 설치 여부 확인
+    - name: Wazuh Indexer 설치 여부 확인
       stat:
-        path: /var/ossec/etc/ossec.conf
-      register: wazuh_installed
+        path: /etc/wazuh-indexer/opensearch.yml
+      register: wazuh_indexer_installed
 
     # ──────────────────────────────────────────
     # 설치 블록 (최초 1회)
     # ──────────────────────────────────────────
-    - name: Wazuh 신규 설치
-      when: not wazuh_installed.stat.exists
+    - name: Wazuh Indexer 신규 설치
+      when: not wazuh_indexer_installed.stat.exists
       block:
         - name: Wazuh 잔재 정리
           shell: |
-            systemctl stop wazuh-manager 2>/dev/null || true
-            systemctl stop wazuh-dashboard 2>/dev/null || true
-            apt purge wazuh-manager wazuh-dashboard -y || true
+            systemctl stop wazuh-indexer 2>/dev/null || true
+            apt purge wazuh-indexer -y || true
             apt autoremove -y || true
             dpkg --configure -a || true
             apt-get install -f -y || true
-            rm -rf /etc/wazuh-dashboard || true
-            rm -rf /var/ossec || true
-            rm -rf /usr/share/wazuh-dashboard || true
+            rm -rf /etc/wazuh-indexer || true
+            rm -rf /usr/share/wazuh-indexer || true
+            rm -rf /var/lib/wazuh-indexer || true
             systemctl daemon-reload || true
             systemctl reset-failed || true
 
@@ -109,25 +107,62 @@
             - /tmp/wazuh-install-files
             - /tmp/wazuh-install-files.tar
 
-        - name: wazuh-install-files.tar S3 다운로드 (Indexer가 생성한 인증서)
+        - name: 다중 노드 config.yml 작성
+          copy:
+            dest: /tmp/config.yml
+            content: |
+              nodes:
+                indexer:
+                  - name: node-1
+                    ip: "{{ ansible_default_ipv4.address }}"
+                server:
+                  - name: wazuh-1
+                    ip: "{{ wazuh_manager1_ip }}"
+                    node_type: master
+                  - name: wazuh-2
+                    ip: "{{ wazuh_manager2_ip }}"
+                    node_type: worker
+                dashboard:
+                  - name: dashboard-1
+                    ip: "{{ wazuh_manager1_ip }}"
+                  - name: dashboard-2
+                    ip: "{{ wazuh_manager2_ip }}"
+
+        - name: 인증서 생성
+          shell: bash /tmp/wazuh-install.sh --generate-config-files
+          args:
+            chdir: /tmp/
+          async: 600
+          poll: 30
+
+        - name: wazuh-install-files.tar S3 업로드 (Manager EC2들이 사용)
           shell: >
-            aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar /tmp/wazuh-install-files.tar
-            --region ap-south-2
+            aws s3 cp /tmp/wazuh-install-files.tar
+            s3://wazuh-ansible-ssm/wazuh-install-files.tar
+            --region {{ ansible_env.AWS_DEFAULT_REGION | default('ap-south-2') }}
           environment:
             AWS_DEFAULT_REGION: "ap-south-2"
 
-        - name: Wazuh Manager 설치 (master)
-          shell: bash /tmp/wazuh-install.sh --wazuh-server wazuh-1 --overwrite
+        - name: Wazuh Indexer 설치
+          shell: bash /tmp/wazuh-install.sh --wazuh-indexer node-1 --overwrite
           args:
             chdir: /tmp/
           async: 1800
           poll: 30
 
-        - name: Wazuh Dashboard 설치
-          shell: bash /tmp/wazuh-install.sh --wazuh-dashboard dashboard-1 --overwrite
+        - name: Indexer API 준비 대기 (start-cluster 실행 전)
+          wait_for:
+            port: 9200
+            host: "{{ ansible_default_ipv4.address }}"
+            delay: 15
+            timeout: 300
+            msg: "Indexer가 start-cluster 전에 응답하지 않습니다."
+
+        - name: Wazuh Cluster 시작
+          shell: bash /tmp/wazuh-install.sh --start-cluster
           args:
             chdir: /tmp/
-          async: 1800
+          async: 600
           poll: 30
 
       rescue:
@@ -142,92 +177,36 @@
 
         - name: 설치 실패 처리
           fail:
-            msg: "Wazuh 설치 실패. 위 로그를 확인하세요."
+            msg: "Wazuh Indexer 설치 실패. 위 로그를 확인하세요."
 
     # ──────────────────────────────────────────
     # 설정 블록 (항상 실행)
     # ──────────────────────────────────────────
-    - name: 로컬 Indexer 서비스 중지 (외부 Indexer로 전환)
-      systemd:
-        name: wazuh-indexer
-        state: stopped
-        enabled: no
-      ignore_errors: yes
+    - name: JVM 힙 메모리 설정
+      replace:
+        path: /etc/wazuh-indexer/jvm.options
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - { regexp: '^-Xms.*', replace: '-Xms4g' }
+        - { regexp: '^-Xmx.*', replace: '-Xmx4g' }
 
-    - name: ossec.conf 템플릿 배포
-      template:
-        src: ossec.conf.j2
-        dest: /var/ossec/etc/ossec.conf
-        owner: root
-        group: wazuh
-        mode: '0640'
-
-    - name: 커스텀 룰 배포
-      copy:
-        src: local_rules.xml
-        dest: /var/ossec/etc/rules/local_rules.xml
-        owner: root
-        group: wazuh
-        mode: '0640'
-
-    - name: Agent 중앙 설정 배포
-      copy:
-        src: agent.conf
-        dest: /var/ossec/etc/shared/default/agent.conf
-        owner: wazuh
-        group: wazuh
-        mode: '0640'
-
-    - name: ossec.conf XML 검증
-      shell: |
-        python3 -c "
-        import xml.etree.ElementTree as ET
-        ET.parse('/var/ossec/etc/ossec.conf')
-        print('XML OK')
-        "
-      register: xml_check
-      failed_when: "'XML OK' not in xml_check.stdout"
-
-    - name: Wazuh 설정 파서 검증
-      command: /var/ossec/bin/wazuh-analysisd -t
-      register: analysisd_check
-      failed_when: analysisd_check.rc != 0
-
-    - name: analysisd 검증 결과 출력
-      debug:
-        var: analysisd_check.stdout_lines
-      when: analysisd_check.stdout_lines is defined
-
-    - name: Dashboard server.host 설정
+    - name: Indexer 메모리 lock 설정
       lineinfile:
-        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
-        regexp: '^server.host:'
-        line: 'server.host: 0.0.0.0'
-
-    - name: Filebeat output → 외부 Indexer EIP
-      replace:
-        path: /etc/filebeat/filebeat.yml
-        regexp: 'hosts: \["https://.*:9200"\]'
-        replace: 'hosts: ["https://{{ wazuh_indexer_ip }}:9200"]'
-
-    - name: Dashboard opensearch.hosts → 외부 Indexer EIP
-      replace:
-        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
-        regexp: 'opensearch.hosts:.*'
-        replace: 'opensearch.hosts: ["https://{{ wazuh_indexer_ip }}:9200"]'
+        path: /etc/wazuh-indexer/opensearch.yml
+        regexp: '^bootstrap.memory_lock:'
+        line: 'bootstrap.memory_lock: true'
+        state: present
 
     - name: systemd override 디렉토리 생성
       file:
-        path: "/etc/systemd/system/{{ item }}.service.d"
+        path: /etc/systemd/system/wazuh-indexer.service.d
         state: directory
         mode: '0755'
-      loop:
-        - wazuh-manager
-        - wazuh-dashboard
 
-    - name: Manager systemd 재시작 설정
+    - name: Indexer systemd 재시작 설정
       copy:
-        dest: /etc/systemd/system/wazuh-manager.service.d/restart.conf
+        dest: /etc/systemd/system/wazuh-indexer.service.d/restart.conf
         content: |
           [Unit]
           StartLimitIntervalSec=300
@@ -235,20 +214,8 @@
 
           [Service]
           Restart=always
-          RestartSec=10
-      notify: systemd reload
-
-    - name: Dashboard systemd 재시작 설정
-      copy:
-        dest: /etc/systemd/system/wazuh-dashboard.service.d/restart.conf
-        content: |
-          [Unit]
-          StartLimitIntervalSec=300
-          StartLimitBurst=5
-
-          [Service]
-          Restart=always
-          RestartSec=10
+          RestartSec=30
+          LimitMEMLOCK=infinity
       notify: systemd reload
 
     - meta: flush_handlers
@@ -256,22 +223,38 @@
     # ──────────────────────────────────────────
     # 서비스 재시작
     # ──────────────────────────────────────────
-    - name: Wazuh 서비스 재시작
+    - name: Wazuh Indexer 재시작
       systemd:
-        name: "{{ item }}"
+        name: wazuh-indexer
         state: restarted
         enabled: yes
-      loop:
-        - wazuh-manager
-        - wazuh-dashboard
+
+    - name: Wazuh Indexer API 응답 대기
+      wait_for:
+        port: 9200
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 15
+        timeout: 300
+        msg: "Indexer가 제한 시간 내에 시작되지 않았습니다."
+
+    - name: Wazuh admin 비밀번호 고정
+      shell: >
+        timeout 60
+        /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh
+        -u admin -p '{{ wazuh_admin_password }}'
+      no_log: true
+      changed_when: false
+      register: pwd_change
+      until: pwd_change.rc == 0
+      retries: 5
+      delay: 10
 
     # ──────────────────────────────────────────
     # 결과 확인
     # ──────────────────────────────────────────
     - name: 서비스 상태 확인
       shell: |
-        echo "=== Manager ===" && systemctl is-active wazuh-manager
-        echo "=== Dashboard ===" && systemctl is-active wazuh-dashboard
+        echo "=== Indexer ===" && systemctl is-active wazuh-indexer
       register: service_status
 
     - name: 서비스 상태 출력

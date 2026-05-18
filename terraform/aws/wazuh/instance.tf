@@ -64,7 +64,7 @@ resource "aws_key_pair" "aws-wazuh-key" {
 
 resource "aws_instance" "aws-wazuh-01" {
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.xlarge"
+  instance_type          = "t3.large"
   subnet_id              = data.aws_subnet.aws-app-sub-2a.id
   vpc_security_group_ids = [aws_security_group.aws-wazuh-sg.id]
   key_name               = aws_key_pair.aws-wazuh-key.key_name
@@ -99,7 +99,7 @@ resource "aws_s3_object" "ansible_hosts" {
     wazuh_node_type=master
     wazuh_master_ip=${aws_instance.aws-wazuh-01.private_ip}
     wazuh_cluster_key=${var.wazuh_cluster_key}
-    wazuh_cluster_disabled=no
     slack_webhook_url=${var.slack_webhook_url}
+    wazuh_indexer_ip=${var.wazuh_indexer_ip}
   EOT
 }
