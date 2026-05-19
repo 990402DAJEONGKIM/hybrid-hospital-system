@@ -75,6 +75,7 @@ variable "aws_account_id" {
 variable "rds_kms_key_arn" {
   description = "Aurora 저장 암호화용 KMS 키 ARN (KMS 모듈 output 참조)"
   type        = string
+  default     = ""
 }
 
 # bastion host 용 (by 김다정 2026.05.13)
