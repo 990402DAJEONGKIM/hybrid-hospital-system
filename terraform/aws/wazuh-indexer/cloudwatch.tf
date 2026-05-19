@@ -41,6 +41,6 @@ resource "aws_lambda_permission" "aws-wazuh-sns-indexer" {
 resource "aws_sns_topic_subscription" "aws-wazuh-indexer-to-lambda" {
   topic_arn = aws_sns_topic.aws-wazuh-indexer-alerts.arn
   protocol  = "lambda"
-  endpoint  = "arn:aws:lambda:ap-south-2:${data.aws_caller_identity.current.account_id}:function:wazuh-slack-notify"
+  endpoint  = "arn:aws:lambda:ap-south-2:${data.aws_caller_identity.current.account_id}:function:aws-wazuh-slack-notify"
   depends_on = [aws_lambda_permission.aws-wazuh-sns-indexer]
 }

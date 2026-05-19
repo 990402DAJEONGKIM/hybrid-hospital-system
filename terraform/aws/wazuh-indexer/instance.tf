@@ -1,5 +1,18 @@
 #instance.tf
+import {
+  to = aws_iam_role_policy_attachment.aws-wazuh-indexer-ssm
+  id = "aws-wazuh-indexer-role/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
+import {
+  to = aws_iam_role_policy.aws-wazuh-indexer-s3
+  id = "aws-wazuh-indexer-role:aws-wazuh-indexer-s3-ssm"
+}
+
+import {
+  to = aws_s3_object.aws-wazuh-indexer-hosts
+  id = "wazuh-ansible-ssm/wazuh-indexer/hosts.ini"
+}
 # IAM Role
 resource "aws_iam_role" "aws-wazuh-indexer-role" {
   name = "aws-wazuh-indexer-role"
@@ -16,13 +29,13 @@ resource "aws_iam_role" "aws-wazuh-indexer-role" {
   tags = { Name = "aws-wazuh-indexer-role", Owner = "st2" }
 }
 
-resource "aws_iam_role_policy_attachment" "indexer_ssm" {
+resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-ssm" {
   role       = aws_iam_role.aws-wazuh-indexer-role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_iam_role_policy" "indexer_s3" {
-  name = "wazuh-indexer-s3"
+resource "aws_iam_role_policy" "aws-wazuh-indexer-s3" {
+  name = "aws-wazuh-indexer-s3-ssm"
   role = aws_iam_role.aws-wazuh-indexer-role.id
 
   policy = jsonencode({
@@ -77,7 +90,7 @@ resource "aws_instance" "aws-wazuh-indexer" {
 }
 
 # hosts.ini
-resource "aws_s3_object" "indexer_hosts" {
+resource "aws_s3_object" "aws-wazuh-indexer-hosts" {
   bucket = "wazuh-ansible-ssm"
   key    = "wazuh-indexer/hosts.ini"
   content = <<-EOT
