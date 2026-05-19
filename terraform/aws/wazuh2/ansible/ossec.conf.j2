@@ -33,7 +33,7 @@
       <node>{{ wazuh_master_ip }}</node>
     </nodes>
     <hidden>no</hidden>
-    <disabled>{{ wazuh_cluster_disabled | default('yes') }}</disabled>
+    <disabled>no</disabled>
   </cluster>
 
   <!-- ======================================= -->
@@ -90,9 +90,8 @@
     <ignore>/etc/random-seed</ignore>
     <ignore>/etc/adjtime</ignore>
     <ignore>/etc/resolv.conf</ignore>
-    <ignore>/etc/wazuh-indexer/backup</ignore>
-    <ignore>/var/ossec/logs/alerts</ignore>      
-    <ignore>/var/ossec/logs/archives</ignore>   
+    <ignore>/var/ossec/logs/alerts</ignore>
+    <ignore>/var/ossec/logs/archives</ignore>
 
     <skip_nfs>yes</skip_nfs>
   </syscheck>

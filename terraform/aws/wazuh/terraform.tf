@@ -1,8 +1,9 @@
+#terraform.tf
 terraform {
   cloud {
     organization = "k2p"
     workspaces {
-      name = "TC-wazuh"
+      name = "TC-aws-wazuh"
     }
   }
   required_providers {

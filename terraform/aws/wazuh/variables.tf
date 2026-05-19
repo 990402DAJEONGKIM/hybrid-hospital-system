@@ -12,6 +12,8 @@ variable "ssh_public_key" {
   sensitive = true
 }
 
-variable "wazuh_admin_password" {
-  sensitive = true
+
+variable "wazuh_indexer_ip" {
+  description = "Wazuh Indexer Private IP"  # EIP → Private IP로 수정
+  type        = string
 }
