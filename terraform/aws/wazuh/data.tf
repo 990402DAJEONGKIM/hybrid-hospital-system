@@ -22,6 +22,21 @@ data "aws_ami" "ubuntu_22_04" {
   }
 }
 
+
+data "aws_subnet" "aws-app-sub-2b" {
+  tags = { Name = "aws-app-sub-2b" }
+}
+
+data "terraform_remote_state" "wazuh2" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = {
+      name = "TC-aws-wazuh2"
+    }
+  }
+}
+
 output "wazuh_private_ip" {
   value = aws_instance.aws-wazuh-01.private_ip
 }
