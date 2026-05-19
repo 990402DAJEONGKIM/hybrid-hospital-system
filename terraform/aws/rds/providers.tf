@@ -2,7 +2,7 @@ terraform {
   cloud {
     organization = "k2p"
     workspaces {
-      name = "TC-RDS"
+      name = "TC-aws-RDS"
     }
   }
   required_providers {
