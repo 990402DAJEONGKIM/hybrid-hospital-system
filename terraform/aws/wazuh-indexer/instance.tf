@@ -1,16 +1,5 @@
 #instance.tf
-import {
-  to = aws_iam_role_policy_attachment.aws-wazuh-indexer-ssm
-  id = "aws-wazuh-indexer-role/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-import {
-  to = aws_iam_role_policy.aws-wazuh-indexer-s3
-  id = "aws-wazuh-indexer-role:wazuh-indexer-s3"
-}
-import {
-  to = aws_s3_object.aws-wazuh-indexer-hosts
-  id = "wazuh-ansible-ssm/wazuh-indexer/hosts.ini"
-}
+
 # IAM Role
 resource "aws_iam_role" "aws-wazuh-indexer-role" {
   name = "aws-wazuh-indexer-role"
