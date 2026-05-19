@@ -14,7 +14,7 @@ resource "random_password" "replication_password" {
 # ── Cloud SQL 인스턴스 ─────────────────────────────────────────────────────────
 resource "google_sql_database_instance" "main" {
   name             = "gcp-cloud-sql"
-  database_version = "POSTGRES_15"
+  database_version = "POSTGRES_17"
   region           = var.region
 
   deletion_protection = true
@@ -22,6 +22,7 @@ resource "google_sql_database_instance" "main" {
   settings {
     tier              = "db-g1-small"
     availability_type = "REGIONAL"   # HA 구성
+    activation_policy = var.activation_policy
 
     # ── Private IP 전용 ───────────────────────────────────────────────────────
     ip_configuration {
