@@ -2,20 +2,26 @@ terraform {
   cloud {
     organization = "k2p"
     workspaces {
-      name = "TC-KMS"
+      name = "TC-aws-KMS"
+    }
+  }
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
     }
   }
 }
 
 provider "aws" {
   region = var.aws_region
+}
 
-  default_tags {
-    tags = {
-      Project     = "msp-solution-architect"
-      Team        = "k2p"
-      Environment = "dev"
-      ManagedBy   = "terraform"
-    }
+locals {
+  common_tags = {
+    Owner       = "st1"
+    Project     = "msp-solution-architect"
+    Team        = "k2p"
+    Environment = "dev"
   }
 }
