@@ -42,3 +42,13 @@ output "secretsmanager_kms_key_id" {
   description = "Secrets Manager 암호화용 KMS 키 ID"
   value       = aws_kms_key.secretsmanager.key_id
 }
+
+output "ecr_kms_key_arn" {
+  value       = aws_kms_key.ecr.arn
+  description = "ECR 암호화 KMS 키 ARN"
+}
+
+output "ecr_kms_key_id" {
+  value       = aws_kms_key.ecr.key_id
+  description = "ECR 암호화 KMS 키 ID"
+}

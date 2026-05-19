@@ -8,7 +8,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 6.0"
+      version = "~> 6.45.0"
     }
   }
 }
@@ -19,7 +19,7 @@ provider "aws" {
 
 locals {
   common_tags = {
-    Owner       = "st1"
+    Owner       = "st4"
     Project     = "msp-solution-architect"
     Team        = "k2p"
     Environment = "dev"

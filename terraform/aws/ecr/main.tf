@@ -11,10 +11,10 @@
 
 locals {
   repositories = [
-    "hospital-nginx-patient",
-    "hospital-api-patient",
-    "hospital-nginx-staff",
-    "hospital-api-staff",
+    "aws-hospital-nginx-patient",
+    "aws-hospital-api-patient",
+    "aws-hospital-nginx-staff",
+    "aws-hospital-api-staff",
   ]
 
   # 이미지 유지 개수 기반 Lifecycle Policy (공통)
@@ -50,7 +50,8 @@ resource "aws_ecr_repository" "repos" {
 
   # 저장 데이터 암호화 (AES-256 기본 — KMS CMK 미사용, ECR 관리형 키)
   encryption_configuration {
-    encryption_type = "AES256"
+      encryption_type = "KMS"
+      kms_key         = var.ecr_kms_key_arn  # kms 모듈 output 참조
   }
 
   tags = { Name = each.key }

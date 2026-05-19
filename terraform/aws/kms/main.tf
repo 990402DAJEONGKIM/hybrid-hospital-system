@@ -75,7 +75,7 @@ resource "aws_kms_key" "rds" {
 }
 
 resource "aws_kms_alias" "rds" {
-  name          = "alias/hospital-rds"
+  name          = "alias/aws-kms-rds-01"
   target_key_id = aws_kms_key.rds.key_id
 }
 
@@ -99,7 +99,7 @@ resource "aws_kms_key" "ebs" {
 }
 
 resource "aws_kms_alias" "ebs" {
-  name          = "alias/hospital-ebs"
+  name          = "alias/aws-kms-ebs-01"
   target_key_id = aws_kms_key.ebs.key_id
 }
 
@@ -123,7 +123,7 @@ resource "aws_kms_key" "s3" {
 }
 
 resource "aws_kms_alias" "s3" {
-  name          = "alias/hospital-s3"
+  name          = "alias/aws-kms-s3-01"
   target_key_id = aws_kms_key.s3.key_id
 }
 
@@ -147,8 +147,32 @@ resource "aws_kms_key" "secretsmanager" {
 }
 
 resource "aws_kms_alias" "secretsmanager" {
-  name          = "alias/hospital-secretsmanager"
+  name          = "alias/aws-kms-sm-01"
   target_key_id = aws_kms_key.secretsmanager.key_id
+}
+
+
+# ─────────────────────────────────────────────────────────
+# 5. ECR 암호화 키
+#    컨테이너 이미지 저장 데이터 암호화
+#    ISMS-P 2.7.1
+# ─────────────────────────────────────────────────────────
+resource "aws_kms_key" "ecr" {
+  description             = "Hospital ECR 컨테이너 이미지 암호화 키"
+  enable_key_rotation     = true
+  rotation_period_in_days = var.key_rotation_period_days
+  deletion_window_in_days = var.deletion_window_days
+  policy                  = local.key_policy
+
+  tags = {
+    Name    = "aws-kms-ecr-01"
+    Purpose = "ecr-encryption"
+  }
+}
+
+resource "aws_kms_alias" "ecr" {
+  name          = "alias/aws-kms-ecr-01"
+  target_key_id = aws_kms_key.ecr.key_id
 }
 
 

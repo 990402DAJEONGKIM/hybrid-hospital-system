@@ -20,3 +20,8 @@ variable "image_retention_count" {
   type        = number
   default     = 10
 }
+
+variable "ecr_kms_key_arn" {
+  description = "ECR 암호화에 사용할 KMS 키 ARN"
+  type        = string
+}
