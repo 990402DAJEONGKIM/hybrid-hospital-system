@@ -14,9 +14,3 @@ variable "vpc_name" {
   type        = string
   default     = "gcp-vpc"
 }
-
-variable "activation_policy" {
-  description = "Cloud SQL 인스턴스 상태 (ALWAYS=켜기, NEVER=끄기)"
-  type        = string
-  default     = "ALWAYS"
-}

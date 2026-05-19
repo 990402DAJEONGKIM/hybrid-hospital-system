@@ -22,7 +22,6 @@ resource "google_sql_database_instance" "main" {
   settings {
     tier              = "db-g1-small"
     availability_type = "REGIONAL"   # HA 구성
-    activation_policy = var.activation_policy
 
     # ── Private IP 전용 ───────────────────────────────────────────────────────
     ip_configuration {
