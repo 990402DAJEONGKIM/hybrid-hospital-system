@@ -12,5 +12,5 @@ variable "region" {
 variable "vpc_name" {
   description = "연결할 VPC 이름 (gcp-vpc workspace apply 후 확인)"
   type        = string
-  default     = "GCP-VPC"
+  default     = "gcp-vpc"
 }

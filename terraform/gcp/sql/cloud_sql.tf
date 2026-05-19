@@ -13,7 +13,7 @@ resource "random_password" "replication_password" {
 
 # ── Cloud SQL 인스턴스 ─────────────────────────────────────────────────────────
 resource "google_sql_database_instance" "main" {
-  name             = "GCP-CloudSQL"
+  name             = "gcp-cloud-sql"
   database_version = "POSTGRES_15"
   region           = var.region
 
@@ -104,4 +104,3 @@ resource "google_sql_user" "replication" {
   instance = google_sql_database_instance.main.name
   password = random_password.replication_password.result
 }
-# ──────────────────────────────────────────────────────────────────────────────

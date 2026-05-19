@@ -1,12 +1,12 @@
 # ── VPC ──────────────────────────────────────────────────────────────────────
 resource "google_compute_network" "main" {
-  name                    = "GCP-VPC"
+  name                    = "gcp-vpc"
   auto_create_subnetworks = false
 }
 
 # ── 서브넷 ────────────────────────────────────────────────────────────────────
 resource "google_compute_subnetwork" "db" {
-  name                     = "GCP-Subnet"
+  name                     = "gcp-subnet"
   ip_cidr_range            = "10.10.1.0/24"
   region                   = var.region
   network                  = google_compute_network.main.id
@@ -15,7 +15,7 @@ resource "google_compute_subnetwork" "db" {
 
 # ── Private Service Access (Cloud SQL Private IP 연결용) ──────────────────────
 resource "google_compute_global_address" "psa_range" {
-  name          = "GCP-PSA"
+  name          = "gcp-psa"
   purpose       = "VPC_PEERING"
   address_type  = "INTERNAL"
   prefix_length = 16
@@ -33,7 +33,7 @@ resource "google_service_networking_connection" "psa" {
 # ── 방화벽 ────────────────────────────────────────────────────────────────────
 # DR 앱 → Cloud SQL 5432 허용 (VPC 내부만)
 resource "google_compute_firewall" "allow_sql_internal" {
-  name    = "GCP-FW-1"
+  name    = "gcp-fw-1"
   network = google_compute_network.main.name
 
   allow {
@@ -47,7 +47,7 @@ resource "google_compute_firewall" "allow_sql_internal" {
 
 # pglogical: RDS → Cloud SQL 복제 수신 허용
 resource "google_compute_firewall" "allow_pglogical_from_rds" {
-  name    = "GCP-FW-2"
+  name    = "gcp-fw-2"
   network = google_compute_network.main.name
 
   allow {
@@ -61,7 +61,7 @@ resource "google_compute_firewall" "allow_pglogical_from_rds" {
 
 # 그 외 외부 접근 전체 차단
 resource "google_compute_firewall" "deny_all_ingress" {
-  name     = "GCP-FW-3"
+  name     = "gcp-fw-3"
   network  = google_compute_network.main.name
   priority = 65534
 
@@ -71,5 +71,3 @@ resource "google_compute_firewall" "deny_all_ingress" {
 
   source_ranges = ["0.0.0.0/0"]
 }
-
-# ── 
