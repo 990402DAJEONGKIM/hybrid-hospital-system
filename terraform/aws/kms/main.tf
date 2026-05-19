@@ -3,7 +3,7 @@
 # ISMS-P 2.7.1: 암호키 관리 (생성·교체·폐기 정책 수립)
 #
 # 키 분리 전략:
-#   - rds   : MySQL DB 저장 데이터 암호화
+#   - rds   : postgresql DB 저장 데이터 암호화
 #   - ebs   : EC2 EBS 볼륨 암호화 (ECS EC2 노드)
 #   - s3    : S3 버킷 암호화 (로그, 정적 파일, 백업)
 #   - sm    : Secrets Manager 암호화 (DB 자격증명 등)
@@ -40,7 +40,7 @@ locals {
         Effect = "Allow"
         Principal = {
           # 기존 var.aws_region 대신 동적 참조 적용
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.${data.aws_region.current.region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -58,11 +58,11 @@ locals {
 
 # ─────────────────────────────────────────────────────────
 # 1. RDS 암호화 키
-#    MySQL 인스턴스 저장 데이터 (at-rest) 암호화
+#    PostgreSQL 인스턴스 저장 데이터 (at-rest) 암호화
 #    개인정보보호법 제29조, ISMS-P 2.7.1
 # ─────────────────────────────────────────────────────────
 resource "aws_kms_key" "rds" {
-  description             = "Hospital RDS MySQL 저장 데이터 암호화 키"
+  description             = "Hospital RDS PostgreSQL 저장 데이터 암호화 키"
   enable_key_rotation     = true
   rotation_period_in_days = var.key_rotation_period_days
   deletion_window_in_days = var.deletion_window_days
