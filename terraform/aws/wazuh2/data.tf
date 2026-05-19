@@ -19,7 +19,7 @@ data "aws_ami" "ubuntu_22_04" {
 }
 
 data "terraform_remote_state" "wazuh" {
-  backend = "cloud"
+  backend = "remote"
   config = {
     organization = "k2p"
     workspaces = {
@@ -27,7 +27,6 @@ data "terraform_remote_state" "wazuh" {
     }
   }
 }
-
 data "aws_security_group" "aws-wazuh-sg" {
   name = "aws-wazuh-sg"
 }
