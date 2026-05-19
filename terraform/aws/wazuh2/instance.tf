@@ -1,5 +1,5 @@
 #instance.tf
-data "aws_iam_instance_profile" "wazuh_profile" {
+data "aws_iam_instance_profile" "aws-wazuh-profile" {
   name = "aws-wazuh-instance-profile"
 }
 
@@ -14,7 +14,7 @@ resource "aws_instance" "aws-wazuh-02" {
   subnet_id              = data.aws_subnet.aws-app-sub-2b.id
   vpc_security_group_ids = [data.aws_security_group.aws-wazuh-sg.id]
   key_name               = data.aws_key_pair.aws-wazuh-key.key_name
-  iam_instance_profile   = data.aws_iam_instance_profile.wazuh_profile.name
+  iam_instance_profile   = data.aws_iam_instance_profile.aws-wazuh-profile.name
 
   root_block_device {
     volume_size = 50
@@ -28,7 +28,7 @@ resource "aws_instance" "aws-wazuh-02" {
 }
 
 # hosts.ini
-resource "aws_s3_object" "ansible_hosts" {
+resource "aws_s3_object" "aws-ansible-hosts" {
   bucket  = "wazuh-ansible-ssm"
   key = "wazuh2/hosts.ini"
   content = <<-EOT
