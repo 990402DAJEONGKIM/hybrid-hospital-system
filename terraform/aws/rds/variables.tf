@@ -71,6 +71,12 @@ variable "aws_account_id" {
   type        = string
 }
 
+# KMS 모듈에서 전달받는 키 ARN (TC-KMS workspace output)
+variable "rds_kms_key_arn" {
+  description = "Aurora 저장 암호화용 KMS 키 ARN (KMS 모듈 output 참조)"
+  type        = string
+}
+
 # bastion host 용 (by 김다정 2026.05.13)
 # =========================================================================================
 # bastion 서버의 켜짐(1)" 또는 "꺼짐(0)" 신호를 받아줄 변수를 선언.

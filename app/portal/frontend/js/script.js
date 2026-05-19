@@ -1,64 +1,37 @@
-// ── 토큰 관리 ─────────────────────────────────────────────
-function getAccessToken()  { return sessionStorage.getItem('access_token'); }
-function getRefreshToken() { return sessionStorage.getItem('refresh_token'); }
-function getTokenExpiresAt() { return parseInt(sessionStorage.getItem('token_expires_at') || '0', 10); }
+// ── 공통 fetch 옵션 ────────────────────────────────────────
+const _fetchDefaults = {
+    credentials: 'include', // httpOnly 쿠키 자동 전송
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+};
 
-function saveTokens(data) {
-    sessionStorage.setItem('access_token',    data.access_token);
-    sessionStorage.setItem('refresh_token',   data.refresh_token);
-    sessionStorage.setItem('token_expires_at', Date.now() + data.expires_in * 1000);
-}
-
-function clearTokens() {
-    sessionStorage.removeItem('access_token');
-    sessionStorage.removeItem('refresh_token');
-    sessionStorage.removeItem('token_expires_at');
-}
-
-function isTokenExpiringSoon() {
-    // 만료 5분 전이면 true
-    return getTokenExpiresAt() - Date.now() < 5 * 60 * 1000;
-}
-
-async function refreshTokens() {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) return false;
-
+async function _refreshTokens() {
     try {
         const res = await fetch(`${BASE_URL}/auth/refresh`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-            body: JSON.stringify({ refresh_token: refreshToken }),
+            ..._fetchDefaults,
         });
-        if (!res.ok) return false;
-        saveTokens(await res.json());
-        return true;
+        return res.ok;
     } catch {
         return false;
     }
 }
 
-// ── 공통 API 호출 (토큰 자동 갱신 + 401 재시도) ────────────
+// ── 공통 API 호출 (401 시 토큰 갱신 후 1회 재시도) ─────────
 async function apiCall(path, options = {}) {
-    if (isTokenExpiringSoon()) {
-        const ok = await refreshTokens();
-        if (!ok) { logout(); return null; }
-    }
-
     const res = await fetch(`${BASE_URL}${path}`, {
+        ..._fetchDefaults,
         ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': API_KEY,
-            'Authorization': `Bearer ${getAccessToken()}`,
-            ...(options.headers || {}),
-        },
+        headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
     });
 
     if (res.status === 401) {
-        const ok = await refreshTokens();
+        const ok = await _refreshTokens();
         if (!ok) { logout(); return null; }
-        return apiCall(path, options); // 한 번 재시도
+        return fetch(`${BASE_URL}${path}`, {
+            ..._fetchDefaults,
+            ...options,
+            headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
+        });
     }
 
     return res;
@@ -66,34 +39,19 @@ async function apiCall(path, options = {}) {
 
 // ── 로그아웃 ──────────────────────────────────────────────
 async function logout() {
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
-        try {
-            await fetch(`${BASE_URL}/auth/logout`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-                body: JSON.stringify({ refresh_token: refreshToken }),
-            });
-        } catch { /* 서버 오류여도 클라이언트 토큰은 삭제 */ }
-    }
-    clearTokens();
+    try {
+        await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', ..._fetchDefaults });
+    } catch { /* 서버 오류여도 로그인 페이지로 이동 */ }
     window.location.href = 'login.html';
 }
 
 // ── 로그인 가드 ───────────────────────────────────────────
 async function requireLogin() {
-    if (!getAccessToken()) {
+    const res = await apiCall('/auth/me');
+    if (!res || !res.ok) {
         window.location.href = 'login.html';
         return null;
     }
-    // 토큰 만료 임박 시 갱신
-    if (isTokenExpiringSoon()) {
-        const ok = await refreshTokens();
-        if (!ok) { logout(); return null; }
-    }
-    // 내 계정 정보 조회
-    const res = await apiCall('/auth/me');
-    if (!res) return null;
     const me = await res.json();
     if (me.password_expired) {
         window.location.href = 'change-password.html';
