@@ -5,22 +5,22 @@
 
 output "nginx_patient_repository_url" {
   description = "NGINX Patient 리포지토리 URL"
-  value       = aws_ecr_repository.repos["hospital-nginx-patient"].repository_url
+  value       = aws_ecr_repository.repos["aws-hospital-nginx-patient"].repository_url
 }
 
 output "api_patient_repository_url" {
   description = "API Patient 리포지토리 URL"
-  value       = aws_ecr_repository.repos["hospital-api-patient"].repository_url
+  value       = aws_ecr_repository.repos["aws-hospital-api-patient"].repository_url
 }
 
 output "nginx_staff_repository_url" {
   description = "NGINX Staff 리포지토리 URL"
-  value       = aws_ecr_repository.repos["hospital-nginx-staff"].repository_url
+  value       = aws_ecr_repository.repos["aws-hospital-nginx-staff"].repository_url
 }
 
 output "api_staff_repository_url" {
   description = "API Staff 리포지토리 URL"
-  value       = aws_ecr_repository.repos["hospital-api-staff"].repository_url
+  value       = aws_ecr_repository.repos["aws-hospital-api-staff"].repository_url
 }
 
 output "repository_urls" {

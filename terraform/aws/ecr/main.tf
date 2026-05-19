@@ -9,6 +9,10 @@
 #   - 프라이빗 리포지토리: 퍼블릭 접근 차단
 # =========================================================
 
+data "aws_kms_key" "ecr" {
+  key_id = "alias/aws-kms-ecr-01"
+}
+
 locals {
   repositories = [
     "aws-hospital-nginx-patient",
@@ -51,7 +55,7 @@ resource "aws_ecr_repository" "repos" {
   # 저장 데이터 암호화 (AES-256 기본 — KMS CMK 미사용, ECR 관리형 키)
   encryption_configuration {
       encryption_type = "KMS"
-      kms_key         = var.ecr_kms_key_arn  # kms 모듈 output 참조
+      kms_key         = data.aws_kms_key.ecr.arn
   }
 
   tags = { Name = each.key }
