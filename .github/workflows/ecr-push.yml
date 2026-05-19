@@ -1,0 +1,82 @@
+name: Build & Push Docker Images to ECR
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'docker/**'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-2
+
+jobs:
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push api-patient
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE: aws-hospital-api-patient
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f docker/api-patient/Dockerfile -t $REGISTRY/$IMAGE:$TAG .
+          docker push $REGISTRY/$IMAGE:$TAG
+
+      - name: Build & Push nginx-patient
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE: aws-hospital-nginx-patient
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f docker/nginx-patient/Dockerfile -t $REGISTRY/$IMAGE:$TAG .
+          docker push $REGISTRY/$IMAGE:$TAG
+
+      - name: Build & Push api-staff
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE: aws-hospital-api-staff
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f docker/api-staff/Dockerfile -t $REGISTRY/$IMAGE:$TAG .
+          docker push $REGISTRY/$IMAGE:$TAG
+
+      - name: Build & Push nginx-staff
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE: aws-hospital-nginx-staff
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f docker/nginx-staff/Dockerfile -t $REGISTRY/$IMAGE:$TAG .
+          docker push $REGISTRY/$IMAGE:$TAG
+
+      - name: Print image URIs
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          echo "=== ECR Image URIs (TC-ECS Variables에 입력) ==="
+          echo "nginx_patient_image: $REGISTRY/aws-hospital-nginx-patient:$TAG"
+          echo "api_patient_image:   $REGISTRY/aws-hospital-api-patient:$TAG"
+          echo "nginx_staff_image:   $REGISTRY/aws-hospital-nginx-staff:$TAG"
+          echo "api_staff_image:     $REGISTRY/aws-hospital-api-staff:$TAG"
