@@ -148,6 +148,11 @@ resource "aws_rds_cluster_instance" "writer" {
   promotion_tier          = 0
 
   monitoring_interval     = 0
+  
+  # ✅ 인스턴스 삭제 방지 설정
+  lifecycle {
+    prevent_destroy = true
+  }
 
   tags = merge(local.common_tags, { Name = "aws-aurora-01-writer", Role = "writer" })
 }
