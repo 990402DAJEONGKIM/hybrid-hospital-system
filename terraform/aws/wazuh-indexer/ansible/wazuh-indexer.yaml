@@ -249,6 +249,18 @@
       retries: 5
       delay: 10
 
+    - name: kibanaserver 비밀번호 고정
+      shell: >
+        timeout 60
+        /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh
+        -u kibanaserver -p '{{ kibanaserver_password }}'
+      no_log: true
+      changed_when: false
+      register: kibana_pwd_change
+      until: kibana_pwd_change.rc == 0
+      retries: 5
+      delay: 10
+
     # ──────────────────────────────────────────
     # 결과 확인
     # ──────────────────────────────────────────

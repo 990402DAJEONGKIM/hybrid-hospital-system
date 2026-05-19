@@ -38,3 +38,6 @@ data "terraform_remote_state" "wazuh2" {
   }
 }
 
+
+data "aws_caller_identity" "current" {}
+
