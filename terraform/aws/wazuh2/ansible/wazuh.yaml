@@ -169,7 +169,8 @@
         cp /tmp/wazuh-install-files/{{ wazuh_cert_name }}.pem /etc/filebeat/certs/
         cp /tmp/wazuh-install-files/{{ wazuh_cert_name }}-key.pem /etc/filebeat/certs/
         cp /tmp/wazuh-install-files/root-ca.pem /etc/filebeat/certs/
-
+        cp /tmp/wazuh-install-files/root-ca.pem /etc/wazuh-dashboard/certs/
+        
     - name: ossec.conf 템플릿 배포
       template:
         src: ossec.conf.j2
@@ -270,6 +271,15 @@
       notify: systemd reload
 
     - meta: flush_handlers
+
+    - name: Dashboard keystore kibanaserver 비밀번호 업데이트
+      shell: |
+        echo '{{ kibanaserver_password }}' | \
+        sudo -u wazuh-dashboard \
+        NODE_OPTIONS="--max-old-space-size=2048" \
+        /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
+        add opensearch.password --force --stdin
+      no_log: true
 
     # ──────────────────────────────────────────
     # 서비스 재시작

@@ -31,6 +31,7 @@ data "terraform_remote_state" "wazuh" {
 data "aws_security_group" "aws-wazuh-sg" {
   name = "aws-wazuh-sg"
 }
+
 output "wazuh_private_ip" {
   value = aws_instance.aws-wazuh-02.private_ip
 }
