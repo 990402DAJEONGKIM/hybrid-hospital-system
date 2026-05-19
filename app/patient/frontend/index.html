@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>김이박 클리닉 - 환자 포털</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/config.js"></script>
+    <script src="js/script.js" defer></script>
+</head>
+
+<body>
+    <header class="sass-header">
+        <div class="sass-announcement">
+            <div class="sass-announcement-content">
+                무료 건강검진: 무료 건강검진을 제공합니다. 신규 환자 환영!
+            </div>
+        </div>
+
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <a href="#" class="sass-logo">
+                    <i class="fas fa-heartbeat mr-2"></i>
+                    <span>김이박 클리닉</span>
+                </a>
+
+                <nav class="hidden md:block">
+                    <ul class="flex items-center space-x-4">
+                        <li><a href="#" id="nav-home" class="sass-nav-link">홈</a></li>
+                        <li class="sass-dropdown">
+                            <a href="#" class="sass-nav-link">진료과 <i class="fas fa-chevron-down text-xs"></i></a>
+                            <div class="sass-dropdown-content">
+                                <a href="#" class="sass-dropdown-link">정형외과</a>
+                                <a href="#" class="sass-dropdown-link">내과</a>
+                                <a href="#" class="sass-dropdown-link">마취통증의학과</a>
+                            </div>
+                        </li>
+                        <li class="sass-dropdown">
+                            <a href="#" class="sass-nav-link">환자 <i class="fas fa-chevron-down text-xs"></i></a>
+                            <div class="sass-dropdown-content">
+                                <a href="#" id="nav-new-appointment" class="sass-dropdown-link">예약</a>
+                                <a href="#" id="nav-manage-appointments" class="sass-dropdown-link">예약조회 및 변경</a>
+                                <a href="#" id="nav-edit-profile" class="sass-dropdown-link">개인정보 수정</a>
+                            </div>
+                        </li>
+                        <li><a href="#" id="nav-hospital-intro" class="sass-nav-link">병원 소개</a></li>
+                        <li id="userWelcomeItem" class="hidden flex items-center"><span id="userWelcome" class="text-sm font-medium text-gray-700 mr-2"></span></li>
+                        <li><button id="logoutBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold hover:bg-gray-300 transition-colors hidden">로그아웃</button></li>
+                        <li id="nav-appointment-btn-wrap"><button id="headerAppointmentBtn" class="sass-appointment-btn">예약하기</button></li>
+                    </ul>
+                </nav>
+
+                <button class="md:hidden text-2xl" id="sassMobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="sass-overlay" id="sassOverlay"></div>
+    <div class="sass-mobile-menu" id="sassMobileMenu">
+        <div class="flex justify-end">
+            <button id="sassMobileMenuClose" class="text-2xl">&times;</button>
+        </div>
+        <nav class="flex flex-col space-y-4 mt-8">
+            <a href="#" id="mobile-nav-home" class="text-lg font-medium">홈</a>
+            <a href="#" class="text-lg font-medium">진료과</a>
+            <a href="#" class="text-lg font-medium">환자</a>
+            <a href="#" id="mobile-nav-hospital-intro" class="text-lg font-medium">병원 소개</a>
+            <button id="mobileAppointmentBtn" class="sass-appointment-btn w-full justify-center">예약하기</button>
+        </nav>
+    </div>
+
+    <main class="pt-40 pb-20 px-4 container mx-auto main-content">
+        <!-- 예약 스케줄 달력 섹션 -->
+        <section id="appointment-section" class="bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-bold text-blue-900">예약 스케줄</h2>
+                <div class="flex items-center space-x-4">
+                    <button id="prevMonth" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-chevron-left"></i></button>
+                    <h3 id="currentMonthYear" class="text-xl font-semibold"></h3>
+                    <button id="nextMonth" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <div class="calendar-grid-container grid grid-cols-7 border-t border-l border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                <div class="calendar-weekday is-sunday">일</div>
+                <div class="calendar-weekday">월</div>
+                <div class="calendar-weekday">화</div>
+                <div class="calendar-weekday">수</div>
+                <div class="calendar-weekday">목</div>
+                <div class="calendar-weekday">금</div>
+                <div class="calendar-weekday is-saturday">토</div>
+                <div id="calendar-grid" class="contents"></div>
+            </div>
+        </section>
+
+        <!-- 개인정보 수정 섹션 -->
+        <section id="profile-edit-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-bold text-blue-900">개인정보 수정</h2>
+            </div>
+            <div class="max-w-lg mx-auto w-full space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">성함</label>
+                        <input type="text" id="profileName" readonly class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">생년월일</label>
+                        <input type="text" id="profileBirth" readonly class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">성별 코드</label>
+                        <input type="text" id="profileGender" readonly class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">연락처 (수정 가능)</label>
+                    <input type="tel" id="profileContact" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="pt-4">
+                    <button id="saveProfileBtn" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">수정사항 저장</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 병원 소개 섹션 -->
+        <section id="hospital-intro-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
+            <div class="mb-8 text-center">
+                <h2 class="text-3xl font-bold text-blue-900 mb-4">병원 소개</h2>
+                <p class="text-xl text-gray-700 font-medium">김이박 클리닉입니다.</p>
+            </div>
+            <div class="max-w-4xl mx-auto w-full">
+                <h3 class="text-xl font-bold text-blue-800 mb-4"><i class="fas fa-history mr-2"></i>병원 연혁</h3>
+                <div class="overflow-x-auto border border-gray-100 rounded-xl shadow-sm">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 w-1/4">연도</th>
+                                <th class="px-6 py-3">주요 연혁</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2020년</td><td class="px-6 py-4">김이박 클리닉 개원</td></tr>
+                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2021년</td><td class="px-6 py-4">보건복지부 지정 의료기관 획득</td></tr>
+                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2022년</td><td class="px-6 py-4">최첨단 MRI 및 CT 장비 도입</td></tr>
+                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2024년</td><td class="px-6 py-4">지역 거점 응급의료센터 선정</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 예약 상세 내역 모달 -->
+    <div id="calendarModal" class="fixed inset-0 z-[2000] hidden items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modalDateHeader" class="text-xl font-bold text-blue-900"></h3>
+                <button id="closeCalendarModal" class="text-2xl">&times;</button>
+            </div>
+            <div id="modalAppointmentList" class="space-y-3 mb-6 max-h-60 overflow-y-auto"></div>
+            <div class="flex justify-end">
+                <button id="modalConfirmBtn" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 나의 예약 관리 모달 -->
+    <div id="manageAppointmentsModal" class="fixed inset-0 z-[2000] hidden items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-blue-900">나의 예약 조회 및 변경</h3>
+                <button id="closeManageModal" class="text-2xl">&times;</button>
+            </div>
+            <div id="myAppointmentList" class="space-y-4 mb-6 max-h-96 overflow-y-auto"></div>
+            <div class="text-right">
+                <button id="manageModalCloseBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-bold">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 예약 수정 모달 -->
+    <div id="editAppointmentModal" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-blue-900">예약 수정</h3>
+                <button id="closeEditModal" class="text-2xl">&times;</button>
+            </div>
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">예약 날짜</label>
+                    <input type="date" id="editAppDate" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">진료과 선택</label>
+                    <select id="editAppDept" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="ORTHO">정형외과</option>
+                        <option value="INTERNAL">내과</option>
+                        <option value="ANESTHESIA">마취통증의학과</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button id="cancelEditBtn" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">취소</button>
+                <button id="saveEditBtn" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 신규 예약 등록 모달 -->
+    <div id="newAppointmentModal" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-blue-900">신규 진료 예약</h3>
+                <button id="closeNewAppModal" class="text-2xl">&times;</button>
+            </div>
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">예약 날짜</label>
+                    <input type="date" id="newAppDate" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">진료 시간</label>
+                    <select id="newAppTime" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="09:00">09:00</option>
+                        <option value="10:00">10:00</option>
+                        <option value="11:00">11:00</option>
+                        <option value="14:00">14:00</option>
+                        <option value="15:00">15:00</option>
+                        <option value="16:00">16:00</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">진료과 선택</label>
+                    <select id="newAppDept" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="ORTHO">정형외과</option>
+                        <option value="INTERNAL">내과</option>
+                        <option value="ANESTHESIA">마취통증의학과</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">기타 요청사항</label>
+                    <textarea id="newAppNote" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" rows="2" placeholder="증상을 간단히 적어주세요."></textarea>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button id="cancelNewAppBtn" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">취소</button>
+                <button id="saveNewAppBtn" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700">예약 신청</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

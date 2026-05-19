@@ -118,7 +118,8 @@ resource "aws_rds_cluster" "main" {
   preferred_backup_window      = "07:33-08:03"
   preferred_maintenance_window = "tue:13:25-tue:13:55"
 
-  storage_encrypted = false
+  storage_encrypted = true
+  kms_key_id        = var.rds_kms_key_arn
 
   # ✅ 삭제 방지 설정
   deletion_protection = true  # AWS 콘솔/CLI에서도 삭제 불가
