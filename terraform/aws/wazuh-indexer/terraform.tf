@@ -8,7 +8,7 @@ terraform {
   cloud {
     organization = "k2p"
     workspaces {
-      name = "TC-wazuh-indexer"
+      name = "TC-aws-wazuh-indexer"
     }
   }
 }

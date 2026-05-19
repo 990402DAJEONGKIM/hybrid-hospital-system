@@ -26,7 +26,9 @@ data "terraform_remote_state" "wazuh" {
   backend = "remote"
   config = {
     organization = "k2p"
-    workspaces = { name = "TC-wazuh" }
+    workspaces = {
+      name = "TC-aws-wazuh"
+    }
   }
 }
 
@@ -34,6 +36,8 @@ data "terraform_remote_state" "wazuh2" {
   backend = "remote"
   config = {
     organization = "k2p"
-    workspaces = { name = "TC-wazuh2" }
+    workspaces = {
+      name = "TC-aws-wazuh2"
+    }
   }
 }
