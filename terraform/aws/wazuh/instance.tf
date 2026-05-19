@@ -1,13 +1,5 @@
 #instance.tf
-import {
-  to = aws_iam_role.aws-wazuh-ssm-role
-  id = "aws-wazuh-ssm-role"
-}
 
-import {
-  to = aws_iam_instance_profile.aws-wazuh-profile
-  id = "aws-wazuh-instance-profile"
-}
 # IAM Role
 resource "aws_iam_role" "aws-wazuh-ssm-role" {
   name = "aws-wazuh-ssm-role"
