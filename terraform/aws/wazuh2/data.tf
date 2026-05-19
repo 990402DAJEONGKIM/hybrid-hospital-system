@@ -19,11 +19,11 @@ data "aws_ami" "ubuntu_22_04" {
 }
 
 data "terraform_remote_state" "wazuh" {
-  backend = "remote"
+  backend = "cloud"
   config = {
     organization = "k2p"
     workspaces = {
-      name = "TC-wazuh"
+      name = "TC-aws-wazuh"
     }
   }
 }
