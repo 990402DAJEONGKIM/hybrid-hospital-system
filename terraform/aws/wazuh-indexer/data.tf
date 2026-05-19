@@ -37,7 +37,3 @@ data "terraform_remote_state" "wazuh2" {
     workspaces = { name = "TC-wazuh2" }
   }
 }
-
-
-data "aws_caller_identity" "current" {}
-
