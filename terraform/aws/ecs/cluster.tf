@@ -18,7 +18,7 @@ resource "aws_ecs_cluster" "main" {
 # Managed Scaling: ECS 태스크 수요에 따라 EC2 자동 증감
 # ─────────────────────────────────────────────────────────
 resource "aws_ecs_capacity_provider" "main" {
-  name = "aws-ecs-capacity-provider-01"
+  name = "k2p-ecs-capacity-provider-01"
 
   auto_scaling_group_provider {
     auto_scaling_group_arn = aws_autoscaling_group.ecs.arn
