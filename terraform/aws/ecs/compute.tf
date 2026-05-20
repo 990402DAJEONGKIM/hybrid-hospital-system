@@ -17,7 +17,7 @@ data "aws_ssm_parameter" "ecs_ami" {
 # ─────────────────────────────────────────────────────────
 resource "aws_security_group" "ecs_ec2" {
   name        = "aws-ecs-ec2-sg"
-  description = "ECS EC2 인스턴스 보안 그룹"
+  description = "ECS EC2 instance security group"
   vpc_id      = var.vpc_id
 
   # ALB → NGINX (port 80) — VPC 내부에서만 허용
