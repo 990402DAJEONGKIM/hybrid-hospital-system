@@ -213,6 +213,7 @@ resource "aws_ecs_service" "patient" {
 
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 100
+  availability_zone_rebalancing      = "DISABLED"
 
   lifecycle {
     ignore_changes = [desired_count]
@@ -251,6 +252,7 @@ resource "aws_ecs_service" "staff" {
 
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 100
+  availability_zone_rebalancing      = "DISABLED"
 
   lifecycle {
     ignore_changes = [desired_count]
