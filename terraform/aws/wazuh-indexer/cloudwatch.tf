@@ -44,3 +44,40 @@ resource "aws_sns_topic_subscription" "aws-wazuh-indexer-to-lambda" {
   endpoint  = "arn:aws:lambda:ap-south-2:${data.aws_caller_identity.current.account_id}:function:aws-wazuh-slack-notify"
   depends_on = [aws_lambda_permission.aws-wazuh-sns-indexer]
 }
+
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-disk" {
+  alarm_name          = "aws-wazuh-indexer-disk"
+  namespace           = "CWAgent"
+  metric_name         = "disk_used_percent"
+  dimensions = {
+    InstanceId = aws_instance.aws-wazuh-indexer.id
+    path       = "/"
+    device     = "nvme0n1p1"
+    fstype     = "ext4"
+  }
+  period              = 60
+  evaluation_periods  = 3
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
+  tags = { Name = "aws-wazuh-indexer-disk", Owner = "st2" }
+}
+
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-mem" {
+  alarm_name          = "aws-wazuh-indexer-mem"
+  namespace           = "CWAgent"
+  metric_name         = "mem_used_percent"
+  dimensions = {
+    InstanceId = aws_instance.aws-wazuh-indexer.id
+  }
+  period              = 60
+  evaluation_periods  = 3
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
+  tags = { Name = "aws-wazuh-indexer-mem", Owner = "st2" }
+}

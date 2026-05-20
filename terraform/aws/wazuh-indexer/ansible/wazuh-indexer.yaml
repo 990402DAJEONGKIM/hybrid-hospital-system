@@ -25,6 +25,9 @@
       args:
         creates: /swapfile
 
+    - name: Timezone KST 설정
+      shell: timedatectl set-timezone Asia/Seoul
+
     - name: vm.swappiness 설정
       sysctl:
         name: vm.swappiness
@@ -82,17 +85,21 @@
       block:
         - name: Wazuh 잔재 정리
           shell: |
-            systemctl stop wazuh-indexer 2>/dev/null || true
-            apt purge wazuh-indexer -y || true
+            systemctl stop wazuh-manager 2>/dev/null || true
+            systemctl stop wazuh-dashboard 2>/dev/null || true
+            echo "exit 0" > /var/lib/dpkg/info/wazuh-manager.prerm || true
+            echo "exit 0" > /var/lib/dpkg/info/wazuh-manager.postrm || true
+            echo "exit 0" > /var/lib/dpkg/info/wazuh-dashboard.prerm || true
+            echo "exit 0" > /var/lib/dpkg/info/wazuh-dashboard.postrm || true
+            dpkg --force-all --purge wazuh-manager wazuh-dashboard || true
             apt autoremove -y || true
             dpkg --configure -a || true
             apt-get install -f -y || true
-            rm -rf /etc/wazuh-indexer || true
-            rm -rf /usr/share/wazuh-indexer || true
-            rm -rf /var/lib/wazuh-indexer || true
+            rm -rf /etc/wazuh-dashboard || true
+            rm -rf /var/ossec || true
+            rm -rf /usr/share/wazuh-dashboard || true
             systemctl daemon-reload || true
             systemctl reset-failed || true
-
         - name: wazuh-install.sh 다운로드
           get_url:
             url: 'https://packages.wazuh.com/4.14/wazuh-install.sh'
@@ -180,6 +187,35 @@
             msg: "Wazuh Indexer 설치 실패. 위 로그를 확인하세요."
 
     # ──────────────────────────────────────────
+    # start-cluster 항상 실행 (재부팅 후 /tmp 날아가도 대비)
+    # ──────────────────────────────────────────
+    - name: wazuh-install.sh 다운로드 (없을 경우)
+      get_url:
+        url: 'https://packages.wazuh.com/4.14/wazuh-install.sh'
+        dest: '/tmp/wazuh-install.sh'
+        mode: '0755'
+        force: no
+
+    - name: wazuh-install-files.tar S3 다운로드 (없을 경우)
+      shell: >
+        aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar
+        /tmp/wazuh-install-files.tar --region ap-south-2
+      args:
+        creates: /tmp/wazuh-install-files.tar
+      environment:
+        AWS_DEFAULT_REGION: "ap-south-2"
+
+    - name: wazuh-install-files 압축 해제
+      shell: tar -xf /tmp/wazuh-install-files.tar -C /tmp/
+
+    - name: Wazuh Cluster start-cluster 실행
+      shell: bash /tmp/wazuh-install.sh --start-cluster
+      args:
+        chdir: /tmp/
+      async: 600
+      poll: 30
+      ignore_errors: yes
+    # ──────────────────────────────────────────
     # 설정 블록 (항상 실행)
     # ──────────────────────────────────────────
     - name: JVM 힙 메모리 설정
@@ -188,8 +224,8 @@
         regexp: "{{ item.regexp }}"
         replace: "{{ item.replace }}"
       loop:
-        - { regexp: '^-Xms.*', replace: '-Xms4g' }
-        - { regexp: '^-Xmx.*', replace: '-Xmx4g' }
+        - { regexp: '^-Xms.*', replace: '-Xms7g' }
+        - { regexp: '^-Xmx.*', replace: '-Xmx7g' }
 
     - name: Indexer 메모리 lock 설정
       lineinfile:

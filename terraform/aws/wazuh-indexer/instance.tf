@@ -21,6 +21,11 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-cloudwatch" {
+  role       = aws_iam_role.aws-wazuh-indexer-role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 resource "aws_iam_role_policy" "aws-wazuh-indexer-s3" {
   name = "aws-wazuh-indexer-s3-ssm"
   role = aws_iam_role.aws-wazuh-indexer-role.id
