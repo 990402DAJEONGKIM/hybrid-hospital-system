@@ -191,7 +191,7 @@ resource "aws_ecs_service" "patient" {
   name            = "patient-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.patient.arn
-  desired_count   = 3   # 3 AZ × 1 Task
+  desired_count   = 1
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.main.name
@@ -229,7 +229,7 @@ resource "aws_ecs_service" "staff" {
   name            = "staff-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.staff.arn
-  desired_count   = 3
+  desired_count   = 1
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.main.name
