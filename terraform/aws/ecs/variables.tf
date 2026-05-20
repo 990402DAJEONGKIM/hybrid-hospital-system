@@ -58,11 +58,11 @@ variable "wazuh_server_ip" {
 variable "patient_allowed_hosts" {
   description = "환자 포털 도메인 (NGINX → FastAPI 프록시 Host 헤더)"
   type        = string
-  default     = "localhost,127.0.0.1"
+  default     = "patient.mzclinic.cloud"
 }
 
 variable "staff_allowed_hosts" {
   description = "의료진 포털 도메인"
   type        = string
-  default     = "localhost,127.0.0.1"
+  default     = "staff.mzclinic.cloud"
 }
