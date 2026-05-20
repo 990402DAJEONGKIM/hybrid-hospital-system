@@ -77,6 +77,19 @@ locals {
             "kms:GrantIsForAWSResource" = "true"
           }
         }
+      },
+      {
+        # ECS 태스크 실행 역할 — Secrets Manager 시크릿 복호화
+        Sid    = "AllowECSTaskExecutionRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-ecs-task-execution-role"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+        ]
+        Resource = "*"
       }
     ]
   })
