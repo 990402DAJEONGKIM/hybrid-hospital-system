@@ -24,21 +24,27 @@ variable "ec2_key_name" {
 }
 
 variable "asg_min_size" {
-  description = "ASG 최소 EC2 수 (3AZ × 1)"
+  description = "ASG 최소 EC2 수"
   type        = number
-  default     = 3
+  default     = 1
 }
 
 variable "asg_max_size" {
-  description = "ASG 최대 EC2 수 (트래픽 급증 시 최대)"
+  description = "ASG 최대 EC2 수"
   type        = number
-  default     = 9
+  default     = 3
 }
 
 variable "asg_desired_size" {
   description = "ASG 초기 EC2 수"
   type        = number
-  default     = 3
+  default     = 1
+}
+
+variable "asg_scheduled_size" {
+  description = "예약 스케일링 목표 EC2 수 (평일 진료 시간대)"
+  type        = number
+  default     = 2
 }
 
 # ── Wazuh ───────────────────────────────────────────────

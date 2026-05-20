@@ -26,8 +26,8 @@ resource "aws_ecs_capacity_provider" "main" {
     managed_scaling {
       status                    = "ENABLED"
       target_capacity           = 80   # EC2 용량 80% 목표 (버퍼 20% 유지)
-      minimum_scaling_step_size = 1
-      maximum_scaling_step_size = 3
+      minimum_scaling_step_size = 2    # 트래픽 급증 시 2대씩 추가 (1→3)
+      maximum_scaling_step_size = 2
     }
 
     managed_termination_protection = "ENABLED"

@@ -95,7 +95,7 @@ resource "aws_launch_template" "ecs" {
 
 # ─────────────────────────────────────────────────────────
 # Auto Scaling Group
-# 3 AZ × 1 EC2 기본, 최대 9대
+# 평소 EC2 1대, 트래픽 급증 시 2대 추가 → 최대 3대
 # ─────────────────────────────────────────────────────────
 resource "aws_autoscaling_group" "ecs" {
   name                = "aws-ecs-asg-01"
@@ -132,4 +132,67 @@ resource "aws_autoscaling_group" "ecs" {
   lifecycle {
     ignore_changes = [desired_capacity]
   }
+}
+
+
+# ─────────────────────────────────────────────────────────
+# Warm Pool — 콜드 스타트 해결
+#
+# 스케일 아웃 요청 시 인스턴스를 새로 부팅하면 3-4분 소요.
+# Warm Pool은 미리 초기화된 Stopped 인스턴스를 대기시켜
+# 스케일 아웃 시 60-90초로 단축.
+#
+# 비용: Stopped 상태 = EBS(30GB × $0.08/GB) 월 $2.4/대 만 과금
+#       (인스턴스 시간 요금 없음)
+# ─────────────────────────────────────────────────────────
+resource "aws_autoscaling_warm_pool" "ecs" {
+  autoscaling_group_name = aws_autoscaling_group.ecs.name
+
+  # Stopped: EBS 비용만 발생, 스케일 아웃 시 Start → Running
+  pool_state = "Stopped"
+
+  # 항상 1대를 대기 (1→3 스케일 아웃 시 최대 2대 필요하므로 2로도 가능)
+  min_size                  = 1
+  max_group_prepared_capacity = 2
+
+  instance_reuse_policy {
+    # 스케일 인 시 인스턴스를 Warm Pool로 반환 (재초기화 비용 절약)
+    reuse_on_scale_in = true
+  }
+}
+
+
+# ─────────────────────────────────────────────────────────
+# 예약 스케일링 (Scheduled Scaling)
+#
+# 병원 트래픽은 진료 시간대에 집중되므로 오토스케일링 감지 전에
+# 미리 인스턴스를 확보합니다.
+#
+# 시간 기준: UTC (KST = UTC+9)
+#   KST 07:00 = UTC 22:00 (전날)
+#   KST 19:00 = UTC 10:00
+#
+# 적용: 평일(월~금)만 적용, 주말은 1대 유지
+# ─────────────────────────────────────────────────────────
+
+# 평일 07:00 KST — 진료 시작 전 3대로 확장
+resource "aws_autoscaling_schedule" "scale_out_morning" {
+  scheduled_action_name  = "scale-out-morning"
+  autoscaling_group_name = aws_autoscaling_group.ecs.name
+
+  recurrence       = "0 22 * * SUN-THU"  # UTC 22:00 = KST 07:00 (평일)
+  min_size         = var.asg_min_size
+  max_size         = var.asg_max_size
+  desired_capacity = var.asg_scheduled_size  # 2대 (추가 급증 시 오토스케일링으로 3대)
+}
+
+# 평일 19:00 KST — 진료 종료 후 1대로 축소
+resource "aws_autoscaling_schedule" "scale_in_evening" {
+  scheduled_action_name  = "scale-in-evening"
+  autoscaling_group_name = aws_autoscaling_group.ecs.name
+
+  recurrence       = "0 10 * * MON-FRI"  # UTC 10:00 = KST 19:00 (평일)
+  min_size         = var.asg_min_size
+  max_size         = var.asg_max_size
+  desired_capacity = var.asg_min_size     # 1대
 }
