@@ -1,5 +1,3 @@
-al rules · XML
-복사
 
 <group name="local,sudo,after_hours,fim">
  
@@ -17,7 +15,7 @@ al rules · XML
   <!-- 업무 시간 외 sudo -->
   <rule id="100002" level="8">
     <if_sid>100001</if_sid>
-    <time>00:00 - 06:00</time>
+    <time>18:00 - 09:00</time>
     <description>업무 시간 외 sudo 사용 탐지 - 사용자: $(srcuser)</description>
     <group>after_hours,sudo_usage</group>
   </rule>
@@ -151,10 +149,10 @@ al rules · XML
     <group>fim,rootkit,persistence</group>
   </rule>
  
-  <rule id="100015" level="12">
-    <if_sid>550,554</if_sid>
-    <match>authorized_keys</match>
-    <description>SSH authorized_keys 변경 탐지</description>
+  <rule id="100015" level="10">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">\/authorized_keys$</field>
+    <description>SSH authorized_keys 수정 탐지 - 파일: $(file)</description>
     <group>fim,ssh_attack,persistence</group>
   </rule>
  
@@ -175,7 +173,7 @@ al rules · XML
  
   <rule id="100017" level="10">
     <if_sid>5715</if_sid>
-    <time>00:00 - 06:00</time>
+    <time>18:00 - 09:00</time>
     <description>업무 시간 외 SSH 로그인 성공 - 계정 탈취 의심</description>
     <group>after_hours,authentication_success</group>
   </rule>
@@ -270,6 +268,20 @@ al rules · XML
     <group>fim,rootkit,persistence</group>
   </rule>
 
+  <rule id="100037" level="12">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">\/\.ssh\/</field>
+    <description>SSH .ssh 디렉토리 신규 파일 생성 탐지 - 파일: $(file)</description>
+    <group>fim,ssh_attack,persistence</group>
+  </rule>
+  
+  <rule id="100038" level="12">
+    <if_sid>553</if_sid>
+    <field name="file" type="pcre2">\/\.ssh\/</field>
+    <description>SSH .ssh 디렉토리 파일 삭제 탐지 - 파일: $(file)</description>
+    <group>fim,ssh_attack,persistence</group>
+  </rule>
+
 
 </group>
 
@@ -286,5 +298,58 @@ al rules · XML
     <description>Filebeat → Indexer 연결 실패 탐지</description>
     <group>indexer,availability</group>
   </rule>
+
+</group>
+
+<group name="onprem,fim,critical_file">
+
+  <!-- ───────────────────────────────────── -->
+  <!-- 온프레미스 FIM 탐지 -->
+  <!-- ───────────────────────────────────── -->
+
+  <rule id="100031" level="12">
+    <if_sid>550,554,553</if_sid>
+    <field name="file">/host/etc/passwd</field>
+    <description>온프레미스 /etc/passwd 변조 탐지</description>
+    <group>fim,critical_file,onprem</group>
+  </rule>
+
+  <rule id="100032" level="12">
+    <if_sid>550,554,553</if_sid>
+    <field name="file">/host/etc/shadow</field>
+    <description>온프레미스 /etc/shadow 변조 탐지</description>
+    <group>fim,critical_file,onprem</group>
+  </rule>
+
+  <rule id="100033" level="10">
+    <if_sid>550,554,553</if_sid>
+    <field name="file">/host/etc/ssh/sshd_config</field>
+    <description>온프레미스 SSH 설정 변경 탐지</description>
+    <group>fim,ssh,onprem</group>
+  </rule>
+
+  <rule id="100034" level="12">
+    <if_sid>550,554,553</if_sid>
+    <field name="file">/host/etc/sudoers</field>
+    <description>온프레미스 sudoers 변경 탐지</description>
+    <group>fim,privilege_escalation,onprem</group>
+  </rule>
+
+  <rule id="100035" level="12">
+    <if_sid>550,554,553</if_sid>
+    <field name="file">/host/home/mspadmin/hospital-db/docker-compose.yml</field>
+    <description>온프레미스 hospital-db docker-compose.yml 변조 탐지</description>
+    <group>fim,critical_file,onprem</group>
+  </rule>
+
+  <rule id="100036" level="12">
+    <if_sid>550,554,553</if_sid>
+    <field name="file">/host/home/mspadmin/deidentification-api/docker-compose.yml</field>
+    <description>온프레미스 deidentification-api docker-compose.yml 변조 탐지</description>
+    <group>fim,critical_file,onprem</group>
+  </rule>
+
+
+
 
 </group>

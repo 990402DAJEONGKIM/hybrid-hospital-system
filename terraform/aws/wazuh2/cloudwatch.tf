@@ -43,3 +43,41 @@ resource "aws_sns_topic_subscription" "aws-wazuh-02-to-lambda" {
   protocol  = "lambda"
   endpoint  = "arn:aws:lambda:ap-south-2:${data.aws_caller_identity.current.account_id}:function:aws-wazuh-slack-notify"
 }
+
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-disk-02" {
+  alarm_name          = "aws-wazuh-disk-02"
+  namespace           = "CWAgent"
+  metric_name         = "disk_used_percent"
+  dimensions = {
+    InstanceId = aws_instance.aws-wazuh-02.id
+    path       = "/"
+    device     = "nvme0n1p1"
+    fstype     = "ext4"
+  }
+  period              = 60
+  evaluation_periods  = 3
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  alarm_actions       = [data.aws_sns_topic.aws-wazuh-alerts-01.arn]
+  ok_actions          = [data.aws_sns_topic.aws-wazuh-alerts-01.arn]
+  tags = { Name = "aws-wazuh-disk-02", Owner = "st2" }
+}
+
+# 메모리 알람 - wazuh-02
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-mem-02" {
+  alarm_name          = "aws-wazuh-mem-02"
+  namespace           = "CWAgent"
+  metric_name         = "mem_used_percent"
+  dimensions = {
+    InstanceId = aws_instance.aws-wazuh-02.id
+  }
+  period              = 60
+  evaluation_periods  = 3
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  alarm_actions       = [data.aws_sns_topic.aws-wazuh-alerts-01.arn]
+  ok_actions          = [data.aws_sns_topic.aws-wazuh-alerts-01.arn]
+  tags = { Name = "aws-wazuh-mem-02", Owner = "st2" }
+}

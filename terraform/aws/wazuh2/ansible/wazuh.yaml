@@ -25,6 +25,9 @@
       args:
         creates: /swapfile
 
+    - name: Timezone KST 설정
+      shell: timedatectl set-timezone Asia/Seoul
+
     - name: vm.swappiness 설정
       sysctl:
         name: vm.swappiness
@@ -71,21 +74,27 @@
     # 설치 여부 확인 (manager 기준)
     # ──────────────────────────────────────────
     - name: Wazuh 설치 여부 확인
-      stat:
-        path: /var/ossec/etc/ossec.conf
+      shell: |
+        test -f /var/ossec/etc/ossec.conf && test -d /usr/share/wazuh-dashboard
       register: wazuh_installed
+      failed_when: false
+      changed_when: false
 
     # ──────────────────────────────────────────
     # 설치 블록 (최초 1회)
     # ──────────────────────────────────────────
     - name: Wazuh 신규 설치
-      when: not wazuh_installed.stat.exists
+      when: wazuh_installed.rc != 0
       block:
         - name: Wazuh 잔재 정리
           shell: |
             systemctl stop wazuh-manager 2>/dev/null || true
             systemctl stop wazuh-dashboard 2>/dev/null || true
-            apt purge wazuh-manager wazuh-dashboard -y || true
+            echo "exit 0" > /var/lib/dpkg/info/wazuh-manager.prerm || true
+            echo "exit 0" > /var/lib/dpkg/info/wazuh-manager.postrm || true
+            echo "exit 0" > /var/lib/dpkg/info/wazuh-dashboard.prerm || true
+            echo "exit 0" > /var/lib/dpkg/info/wazuh-dashboard.postrm || true
+            dpkg --force-all --purge wazuh-manager wazuh-dashboard || true
             apt autoremove -y || true
             dpkg --configure -a || true
             apt-get install -f -y || true
@@ -124,7 +133,7 @@
           poll: 30
 
         - name: Wazuh Dashboard 설치
-          shell: bash /tmp/wazuh-install.sh --wazuh-dashboard dashboard-2 --overwrite
+          shell: bash /tmp/wazuh-install.sh --wazuh-dashboard dashboard-2 --overwrite -fd
           args:
             chdir: /tmp/
           async: 1800
@@ -166,6 +175,7 @@
 
     - name: Filebeat 인증서 갱신
       shell: |
+        mkdir -p /etc/wazuh-dashboard/certs
         cp /tmp/wazuh-install-files/{{ wazuh_cert_name }}.pem /etc/filebeat/certs/
         cp /tmp/wazuh-install-files/{{ wazuh_cert_name }}-key.pem /etc/filebeat/certs/
         cp /tmp/wazuh-install-files/root-ca.pem /etc/filebeat/certs/
@@ -268,6 +278,7 @@
           [Service]
           Restart=always
           RestartSec=10
+          Environment="NODE_OPTIONS=--max-old-space-size=2048"
       notify: systemd reload
 
     - meta: flush_handlers
@@ -280,6 +291,34 @@
         /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
         add opensearch.password --force --stdin
       no_log: true
+
+    - name: SSM Agent 최신 버전으로 업데이트
+      shell: |
+        snap refresh amazon-ssm-agent --channel=stable
+        systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
+      ignore_errors: yes
+
+    - name: SSM Agent 설정 디렉토리 생성
+      file:
+        path: /etc/amazon/ssm
+        state: directory
+        mode: '0755'
+
+    - name: SSM Agent Instance Profile만 사용하도록 설정
+      copy:
+        dest: /etc/amazon/ssm/amazon-ssm-agent.json
+        content: |
+          {
+            "Profile": {
+              "ShareCreds": true,
+              "ShareProfile": ""
+            }
+          }
+        mode: '0644'
+
+    - name: SSM Agent 재시작
+      shell: systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
+      ignore_errors: yes
 
     # ──────────────────────────────────────────
     # 서비스 재시작
