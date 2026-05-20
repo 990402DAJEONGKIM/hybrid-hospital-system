@@ -12,10 +12,24 @@
 
 
 # ─────────────────────────────────────────────────────────
+# Route 53 Hosted Zone 자동 조회 (하드코딩 불필요)
+# ─────────────────────────────────────────────────────────
+data "aws_route53_zone" "main" {
+  name         = var.base_domain
+  private_zone = false
+}
+
+locals {
+  patient_domain = "${var.patient_subdomain}.${var.base_domain}"
+  staff_domain   = "${var.staff_subdomain}.${var.base_domain}"
+}
+
+
+# ─────────────────────────────────────────────────────────
 # 1. 환자 포털 인증서 (Public ALB용)
 # ─────────────────────────────────────────────────────────
 resource "aws_acm_certificate" "patient" {
-  domain_name       = var.patient_domain
+  domain_name       = local.patient_domain
   validation_method = "DNS"
 
   lifecycle {
@@ -25,7 +39,6 @@ resource "aws_acm_certificate" "patient" {
   tags = { Name = "acm-patient-portal" }
 }
 
-# DNS 검증 레코드 — Route 53에 자동 생성
 resource "aws_route53_record" "patient_validation" {
   for_each = {
     for dvo in aws_acm_certificate.patient.domain_validation_options :
@@ -36,7 +49,7 @@ resource "aws_route53_record" "patient_validation" {
     }
   }
 
-  zone_id         = var.route53_zone_id
+  zone_id         = data.aws_route53_zone.main.zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -44,7 +57,6 @@ resource "aws_route53_record" "patient_validation" {
   allow_overwrite = true
 }
 
-# 검증 완료 대기 (ALB 리스너 생성 전 완료 보장)
 resource "aws_acm_certificate_validation" "patient" {
   certificate_arn         = aws_acm_certificate.patient.arn
   validation_record_fqdns = [for r in aws_route53_record.patient_validation : r.fqdn]
@@ -55,7 +67,7 @@ resource "aws_acm_certificate_validation" "patient" {
 # 2. 의료진 포털 인증서 (Internal ALB용)
 # ─────────────────────────────────────────────────────────
 resource "aws_acm_certificate" "staff" {
-  domain_name       = var.staff_domain
+  domain_name       = local.staff_domain
   validation_method = "DNS"
 
   lifecycle {
@@ -75,7 +87,7 @@ resource "aws_route53_record" "staff_validation" {
     }
   }
 
-  zone_id         = var.route53_zone_id
+  zone_id         = data.aws_route53_zone.main.zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]

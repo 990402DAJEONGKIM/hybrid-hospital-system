@@ -15,10 +15,10 @@ output "staff_certificate_arn" {
 
 output "patient_domain" {
   description = "환자 포털 도메인"
-  value       = var.patient_domain
+  value       = local.patient_domain
 }
 
 output "staff_domain" {
   description = "의료진 포털 도메인"
-  value       = var.staff_domain
+  value       = local.staff_domain
 }
