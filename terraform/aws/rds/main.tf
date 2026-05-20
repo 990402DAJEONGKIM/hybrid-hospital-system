@@ -69,7 +69,7 @@ resource "aws_security_group" "rds" {
     description = "On-premises direct access"
   }
 
-  # ✅ 추가: 베스천 호스트 → Aurora 직접 접근
+  # bastion host -> Aurora
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -102,49 +102,49 @@ resource "aws_db_subnet_group" "main" {
 
 
 # ─────────────────────────────────────────────
-# Aurora 클러스터 파라미터 그룹 — pglogical 논리 복제
+# Aurora 클러스터 파라미터 그룹 (pglogical)
 # ─────────────────────────────────────────────
 resource "aws_rds_cluster_parameter_group" "pglogical" {
   name        = "aws-aurora-01-pglogical"
   family      = "aurora-postgresql17"
-  description = "Aurora PostgreSQL 17 - pglogical 논리 복제 설정"
+  description = "Aurora PostgreSQL 17 pglogical logical replication"
 
-  # 논리 복제 활성화 (재부팅 필요)
+  # enable logical replication (reboot required)
   parameter {
     name         = "rds.logical_replication"
     value        = "1"
     apply_method = "pending-reboot"
   }
 
-  # pglogical 익스텐션 사전 로드 (재부팅 필요)
+  # preload pglogical extension (reboot required)
   parameter {
     name         = "shared_preload_libraries"
     value        = "pglogical"
     apply_method = "pending-reboot"
   }
 
-  # 복제 슬롯 수 (구독자 수 + 여유분)
+  # replication slots (subscriber count + buffer)
   parameter {
     name         = "max_replication_slots"
     value        = "10"
     apply_method = "pending-reboot"
   }
 
-  # WAL 발신자 수
+  # wal senders
   parameter {
     name         = "max_wal_senders"
     value        = "10"
     apply_method = "pending-reboot"
   }
 
-  # 커밋 타임스탬프 추적 — pglogical conflict resolution 필요
+  # required for pglogical conflict resolution
   parameter {
     name         = "track_commit_timestamp"
     value        = "1"
     apply_method = "pending-reboot"
   }
 
-  # WAL 발신자 타임아웃 비활성화 (장거리 복제 끊김 방지)
+  # disable wal sender timeout (long-distance replication)
   parameter {
     name         = "wal_sender_timeout"
     value        = "0"
@@ -167,7 +167,7 @@ resource "aws_rds_cluster" "main" {
 
   db_subnet_group_name            = aws_db_subnet_group.main.name
   vpc_security_group_ids          = [aws_security_group.rds.id]
-  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.pglogical.name  # ✅ pglogical
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.pglogical.name  # pglogical
 
   backup_retention_period      = var.backup_retention_days
   preferred_backup_window      = "07:33-08:03"
@@ -179,9 +179,9 @@ resource "aws_rds_cluster" "main" {
   #storage_encrypted = true
   #kms_key_id        = var.rds_kms_key_arn
 
-  # ✅ 삭제 방지 설정
-  deletion_protection       = true   # AWS 콘솔/CLI에서도 삭제 불가
-  skip_final_snapshot       = false  # 삭제 시 스냅샷 강제 생성
+  # 삭제 방지 설정
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "aws-aurora-01-final-snapshot"
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
@@ -206,8 +206,8 @@ resource "aws_rds_cluster_instance" "writer" {
   promotion_tier          = 0
 
   monitoring_interval     = 0
-  
-  # ✅ 인스턴스 삭제 방지 설정
+
+  # 인스턴스 삭제 방지
   lifecycle {
     prevent_destroy = true
   }
@@ -241,7 +241,7 @@ resource "aws_iam_role_policy_attachment" "enhanced_monitoring" {
 
 
 # ─────────────────────────────────────────────
-# IAM Role — RDS Proxy → Secrets Manager
+# IAM Role — RDS Proxy -> Secrets Manager
 # ─────────────────────────────────────────────
 resource "aws_iam_role" "rds_proxy" {
   name = "aws-rds-proxy-role"
@@ -282,53 +282,11 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
 # ─────────────────────────────────────────────
 # RDS Proxy (toggle.sh로 별도 관리 — 주석 해제 후 import)
 # ─────────────────────────────────────────────
-# resource "aws_db_proxy" "main" {
-#   name                   = "aws-rds-proxy-01"
-#   debug_logging          = false
-#   engine_family          = "POSTGRESQL"
-#   idle_client_timeout    = 1800
-#   require_tls            = true
-#   role_arn               = aws_iam_role.rds_proxy.arn
-#   vpc_security_group_ids = [aws_security_group.proxy.id]
-#   vpc_subnet_ids         = var.db_subnet_ids
-#
-#   auth {
-#     auth_scheme = "SECRETS"
-#     iam_auth    = "DISABLED"
-#     secret_arn  = "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-hospital-user"
-#   }
-#
-#   auth {
-#     auth_scheme = "SECRETS"
-#     iam_auth    = "DISABLED"
-#     secret_arn  = "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-api-user"
-#   }
-#
-#   tags = merge(local.common_tags, { Name = "aws-rds-proxy-01" })
-# }
-#
-# resource "aws_db_proxy_default_target_group" "main" {
-#   db_proxy_name = aws_db_proxy.main.name
-#
-#   connection_pool_config {
-#     connection_borrow_timeout    = 120
-#     max_connections_percent      = 100
-#     max_idle_connections_percent = 50
-#   }
-# }
-#
-# resource "aws_db_proxy_target" "main" {
-#   db_cluster_identifier = aws_rds_cluster.main.id
-#   db_proxy_name         = aws_db_proxy.main.name
-#   target_group_name     = aws_db_proxy_default_target_group.main.name
-# }
-
-
+# resource "aws_db_proxy" "main" { ... }
 
 
 # bastion host 용 (by 김다정 2026.05.13)
 # =========================================================================================
-# ssm 연결을 위한 IAM Role (EC2가 SSM 서비스를 쓸 수 있게 허용)
 resource "aws_iam_role" "aws_bastion_role" {
   name = "aws-bastion-role"
 
@@ -342,24 +300,20 @@ resource "aws_iam_role" "aws_bastion_role" {
   })
 }
 
-# SSM 관리형 정책 연결
 resource "aws_iam_role_policy_attachment" "aws_ssm_attachment" {
   role       = aws_iam_role.aws_bastion_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# 3. EC2 인스턴스 프로파일
 resource "aws_iam_instance_profile" "aws_bastion_profile" {
   name = "aws-bastion-profile"
   role = aws_iam_role.aws_bastion_role.name
 }
 
-# 베스천 전용 보안 그룹
 resource "aws_security_group" "aws_bastion_sg" {
   name   = "aws-bastion-sg"
   vpc_id = data.aws_vpc.aws_vpc-01.id
 
-  # 아웃바운드는 RDS(5432) 접근을 위해 전체 허용
   egress {
     from_port   = 0
     to_port     = 0
@@ -368,12 +322,11 @@ resource "aws_security_group" "aws_bastion_sg" {
   }
 }
 
-# 5. 베스천 EC2 인스턴스 생성
 resource "aws_instance" "aws_bastion_01" {
-  ami                  = "ami-0603dd3984985653f" 
+  ami                  = "ami-0603dd3984985653f"
   instance_type        = "t3.micro"
   iam_instance_profile = aws_iam_instance_profile.aws_bastion_profile.name
-  
+
   subnet_id              = data.aws_subnet.aws-pub-sub-2a.id
   vpc_security_group_ids = [aws_security_group.aws_bastion_sg.id]
 
