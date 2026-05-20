@@ -148,37 +148,3 @@ resource "aws_autoscaling_group" "ecs" {
 }
 
 
-# ─────────────────────────────────────────────────────────
-# 예약 스케일링 (Scheduled Scaling)
-#
-# 병원 트래픽은 진료 시간대에 집중되므로 오토스케일링 감지 전에
-# 미리 인스턴스를 확보합니다.
-#
-# 시간 기준: UTC (KST = UTC+9)
-#   KST 07:00 = UTC 22:00 (전날)
-#   KST 19:00 = UTC 10:00
-#
-# 적용: 평일(월~금)만 적용, 주말은 1대 유지
-# ─────────────────────────────────────────────────────────
-
-# 평일 07:00 KST — 진료 시작 전 3대로 확장
-resource "aws_autoscaling_schedule" "scale_out_morning" {
-  scheduled_action_name  = "scale-out-morning"
-  autoscaling_group_name = aws_autoscaling_group.ecs.name
-
-  recurrence       = "0 22 * * SUN-THU"  # UTC 22:00 = KST 07:00 (평일)
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_scheduled_size  # 2대 (추가 급증 시 오토스케일링으로 3대)
-}
-
-# 평일 19:00 KST — 진료 종료 후 1대로 축소
-resource "aws_autoscaling_schedule" "scale_in_evening" {
-  scheduled_action_name  = "scale-in-evening"
-  autoscaling_group_name = aws_autoscaling_group.ecs.name
-
-  recurrence       = "0 10 * * MON-FRI"  # UTC 10:00 = KST 19:00 (평일)
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_min_size     # 1대
-}

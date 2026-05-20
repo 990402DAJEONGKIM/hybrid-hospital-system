@@ -26,7 +26,7 @@ variable "ec2_key_name" {
 variable "asg_min_size" {
   description = "ASG 최소 EC2 수"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "asg_max_size" {
@@ -37,12 +37,6 @@ variable "asg_max_size" {
 
 variable "asg_desired_size" {
   description = "ASG 초기 EC2 수"
-  type        = number
-  default     = 1
-}
-
-variable "asg_scheduled_size" {
-  description = "예약 스케일링 목표 EC2 수 (평일 진료 시간대)"
   type        = number
   default     = 2
 }
