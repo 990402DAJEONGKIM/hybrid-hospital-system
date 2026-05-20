@@ -49,10 +49,7 @@ resource "aws_launch_template" "ecs" {
   image_id      = data.aws_ssm_parameter.ecs_ami.value
   instance_type = var.ec2_instance_type
 
-  dynamic "key_name" {
-    for_each = var.ec2_key_name != "" ? [var.ec2_key_name] : []
-    content { key_name = key_name.value }
-  }
+  key_name = var.ec2_key_name != "" ? var.ec2_key_name : null
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_instance.name
@@ -67,7 +64,7 @@ resource "aws_launch_template" "ecs" {
       volume_size           = 30
       volume_type           = "gp3"
       encrypted             = true
-      kms_key_id            = var.ebs_kms_key_arn
+      kms_key_id            = data.aws_kms_key.ebs.arn
       delete_on_termination = true
     }
   }
@@ -102,7 +99,7 @@ resource "aws_launch_template" "ecs" {
 # ─────────────────────────────────────────────────────────
 resource "aws_autoscaling_group" "ecs" {
   name                = "aws-ecs-asg-01"
-  vpc_zone_identifier = var.app_subnet_ids
+  vpc_zone_identifier = data.aws_subnets.app.ids
 
   min_size         = var.asg_min_size
   max_size         = var.asg_max_size

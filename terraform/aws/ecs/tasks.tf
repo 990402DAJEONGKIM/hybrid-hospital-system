@@ -14,12 +14,36 @@
 #   - staff-service   (Internal ALB)
 # =========================================================
 
+# ─────────────────────────────────────────────────────────
+# ECR 최신 이미지 자동 조회 (하드코딩 불필요)
+# ─────────────────────────────────────────────────────────
+data "aws_ecr_image" "nginx_patient" {
+  repository_name = "aws-hospital-nginx-patient"
+  most_recent     = true
+}
+
+data "aws_ecr_image" "api_patient" {
+  repository_name = "aws-hospital-api-patient"
+  most_recent     = true
+}
+
+data "aws_ecr_image" "nginx_staff" {
+  repository_name = "aws-hospital-nginx-staff"
+  most_recent     = true
+}
+
+data "aws_ecr_image" "api_staff" {
+  repository_name = "aws-hospital-api-staff"
+  most_recent     = true
+}
+
+
 locals {
   # FastAPI 공통 secrets (Secrets Manager → 컨테이너 환경변수)
   api_secrets = [
-    { name = "DATABASE_URL", valueFrom = var.secret_db_url_arn },
-    { name = "JWT_SECRET",   valueFrom = var.secret_jwt_arn    },
-    { name = "API_KEY",      valueFrom = var.secret_api_key_arn },
+    { name = "DATABASE_URL", valueFrom = data.aws_secretsmanager_secret.db_url.arn     },
+    { name = "JWT_SECRET",   valueFrom = data.aws_secretsmanager_secret.jwt_secret.arn },
+    { name = "API_KEY",      valueFrom = data.aws_secretsmanager_secret.api_key.arn    },
   ]
 }
 
@@ -53,7 +77,7 @@ resource "aws_ecs_task_definition" "patient" {
   container_definitions = jsonencode([
     {
       name      = "nginx-patient"
-      image     = var.nginx_patient_image
+      image     = data.aws_ecr_image.nginx_patient.image_uri
       essential = true
       portMappings = [{
         containerPort = 80
@@ -74,7 +98,7 @@ resource "aws_ecs_task_definition" "patient" {
     },
     {
       name      = "api-patient"
-      image     = var.api_patient_image
+      image     = data.aws_ecr_image.api_patient.image_uri
       essential = true
       portMappings = [{
         containerPort = 8000
@@ -114,7 +138,7 @@ resource "aws_ecs_task_definition" "staff" {
   container_definitions = jsonencode([
     {
       name      = "nginx-staff"
-      image     = var.nginx_staff_image
+      image     = data.aws_ecr_image.nginx_staff.image_uri
       essential = true
       portMappings = [{
         containerPort = 80
@@ -135,7 +159,7 @@ resource "aws_ecs_task_definition" "staff" {
     },
     {
       name      = "api-staff"
-      image     = var.api_staff_image
+      image     = data.aws_ecr_image.api_staff.image_uri
       essential = true
       portMappings = [{
         containerPort = 8000
@@ -179,7 +203,7 @@ resource "aws_ecs_service" "patient" {
   }
 
   network_configuration {
-    subnets          = var.app_subnet_ids
+    subnets          = data.aws_subnets.app.ids
     security_groups  = [aws_security_group.ecs_ec2.id]
     assign_public_ip = false
   }
@@ -221,7 +245,7 @@ resource "aws_ecs_service" "staff" {
   }
 
   network_configuration {
-    subnets          = var.app_subnet_ids
+    subnets          = data.aws_subnets.app.ids
     security_groups  = [aws_security_group.ecs_ec2.id]
     assign_public_ip = false
   }

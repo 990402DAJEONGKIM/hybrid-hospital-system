@@ -39,9 +39,9 @@ resource "aws_iam_role_policy" "task_execution_secrets" {
         "secretsmanager:DescribeSecret",
       ]
       Resource = [
-        var.secret_db_url_arn,
-        var.secret_jwt_arn,
-        var.secret_api_key_arn,
+        data.aws_secretsmanager_secret.db_url.arn,
+        data.aws_secretsmanager_secret.jwt_secret.arn,
+        data.aws_secretsmanager_secret.api_key.arn,
       ]
     }]
   })

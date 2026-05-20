@@ -10,12 +10,6 @@ variable "vpc_id" {
   default     = "vpc-032134a80cdaa051e"
 }
 
-# App 서브넷 ID (ECS EC2 배치 — Private)
-variable "app_subnet_ids" {
-  description = "App 서브넷 ID 목록 (10.0.11~13.0/24, 3 AZ)"
-  type        = list(string)
-}
-
 # ── ECS EC2 설정 ─────────────────────────────────────────
 variable "ec2_instance_type" {
   description = "ECS EC2 인스턴스 타입"
@@ -47,52 +41,11 @@ variable "asg_desired_size" {
   default     = 3
 }
 
-variable "ebs_kms_key_arn" {
-  description = "EBS 암호화용 KMS 키 ARN (TC-KMS 워크스페이스 output)"
-  type        = string
-}
-
 # ── Wazuh ───────────────────────────────────────────────
 variable "wazuh_server_ip" {
-  description = "Wazuh 서버 IP (에이전트가 연결할 주소)"
+  description = "Wazuh 서버 IP (에이전트가 연결할 주소, 미설정 시 설치 건너뜀)"
   type        = string
-}
-
-# ── ECR 이미지 URI ────────────────────────────────────────
-variable "nginx_patient_image" {
-  description = "hospital-nginx-patient ECR 이미지 URI (tag 포함)"
-  type        = string
-}
-
-variable "api_patient_image" {
-  description = "hospital-api-patient ECR 이미지 URI (tag 포함)"
-  type        = string
-}
-
-variable "nginx_staff_image" {
-  description = "hospital-nginx-staff ECR 이미지 URI (tag 포함)"
-  type        = string
-}
-
-variable "api_staff_image" {
-  description = "hospital-api-staff ECR 이미지 URI (tag 포함)"
-  type        = string
-}
-
-# ── Secrets Manager ARN (FastAPI 환경변수) ────────────────
-variable "secret_db_url_arn" {
-  description = "DATABASE_URL Secrets Manager ARN"
-  type        = string
-}
-
-variable "secret_jwt_arn" {
-  description = "JWT_SECRET Secrets Manager ARN"
-  type        = string
-}
-
-variable "secret_api_key_arn" {
-  description = "API_KEY Secrets Manager ARN"
-  type        = string
+  default     = ""
 }
 
 # ── ALB Target Group ARN (ECS Service 연결) ───────────────
