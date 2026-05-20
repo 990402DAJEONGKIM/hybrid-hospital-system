@@ -57,7 +57,7 @@ location /health {
 
 ```
 스케일링 가능:
-  EC2 인스턴스  ← ASG가 관리 (min 2대, max 3대)
+  EC2 인스턴스  ← ASG가 관리 (min 2대, max 4대)
   ECS 태스크    ← ECS Service Auto Scaling이 관리
 
 스케일링 불가:
@@ -84,7 +84,7 @@ location /health {
 | 항목 | 값 |
 |---|---|
 | 최소 인스턴스 | 2대 |
-| 최대 인스턴스 | 3대 |
+| 최대 인스턴스 | 4대 |
 | 스케일링 기준 | ECS Capacity Provider 자동 관리 |
 | 헬스체크 | EC2 상태 기반 |
 | 헬스체크 유예 기간 | 120초 |

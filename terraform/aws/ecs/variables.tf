@@ -32,7 +32,7 @@ variable "asg_min_size" {
 variable "asg_max_size" {
   description = "ASG 최대 EC2 수"
   type        = number
-  default     = 3
+  default     = 4
 }
 
 variable "asg_desired_size" {
