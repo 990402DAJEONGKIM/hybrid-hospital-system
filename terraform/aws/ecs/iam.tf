@@ -25,25 +25,35 @@ resource "aws_iam_role_policy_attachment" "task_execution_managed" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Secrets Manager 읽기 권한 추가 (환경변수 주입용)
+# Secrets Manager 읽기 + KMS 복호화 권한 (환경변수 주입용)
 resource "aws_iam_role_policy" "task_execution_secrets" {
   name = "ecs-task-execution-secrets"
   role = aws_iam_role.task_execution.id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "secretsmanager:GetSecretValue",
-        "secretsmanager:DescribeSecret",
-      ]
-      Resource = [
-        data.aws_secretsmanager_secret.db_url.arn,
-        data.aws_secretsmanager_secret.jwt_secret.arn,
-        data.aws_secretsmanager_secret.api_key.arn,
-      ]
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+        ]
+        Resource = [
+          data.aws_secretsmanager_secret.db_url.arn,
+          data.aws_secretsmanager_secret.jwt_secret.arn,
+          data.aws_secretsmanager_secret.api_key.arn,
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+        ]
+        Resource = [data.aws_kms_key.secretsmanager.arn]
+      }
+    ]
   })
 }
 
