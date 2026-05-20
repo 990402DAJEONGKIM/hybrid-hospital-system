@@ -16,6 +16,13 @@ resource "aws_iam_role" "aws-wazuh-ssm-role" {
   tags = { Name = "aws-wazuh-ssm-role", Owner = "st2" }
 }
 
+# CloudWatch Agent 권한
+resource "aws_iam_role_policy_attachment" "aws-wazuh-cloudwatch" {
+  role       = aws_iam_role.aws-wazuh-ssm-role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+
 # SSM 권한
 resource "aws_iam_role_policy_attachment" "aws-wazuh-ssm" {
   role       = aws_iam_role.aws-wazuh-ssm-role.name
@@ -24,7 +31,7 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-ssm" {
 
 # S3 권한 (Ansible SSM connection용)
 resource "aws_iam_role_policy" "aws-wazuh-s3" {
-  name = "aws-wazuh-s3-ssm"
+  name = "aws-wazuh-s3"
   role = aws_iam_role.aws-wazuh-ssm-role.id
 
   policy = jsonencode({
@@ -40,7 +47,9 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
       ]
       Resource = [
         "arn:aws:s3:::wazuh-ansible-ssm",
-        "arn:aws:s3:::wazuh-ansible-ssm/*"
+        "arn:aws:s3:::wazuh-ansible-ssm/*",
+        "arn:aws:s3:::aws-wazuh-storage",
+        "arn:aws:s3:::aws-wazuh-storage/*"
       ]
     }]
   })
