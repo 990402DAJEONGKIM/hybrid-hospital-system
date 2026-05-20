@@ -102,6 +102,60 @@ resource "aws_db_subnet_group" "main" {
 
 
 # ─────────────────────────────────────────────
+# Aurora 클러스터 파라미터 그룹 — pglogical 논리 복제
+# ─────────────────────────────────────────────
+resource "aws_rds_cluster_parameter_group" "pglogical" {
+  name        = "aws-aurora-01-pglogical"
+  family      = "aurora-postgresql17"
+  description = "Aurora PostgreSQL 17 - pglogical 논리 복제 설정"
+
+  # 논리 복제 활성화 (재부팅 필요)
+  parameter {
+    name         = "rds.logical_replication"
+    value        = "1"
+    apply_method = "pending-reboot"
+  }
+
+  # pglogical 익스텐션 사전 로드 (재부팅 필요)
+  parameter {
+    name         = "shared_preload_libraries"
+    value        = "pglogical"
+    apply_method = "pending-reboot"
+  }
+
+  # 복제 슬롯 수 (구독자 수 + 여유분)
+  parameter {
+    name         = "max_replication_slots"
+    value        = "10"
+    apply_method = "pending-reboot"
+  }
+
+  # WAL 발신자 수
+  parameter {
+    name         = "max_wal_senders"
+    value        = "10"
+    apply_method = "pending-reboot"
+  }
+
+  # 커밋 타임스탬프 추적 — pglogical conflict resolution 필요
+  parameter {
+    name         = "track_commit_timestamp"
+    value        = "1"
+    apply_method = "pending-reboot"
+  }
+
+  # WAL 발신자 타임아웃 비활성화 (장거리 복제 끊김 방지)
+  parameter {
+    name         = "wal_sender_timeout"
+    value        = "0"
+    apply_method = "immediate"
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-aurora-01-pglogical" })
+}
+
+
+# ─────────────────────────────────────────────
 # Aurora 클러스터
 # ─────────────────────────────────────────────
 resource "aws_rds_cluster" "main" {
@@ -111,8 +165,9 @@ resource "aws_rds_cluster" "main" {
   master_username             = var.db_master_username
   manage_master_user_password = true
 
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
+  db_subnet_group_name            = aws_db_subnet_group.main.name
+  vpc_security_group_ids          = [aws_security_group.rds.id]
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.pglogical.name  # ✅ pglogical
 
   backup_retention_period      = var.backup_retention_days
   preferred_backup_window      = "07:33-08:03"
@@ -120,14 +175,14 @@ resource "aws_rds_cluster" "main" {
 
   storage_encrypted = false  # 기존 RDS랑 맞게 false로 변경
   kms_key_id        = null   # kms도 null로
-  
+
   #storage_encrypted = true
   #kms_key_id        = var.rds_kms_key_arn
 
   # ✅ 삭제 방지 설정
-  deletion_protection = true  # AWS 콘솔/CLI에서도 삭제 불가
-  skip_final_snapshot = false # 삭제 시 스냅샷 강제 생성
-  final_snapshot_identifier = "aws-aurora-01-final-snapshot" # 스냅샷 이름
+  deletion_protection       = true   # AWS 콘솔/CLI에서도 삭제 불가
+  skip_final_snapshot       = false  # 삭제 시 스냅샷 강제 생성
+  final_snapshot_identifier = "aws-aurora-01-final-snapshot"
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
