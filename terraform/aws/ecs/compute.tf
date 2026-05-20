@@ -129,35 +129,21 @@ resource "aws_autoscaling_group" "ecs" {
     propagate_at_launch = true
   }
 
+  # Warm Pool — 콜드 스타트 해결
+  # Stopped 인스턴스를 미리 대기시켜 스케일 아웃 시 60~90초로 단축
+  # 비용: EBS $2.4/월만 과금 (인스턴스 시간 요금 없음)
+  warm_pool {
+    pool_state                  = "Stopped"
+    min_size                    = 1
+    max_group_prepared_capacity = 2
+
+    instance_reuse_policy {
+      reuse_on_scale_in = true
+    }
+  }
+
   lifecycle {
     ignore_changes = [desired_capacity]
-  }
-}
-
-
-# ─────────────────────────────────────────────────────────
-# Warm Pool — 콜드 스타트 해결
-#
-# 스케일 아웃 요청 시 인스턴스를 새로 부팅하면 3-4분 소요.
-# Warm Pool은 미리 초기화된 Stopped 인스턴스를 대기시켜
-# 스케일 아웃 시 60-90초로 단축.
-#
-# 비용: Stopped 상태 = EBS(30GB × $0.08/GB) 월 $2.4/대 만 과금
-#       (인스턴스 시간 요금 없음)
-# ─────────────────────────────────────────────────────────
-resource "aws_autoscaling_warm_pool" "ecs" {
-  autoscaling_group_name = aws_autoscaling_group.ecs.name
-
-  # Stopped: EBS 비용만 발생, 스케일 아웃 시 Start → Running
-  pool_state = "Stopped"
-
-  # 항상 1대를 대기 (1→3 스케일 아웃 시 최대 2대 필요하므로 2로도 가능)
-  min_size                  = 1
-  max_group_prepared_capacity = 2
-
-  instance_reuse_policy {
-    # 스케일 인 시 인스턴스를 Warm Pool로 반환 (재초기화 비용 절약)
-    reuse_on_scale_in = true
   }
 }
 
