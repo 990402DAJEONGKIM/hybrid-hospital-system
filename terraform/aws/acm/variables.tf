@@ -5,8 +5,9 @@ variable "aws_region" {
 }
 
 variable "base_domain" {
-  description = "베이스 도메인 (예: kimyipark.com) — Route 53 Hosted Zone 조회 및 서브도메인 생성에 사용"
+  description = "베이스 도메인 — Route 53 Hosted Zone 조회 및 서브도메인 생성에 사용"
   type        = string
+  default     = "mzclinic.cloud"
 }
 
 variable "patient_subdomain" {
