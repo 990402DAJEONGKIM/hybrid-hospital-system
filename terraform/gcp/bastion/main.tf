@@ -5,7 +5,7 @@
 # ISMS-P 준수:
 #   - IAP(Identity-Aware Proxy) SSH 접속 (공인 IP 불필요)
 #   - 외부 SSH 포트 직접 오픈 없음
-#   - 최소 권한 서비스 계정
+#   - 기존 서비스 계정 재사용
 ##############################################################
 
 # ── 기존 리소스 참조 ─────────────────────────────────────────
@@ -19,6 +19,10 @@ data "google_compute_subnetwork" "main" {
   region = var.region
 }
 
+data "google_service_account" "bastion" {
+  account_id = "tc-st1-account"
+}
+
 # ── IAP API 활성화 ────────────────────────────────────────────
 
 resource "google_project_service" "iap" {
@@ -29,20 +33,6 @@ resource "google_project_service" "iap" {
 resource "google_project_service" "compute" {
   service            = "compute.googleapis.com"
   disable_on_destroy = false
-}
-
-# ── 베스천 전용 서비스 계정 (최소 권한) ──────────────────────
-
-resource "google_service_account" "bastion" {
-  account_id   = "gcp-bastion-sa"
-  display_name = "GCP Bastion Service Account"
-}
-
-# Cloud SQL 접속 권한만 부여
-resource "google_project_iam_member" "bastion_sql" {
-  project = var.project_id
-  role    = "roles/cloudsql.client"
-  member  = "serviceAccount:${google_service_account.bastion.email}"
 }
 
 # ── 방화벽 — IAP SSH 허용 ─────────────────────────────────────
@@ -58,7 +48,6 @@ resource "google_compute_firewall" "allow_iap_ssh" {
     ports    = ["22"]
   }
 
-  # IAP 터널 IP 대역 (GCP 고정값)
   source_ranges = ["35.235.240.0/20"]
   target_tags   = ["gcp-bastion"]
 
@@ -90,12 +79,12 @@ resource "google_compute_instance" "bastion" {
   }
 
   service_account {
-    email  = google_service_account.bastion.email
+    email  = data.google_service_account.bastion.email
     scopes = ["cloud-platform"]
   }
 
   metadata = {
-    enable-oslogin = "TRUE"  # OS Login으로 SSH 키 중앙 관리
+    enable-oslogin = "TRUE"
   }
 
   shielded_instance_config {
