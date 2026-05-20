@@ -48,20 +48,6 @@ variable "wazuh_server_ip" {
   default     = ""
 }
 
-# ── ALB Target Group ARN (ECS Service 연결) ───────────────
-# ALB 모듈 apply 후 입력. 비어있으면 서비스 생성 건너뜀
-variable "patient_tg_arn" {
-  description = "환자 포털 ALB Target Group ARN (TC-ALB apply 후 입력)"
-  type        = string
-  default     = ""
-}
-
-variable "staff_tg_arn" {
-  description = "의료진 포털 ALB Target Group ARN (TC-ALB apply 후 입력)"
-  type        = string
-  default     = ""
-}
-
 # ── ALLOWED_HOSTS (FastAPI TrustedHost) ──────────────────
 variable "patient_allowed_hosts" {
   description = "환자 포털 도메인 (NGINX → FastAPI 프록시 Host 헤더)"

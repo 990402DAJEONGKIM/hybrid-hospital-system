@@ -52,3 +52,15 @@ data "aws_secretsmanager_secret" "jwt_secret" {
 data "aws_secretsmanager_secret" "api_key" {
   name = "hospital/api-key"
 }
+
+
+# ─────────────────────────────────────────────────────────
+# ALB Target Group (alb 모듈 apply 후 자동 조회)
+# ─────────────────────────────────────────────────────────
+data "aws_lb_target_group" "patient" {
+  name = "aws-patient-tg"
+}
+
+data "aws_lb_target_group" "staff" {
+  name = "aws-staff-tg"
+}

@@ -7,7 +7,7 @@
 # ECS-optimized Amazon Linux 2023 AMI (최신 버전 자동 조회)
 # ─────────────────────────────────────────────────────────
 data "aws_ssm_parameter" "ecs_ami" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
 }
 
 

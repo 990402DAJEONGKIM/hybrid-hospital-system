@@ -24,22 +24,18 @@ locals {
     Version = "2012-10-17"
     Statement = [
       {
-        # 루트 계정에 전체 권한 부여 (동일한 IAM 등급의 팀원 3명 모두 권한 위임받음)
         Sid    = "EnableRootAccountPermissions"
         Effect = "Allow"
         Principal = {
-          # 기존 var.aws_account_id 대신 동적 참조 적용
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
       },
       {
-        # CloudWatch Logs가 암호화 키 사용 가능하도록 허용
         Sid    = "AllowCloudWatchLogs"
         Effect = "Allow"
         Principal = {
-          # 기존 var.aws_region 대신 동적 참조 적용
           Service = "logs.${data.aws_region.current.region}.amazonaws.com"
         }
         Action = [
@@ -50,6 +46,37 @@ locals {
           "kms:DescribeKey"
         ]
         Resource = "*"
+      },
+      {
+        # Auto Scaling이 CMK로 암호화된 EBS 볼륨을 생성하기 위한 권한
+        Sid    = "AllowAutoScalingServiceRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        # Auto Scaling → EC2에 키 사용 권한 위임 (EBS 암호화 필수)
+        Sid    = "AllowAutoScalingCreateGrant"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action   = ["kms:CreateGrant"]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
       }
     ]
   })

@@ -186,11 +186,8 @@ resource "aws_ecs_task_definition" "staff" {
 
 # ─────────────────────────────────────────────────────────
 # ECS Service — 환자 포털
-# patient_tg_arn 이 입력된 경우에만 생성 (ALB apply 이후)
 # ─────────────────────────────────────────────────────────
 resource "aws_ecs_service" "patient" {
-  count = var.patient_tg_arn != "" ? 1 : 0
-
   name            = "patient-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.patient.arn
@@ -209,16 +206,14 @@ resource "aws_ecs_service" "patient" {
   }
 
   load_balancer {
-    target_group_arn = var.patient_tg_arn
+    target_group_arn = data.aws_lb_target_group.patient.arn
     container_name   = "nginx-patient"
     container_port   = 80
   }
 
-  # 롤링 업데이트: 최소 1 Task 유지, 최대 200% 배포
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
 
-  # ECS Service Auto Scaling (CPU 70% 기준)
   lifecycle {
     ignore_changes = [desired_count]
   }
@@ -231,8 +226,6 @@ resource "aws_ecs_service" "patient" {
 # ECS Service — 의료진 포털
 # ─────────────────────────────────────────────────────────
 resource "aws_ecs_service" "staff" {
-  count = var.staff_tg_arn != "" ? 1 : 0
-
   name            = "staff-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.staff.arn
@@ -251,7 +244,7 @@ resource "aws_ecs_service" "staff" {
   }
 
   load_balancer {
-    target_group_arn = var.staff_tg_arn
+    target_group_arn = data.aws_lb_target_group.staff.arn
     container_name   = "nginx-staff"
     container_port   = 80
   }
@@ -271,8 +264,6 @@ resource "aws_ecs_service" "staff" {
 # ECS Service Auto Scaling — 환자 포털 (CPU 70% 기준)
 # ─────────────────────────────────────────────────────────
 resource "aws_appautoscaling_target" "patient" {
-  count = var.patient_tg_arn != "" ? 1 : 0
-
   max_capacity       = 9
   min_capacity       = 3
   resource_id        = "service/${aws_ecs_cluster.main.name}/patient-service"
@@ -283,13 +274,11 @@ resource "aws_appautoscaling_target" "patient" {
 }
 
 resource "aws_appautoscaling_policy" "patient_cpu" {
-  count = var.patient_tg_arn != "" ? 1 : 0
-
   name               = "patient-cpu-scaling"
   policy_type        = "TargetTrackingScaling"
-  resource_id        = aws_appautoscaling_target.patient[0].resource_id
-  scalable_dimension = aws_appautoscaling_target.patient[0].scalable_dimension
-  service_namespace  = aws_appautoscaling_target.patient[0].service_namespace
+  resource_id        = aws_appautoscaling_target.patient.resource_id
+  scalable_dimension = aws_appautoscaling_target.patient.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.patient.service_namespace
 
   target_tracking_scaling_policy_configuration {
     target_value       = 70.0
