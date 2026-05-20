@@ -5,13 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from core.middleware import AuditLogMiddleware, SecurityHeadersMiddleware
+from core.middleware import AuditLogMiddleware
 from routers import admin, auth, portal
 
 app = FastAPI(title="김이박 병원 API")
 
 # 미들웨어 등록 순서: 마지막에 추가된 것이 가장 바깥(요청 최초 진입)
-# 요청 처리 순서: TrustedHost → AuditLog → SecurityHeaders → GZip → CORS → App
+# 요청 처리 순서: TrustedHost → AuditLog → GZip → CORS → App
 
 # 1. CORS (가장 안쪽 — preflight 처리)
 app.add_middleware(
@@ -30,10 +30,7 @@ app.add_middleware(
 # 2. GZip 응답 압축
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# 3. 보안 헤더 (ISMS-P 2.10.1)
-app.add_middleware(SecurityHeadersMiddleware)
-
-# 4. 감사 로그 (ISMS-P 2.9.1)
+# 3. 감사 로그 (ISMS-P 2.9.1)
 app.add_middleware(AuditLogMiddleware)
 
 # 5. Trusted Host (가장 바깥 — 유효하지 않은 Host 요청 조기 차단)

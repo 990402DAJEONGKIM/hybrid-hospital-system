@@ -69,6 +69,17 @@ resource "aws_security_group" "rds" {
     description = "On-premises direct access"
   }
 
+  dynamic "ingress" {
+    for_each = var.app_subnet_cidrs
+    content {
+      from_port   = 5432
+      to_port     = 5432
+      protocol    = "tcp"
+      cidr_blocks = [ingress.value]
+      description = "ECS app subnet ${ingress.value} direct access"
+    }
+  }
+
   # bastion host -> Aurora
   ingress {
     from_port       = 5432

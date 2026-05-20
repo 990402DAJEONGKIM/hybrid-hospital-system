@@ -116,18 +116,3 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             pass  # 감사 로그 실패가 실제 응답에 영향을 주지 않도록
 
         return response
-
-
-# ── 보안 헤더 미들웨어 (ISMS-P 2.10.1) ────────────────────────
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["X-Content-Type-Options"]    = "nosniff"
-        response.headers["X-Frame-Options"]           = "DENY"
-        response.headers["X-XSS-Protection"]          = "1; mode=block"
-        response.headers["Referrer-Policy"]           = "strict-origin-when-cross-origin"
-        response.headers["Content-Security-Policy"]   = "default-src 'none'"
-        response.headers["Permissions-Policy"]        = "geolocation=(), microphone=(), camera=()"
-        return response
