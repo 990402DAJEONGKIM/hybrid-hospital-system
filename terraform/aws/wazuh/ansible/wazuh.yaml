@@ -355,12 +355,42 @@
     # ──────────────────────────────────────────
     - name: Vector 설치
       shell: |
-        curl -1sLf 'https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh' | sudo -E bash
-        sudo apt-get install -y vector
+        bash -c "$(curl -L https://setup.vector.dev)"
+        apt-get install -y vector
       args:
         creates: /usr/bin/vector
       tags: vector
 
+    - name: vector 유저 wazuh 그룹 추가
+      user:
+        name: vector
+        groups: wazuh
+        append: yes
+      tags: vector
+
+    - name: Vector 기본 설정 파일 삭제
+      file:
+        path: /etc/vector/vector.yaml
+        state: absent
+      tags: vector
+
+    - name: Vector config 경로 설정
+      copy:
+        dest: /etc/default/vector
+        content: |
+          VECTOR_CONFIG=/etc/vector/vector.toml
+        mode: '0644'
+      tags: vector
+
+    - name: /var/lib/vector 디렉토리 권한 설정
+      file:
+        path: /var/lib/vector
+        state: directory
+        owner: vector
+        group: vector
+        mode: '0755'
+      tags: vector
+      
     - name: Vector systemd override 디렉토리 생성
       file:
         path: /etc/systemd/system/vector.service.d

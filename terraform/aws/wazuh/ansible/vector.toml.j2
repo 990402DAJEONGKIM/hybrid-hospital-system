@@ -12,7 +12,7 @@ address = "127.0.0.1:8686"
 [sources.wazuh_alerts]
 type = "file"
 include = ["/var/ossec/logs/alerts/alerts.json"]
-read_from = "beginning"
+read_from = "end"
 glob_minimum_cooldown_ms = 1000
 rotate_wait_secs = 5
 ignore_older_secs = 86400

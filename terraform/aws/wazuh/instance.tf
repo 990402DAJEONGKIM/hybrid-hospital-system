@@ -72,12 +72,20 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
           "kms:GenerateDataKey",
           "kms:Decrypt"
         ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "kms:RequestAlias" = "alias/aws-kms-s3-01"
-          }
-        }
+        Resource = data.aws_kms_key.s3.arn
+      },
+      {
+        Sid    = "CloudWatchLogsRead"
+        Effect = "Allow"
+        Action = [
+          "logs:GetLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups"
+        ]
+        Resource = [
+          "arn:aws:logs:ap-south-2:*:log-group:/aws/rds/cluster/aws-aurora-01/postgresql",
+          "arn:aws:logs:ap-south-2:*:log-group:/aws/rds/cluster/aws-aurora-01/postgresql:*"
+        ]
       }
     ]
   })
