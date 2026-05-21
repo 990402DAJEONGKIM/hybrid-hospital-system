@@ -36,22 +36,50 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:ListBucket",
-        "s3:DeleteObject",
-        "s3:GetBucketLocation"
-      ]
-      Resource = [
-        "arn:aws:s3:::wazuh-ansible-ssm",
-        "arn:aws:s3:::wazuh-ansible-ssm/*",
-        "arn:aws:s3:::aws-wazuh-storage",
-        "arn:aws:s3:::aws-wazuh-storage/*"
-      ]
-    }]
+    Statement = [
+      {
+        Sid    = "AnsibleSSM"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket",
+          "s3:DeleteObject",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          "arn:aws:s3:::wazuh-ansible-ssm",
+          "arn:aws:s3:::wazuh-ansible-ssm/*"
+        ]
+      },
+      {
+        Sid    = "WazuhLogStorage"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          "arn:aws:s3:::aws-k2p-storage-01",
+          "arn:aws:s3:::aws-k2p-storage-01/*"
+        ]
+      },
+      {
+        Sid    = "KMSForS3"
+        Effect = "Allow"
+        Action = [
+          "kms:GenerateDataKey",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringLike = {
+            "kms:RequestAlias" = "alias/aws-kms-s3-01"
+          }
+        }
+      }
+    ]
   })
 }
 
@@ -90,26 +118,5 @@ resource "aws_instance" "aws-wazuh-01" {
   }
 }
 
-# hosts.ini 자동 생성
-resource "aws_s3_object" "aws-ansible-hosts" {
-  bucket  = "wazuh-ansible-ssm"
-  key = "wazuh1/hosts.ini"
-  content = <<-EOT
-    [wazuh]
-    ${aws_instance.aws-wazuh-01.id}
 
-    [wazuh:vars]
-    ansible_connection=community.aws.aws_ssm
-    ansible_aws_ssm_region=${var.aws_region}
-    ansible_aws_ssm_bucket_name=wazuh-ansible-ssm
-    ansible_aws_ssm_plugin_path=/usr/local/bin/session-manager-plugin
-    ansible_aws_ssm_timeout=3600
-    wazuh_node_name=wazuh-01
-    wazuh_node_type=master
-    wazuh_master_ip=${aws_instance.aws-wazuh-01.private_ip}
-    wazuh_cluster_key=${var.wazuh_cluster_key}
-    slack_webhook_url=${var.slack_webhook_url}
-    wazuh_indexer_ip=${var.wazuh_indexer_ip}
-    wazuh_cert_name=wazuh-1
-  EOT
-}
+

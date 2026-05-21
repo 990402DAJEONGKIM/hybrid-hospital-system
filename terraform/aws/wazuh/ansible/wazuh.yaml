@@ -24,9 +24,11 @@
         grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
       args:
         creates: /swapfile
+      tags: system
 
     - name: Timezone KST 설정
       shell: timedatectl set-timezone Asia/Seoul
+      tags: system
 
     - name: vm.swappiness 설정
       sysctl:
@@ -34,6 +36,7 @@
         value: '10'
         state: present
         reload: yes
+      tags: system
 
     - name: vm.max_map_count 설정
       sysctl:
@@ -41,9 +44,10 @@
         value: '262144'
         state: present
         reload: yes
+      tags: system
 
     # ──────────────────────────────────────────
-    # Wazuh 버전 고정 (indexer 제외)
+    # Wazuh 버전 고정
     # ──────────────────────────────────────────
     - name: Wazuh 버전 고정
       copy:
@@ -52,12 +56,14 @@
           Package: wazuh-manager wazuh-dashboard
           Pin: version 4.14.5*
           Pin-Priority: 1001
+      tags: install
 
     - name: 시스템 업데이트
       apt:
         update_cache: yes
         upgrade: safe
       timeout: 300
+      tags: install
 
     - name: 필수 패키지 설치
       apt:
@@ -69,20 +75,23 @@
           - libxml2-utils
           - awscli
         state: present
+      tags: install
 
     # ──────────────────────────────────────────
-    # 설치 여부 확인 (manager 기준)
+    # 설치 여부 확인
     # ──────────────────────────────────────────
     - name: Wazuh 설치 여부 확인
       stat:
         path: /var/ossec/etc/ossec.conf
       register: wazuh_installed
+      tags: always
 
     # ──────────────────────────────────────────
     # 설치 블록 (최초 1회)
     # ──────────────────────────────────────────
     - name: Wazuh 신규 설치
       when: not wazuh_installed.stat.exists
+      tags: install
       block:
         - name: Wazuh 잔재 정리
           shell: |
@@ -116,7 +125,7 @@
             - /tmp/wazuh-install-files
             - /tmp/wazuh-install-files.tar
 
-        - name: wazuh-install-files.tar S3 다운로드 (Indexer가 생성한 인증서)
+        - name: wazuh-install-files.tar S3 다운로드
           shell: >
             aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar /tmp/wazuh-install-files.tar
             --region ap-south-2
@@ -152,14 +161,15 @@
             msg: "Wazuh 설치 실패. 위 로그를 확인하세요."
 
     # ──────────────────────────────────────────
-    # 설정 블록 (항상 실행)
+    # 설정 블록
     # ──────────────────────────────────────────
-    - name: 로컬 Indexer 서비스 중지 (외부 Indexer로 전환)
+    - name: 로컬 Indexer 서비스 중지
       systemd:
         name: wazuh-indexer
         state: stopped
         enabled: no
       ignore_errors: yes
+      tags: config
 
     - name: 최신 인증서 S3에서 다운로드
       shell: >
@@ -167,9 +177,11 @@
         /tmp/wazuh-install-files.tar --region ap-south-2
       environment:
         AWS_DEFAULT_REGION: "ap-south-2"
+      tags: config
 
     - name: 인증서 압축 해제
       shell: tar -xf /tmp/wazuh-install-files.tar -C /tmp/
+      tags: config
 
     - name: Filebeat 인증서 갱신
       shell: |
@@ -177,7 +189,8 @@
         cp /tmp/wazuh-install-files/{{ wazuh_cert_name }}-key.pem /etc/filebeat/certs/
         cp /tmp/wazuh-install-files/root-ca.pem /etc/filebeat/certs/
         cp /tmp/wazuh-install-files/root-ca.pem /etc/wazuh-dashboard/certs/
-        
+      tags: config
+
     - name: ossec.conf 템플릿 배포
       template:
         src: ossec.conf.j2
@@ -185,6 +198,7 @@
         owner: root
         group: wazuh
         mode: '0640'
+      tags: config
 
     - name: 커스텀 룰 배포
       copy:
@@ -193,6 +207,7 @@
         owner: root
         group: wazuh
         mode: '0640'
+      tags: config
 
     - name: Agent 중앙 설정 배포
       copy:
@@ -201,7 +216,8 @@
         owner: wazuh
         group: wazuh
         mode: '0640'
-        
+      tags: config
+
     - name: onprem 그룹 디렉토리 생성
       file:
         path: /var/ossec/etc/shared/onprem
@@ -209,6 +225,7 @@
         owner: wazuh
         group: wazuh
         mode: '0770'
+      tags: config
 
     - name: onprem Agent 설정 배포
       copy:
@@ -217,6 +234,7 @@
         owner: wazuh
         group: wazuh
         mode: '0640'
+      tags: config
 
     - name: onprem Agent 그룹 이동
       shell: |
@@ -224,6 +242,7 @@
           /var/ossec/bin/agent_control -l | grep onprem-mspserver | awk '{print $2}' | tr -d ','
         ) -g onprem -q
       ignore_errors: yes
+      tags: config
 
     - name: ossec.conf XML 검증
       shell: |
@@ -234,22 +253,26 @@
         "
       register: xml_check
       failed_when: "'XML OK' not in xml_check.stdout"
+      tags: config
 
     - name: Wazuh 설정 파서 검증
       command: /var/ossec/bin/wazuh-analysisd -t
       register: analysisd_check
       failed_when: analysisd_check.rc != 0
+      tags: config
 
     - name: analysisd 검증 결과 출력
       debug:
         var: analysisd_check.stdout_lines
       when: analysisd_check.stdout_lines is defined
+      tags: config
 
     - name: Dashboard server.host 설정
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^server.host:'
         line: 'server.host: 0.0.0.0'
+      tags: config
 
     - name: Filebeat 설정 배포
       template:
@@ -258,12 +281,22 @@
         owner: root
         group: root
         mode: '0600'
+      tags: config
 
-    - name: Dashboard opensearch.hosts 
+    - name: Filebeat 기본 경로 설정
+      copy:
+        dest: /etc/default/filebeat
+        content: |
+          BEAT_PATH_OPTS="--path.home /usr/share/filebeat --path.config /etc/filebeat --path.data /var/lib/filebeat --path.logs /var/log/filebeat"
+        mode: '0644'
+      tags: config
+
+    - name: Dashboard opensearch.hosts
       replace:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: 'opensearch.hosts:.*'
         replace: 'opensearch.hosts: ["https://{{ wazuh_indexer_ip }}:9200"]'
+      tags: config
 
     - name: systemd override 디렉토리 생성
       file:
@@ -273,6 +306,7 @@
       loop:
         - wazuh-manager
         - wazuh-dashboard
+      tags: config
 
     - name: Manager systemd 재시작 설정
       copy:
@@ -286,6 +320,7 @@
           Restart=always
           RestartSec=10
       notify: systemd reload
+      tags: config
 
     - name: Dashboard systemd 재시작 설정
       copy:
@@ -300,8 +335,10 @@
           RestartSec=10
           Environment="NODE_OPTIONS=--max-old-space-size=2048"
       notify: systemd reload
+      tags: config
 
     - meta: flush_handlers
+      tags: always
 
     - name: Dashboard keystore kibanaserver 비밀번호 업데이트
       shell: |
@@ -311,18 +348,124 @@
         /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
         add opensearch.password --force --stdin
       no_log: true
+      tags: config
 
+    # ──────────────────────────────────────────
+    # Vector
+    # ──────────────────────────────────────────
+    - name: Vector 설치
+      shell: |
+        curl -1sLf 'https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh' | sudo -E bash
+        sudo apt-get install -y vector
+      args:
+        creates: /usr/bin/vector
+      tags: vector
+
+    - name: Vector systemd override 디렉토리 생성
+      file:
+        path: /etc/systemd/system/vector.service.d
+        state: directory
+        mode: '0755'
+      tags: vector
+
+    - name: Vector 설정 배포
+      template:
+        src: vector.toml.j2
+        dest: /etc/vector/vector.toml
+        owner: root
+        group: root
+        mode: '0644'
+      tags: vector
+
+    - name: Vector systemd 재시작 설정
+      copy:
+        dest: /etc/systemd/system/vector.service.d/restart.conf
+        content: |
+          [Service]
+          Restart=always
+          RestartSec=10
+      notify: systemd reload
+      tags: vector
+
+    - meta: flush_handlers
+      tags: always
+
+    - name: Vector 서비스 시작
+      systemd:
+        name: vector
+        state: restarted
+        enabled: yes
+        daemon_reload: yes
+      tags: vector
+
+    - name: Vector 상태 확인
+      shell: systemctl is-active vector
+      register: vector_status
+      tags: vector
+
+    - name: Vector 상태 출력
+      debug:
+        var: vector_status.stdout
+      tags: vector
+
+    # ──────────────────────────────────────────
+    # CloudWatch Agent
+    # ──────────────────────────────────────────
+    - name: CloudWatch Agent 설치
+      shell: |
+        wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
+        dpkg -i /tmp/amazon-cloudwatch-agent.deb
+      args:
+        creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
+      tags: cloudwatch
+
+    - name: CloudWatch Agent 설정 배포
+      copy:
+        dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        content: |
+          {
+            "metrics": {
+              "metrics_collected": {
+                "mem": {
+                  "measurement": ["mem_used_percent"]
+                },
+                "disk": {
+                  "measurement": ["disk_used_percent"],
+                  "resources": ["/"]
+                }
+              },
+              "append_dimensions": {
+                "InstanceId": "${aws:InstanceId}"
+              }
+            }
+          }
+      tags: cloudwatch
+
+    - name: CloudWatch Agent 시작
+      shell: |
+        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+        -a fetch-config -m ec2 \
+        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+      args:
+        creates: /var/run/amazon-cloudwatch-agent.pid
+      tags: cloudwatch
+
+    # ──────────────────────────────────────────
+    # SSM Agent
+    # ──────────────────────────────────────────
     - name: SSM Agent 최신 버전으로 업데이트
       shell: |
         snap refresh amazon-ssm-agent --channel=stable
         systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
       ignore_errors: yes
+      tags: ssm
 
     - name: SSM Agent 설정 디렉토리 생성
       file:
         path: /etc/amazon/ssm
         state: directory
         mode: '0755'
+      tags: ssm
 
     - name: SSM Agent Instance Profile만 사용하도록 설정
       copy:
@@ -335,24 +478,39 @@
             }
           }
         mode: '0644'
+      tags: ssm
 
     - name: SSM Agent 재시작
       shell: systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
       ignore_errors: yes
-
+      tags: ssm
 
     # ──────────────────────────────────────────
     # 서비스 재시작
     # ──────────────────────────────────────────
-    - name: Wazuh 서비스 재시작
+    - name: 1단계 - Wazuh Manager 재시작
+      systemd:
+        name: wazuh-manager
+        state: restarted
+        enabled: yes
+      tags: service
+
+    - name: 2단계 - Manager 포트 대기
+      wait_for:
+        port: 1514
+        delay: 5
+        timeout: 120
+      tags: service
+
+    - name: 3단계 - Filebeat, Dashboard 기동
       systemd:
         name: "{{ item }}"
         state: restarted
         enabled: yes
       loop:
         - filebeat
-        - wazuh-manager
         - wazuh-dashboard
+      tags: service
 
     # ──────────────────────────────────────────
     # 결과 확인
@@ -362,15 +520,19 @@
         echo "=== Manager ===" && systemctl is-active wazuh-manager
         echo "=== Dashboard ===" && systemctl is-active wazuh-dashboard
       register: service_status
+      tags: service
 
     - name: 서비스 상태 출력
       debug:
         var: service_status.stdout_lines
+      tags: service
 
     - name: 메모리 상태 확인
       command: free -h
       register: memory_status
+      tags: service
 
     - name: 메모리 상태 출력
       debug:
         var: memory_status.stdout_lines
+      tags: service

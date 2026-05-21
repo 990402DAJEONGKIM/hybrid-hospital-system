@@ -40,3 +40,8 @@ data "terraform_remote_state" "wazuh2" {
 output "wazuh_private_ip" {
   value = aws_instance.aws-wazuh-01.private_ip
 }
+
+output "wazuh_instance_id" {
+  value = aws_instance.aws-wazuh-01.id
+}
+# wazuh_private_ip는 이미 있음
