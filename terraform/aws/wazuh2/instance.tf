@@ -27,26 +27,4 @@ resource "aws_instance" "aws-wazuh-02" {
   }
 }
 
-# hosts.ini
-resource "aws_s3_object" "aws-ansible-hosts" {
-  bucket  = "wazuh-ansible-ssm"
-  key = "wazuh2/hosts.ini"
-  content = <<-EOT
-    [wazuh]
-    ${aws_instance.aws-wazuh-02.id}
 
-    [wazuh:vars]
-    ansible_connection=community.aws.aws_ssm
-    ansible_aws_ssm_region=${var.aws_region}
-    ansible_aws_ssm_bucket_name=wazuh-ansible-ssm
-    ansible_aws_ssm_plugin_path=/usr/local/bin/session-manager-plugin
-    ansible_aws_ssm_timeout=3600
-    wazuh_node_name=wazuh-02
-    wazuh_node_type=worker
-    wazuh_master_ip=${data.terraform_remote_state.wazuh.outputs.wazuh_private_ip}
-    wazuh_cluster_key=${var.wazuh_cluster_key}
-    slack_webhook_url=${var.slack_webhook_url}
-    wazuh_indexer_ip=${var.wazuh_indexer_ip}
-    wazuh_cert_name=wazuh-2
-  EOT
-}

@@ -1,0 +1,40 @@
+# =============================================================
+# Vector 설정 - Wazuh alerts.json → S3 백업
+# ISMS-P 2.9.1 로그 보존 목적
+# =============================================================
+
+data_dir = "/var/lib/vector"
+
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+
+[sources.wazuh_alerts]
+type = "file"
+include = ["/var/ossec/logs/alerts/alerts.json"]
+read_from = "beginning"
+glob_minimum_cooldown_ms = 1000
+rotate_wait_secs = 5
+ignore_older_secs = 86400
+
+[sinks.s3_backup]
+type = "aws_s3"
+inputs = ["wazuh_alerts"]
+bucket = "aws-k2p-storage-01"
+region = "ap-south-2"
+key_prefix = "{{ wazuh_node_name }}/%Y/%m/%d/"
+filename_time_format = "alerts-%Y-%m-%d-%H-%M"
+filename_extension = "json"
+filename_append_uuid = false
+compression = "gzip"
+
+[sinks.s3_backup.encoding]
+codec = "text"
+
+[sinks.s3_backup.batch]
+timeout_secs = 300
+
+[sinks.s3_backup.buffer]
+type = "disk"
+max_size = 1073741824
+when_full = "block"
