@@ -48,28 +48,28 @@ resource "aws_security_group" "patient_alb" {
 
 
 # ─────────────────────────────────────────────────────────
-# 보안그룹 — Internal ALB (의료진 포털)
-# VPC 내부(VPN 경유)에서만 80, 443 허용
+# 보안그룹 — Public ALB (의료진 포털)
+# WAF IP 화이트리스트로 허용 IP 제한 — ALB SG는 전체 허용
 # ─────────────────────────────────────────────────────────
 resource "aws_security_group" "staff_alb" {
   name        = "aws-staff-alb-sg"
-  description = "Internal ALB security group for staff portal"
+  description = "Public ALB security group for staff portal (WAF IP whitelist applied)"
   vpc_id      = data.aws_vpc.main.id
 
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.main.cidr_block]
-    description = "HTTP from VPC (VPN)"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP from internet (WAF handles IP restriction)"
   }
 
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.main.cidr_block]
-    description = "HTTPS from VPC (VPN)"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS from internet (WAF handles IP restriction)"
   }
 
   egress {
@@ -182,10 +182,10 @@ resource "aws_lb_listener" "patient_https" {
 # ─────────────────────────────────────────────────────────
 resource "aws_lb" "staff" {
   name               = "aws-staff-alb"
-  internal           = true
+  internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.staff_alb.id]
-  subnets            = data.aws_subnets.app.ids
+  subnets            = data.aws_subnets.public.ids
 
   enable_deletion_protection = false
 
