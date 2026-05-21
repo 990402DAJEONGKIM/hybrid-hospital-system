@@ -12,11 +12,11 @@
 # ─────────────────────────────────────────────────────────
 # Wazuh 로그 버킷
 # ─────────────────────────────────────────────────────────
-resource "aws_s3_bucket" "wazuh_storage" {
-  bucket = "aws-wazuh-storage"
+resource "aws_s3_bucket" "storage" {
+  bucket = "aws-storage-01"
 
   tags = merge(local.common_tags, {
-    Name    = "aws-wazuh-storage"
+    Name    = "aws-storage-01"
     Purpose = "Wazuh-SIEM-log-retention-ISMS-P-2.9.1"
   })
 }
@@ -25,8 +25,8 @@ resource "aws_s3_bucket" "wazuh_storage" {
 # ─────────────────────────────────────────────────────────
 # 퍼블릭 접근 전면 차단 (ISMS-P 2.8.1)
 # ─────────────────────────────────────────────────────────
-resource "aws_s3_bucket_public_access_block" "wazuh_storage" {
-  bucket = aws_s3_bucket.wazuh_storage.id
+resource "aws_s3_bucket_public_access_block" "storage" {
+  bucket = aws_s3_bucket.storage.id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -38,8 +38,8 @@ resource "aws_s3_bucket_public_access_block" "wazuh_storage" {
 # ─────────────────────────────────────────────────────────
 # KMS 암호화 (ISMS-P 2.7.1)
 # ─────────────────────────────────────────────────────────
-resource "aws_s3_bucket_server_side_encryption_configuration" "wazuh_storage" {
-  bucket = aws_s3_bucket.wazuh_storage.id
+resource "aws_s3_bucket_server_side_encryption_configuration" "storage" {
+  bucket = aws_s3_bucket.storage.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -54,8 +54,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "wazuh_storage" {
 # ─────────────────────────────────────────────────────────
 # 버저닝 활성화 — 로그 무결성 보장 (ISMS-P 2.9.4)
 # ─────────────────────────────────────────────────────────
-resource "aws_s3_bucket_versioning" "wazuh_storage" {
-  bucket = aws_s3_bucket.wazuh_storage.id
+resource "aws_s3_bucket_versioning" "storage" {
+  bucket = aws_s3_bucket.storage.id
 
   versioning_configuration {
     status = "Enabled"
@@ -66,8 +66,8 @@ resource "aws_s3_bucket_versioning" "wazuh_storage" {
 # ─────────────────────────────────────────────────────────
 # 수명 주기 — 1년 보존 후 삭제, 90일 후 Glacier 전환 (ISMS-P 2.9.1)
 # ─────────────────────────────────────────────────────────
-resource "aws_s3_bucket_lifecycle_configuration" "wazuh_storage" {
-  bucket = aws_s3_bucket.wazuh_storage.id
+resource "aws_s3_bucket_lifecycle_configuration" "storage" {
+  bucket = aws_s3_bucket.storage.id
 
   rule {
     id     = "wazuh-log-lifecycle"
@@ -95,8 +95,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "wazuh_storage" {
 # ─────────────────────────────────────────────────────────
 # 버킷 정책 — Wazuh EC2만 접근 허용 (ISMS-P 2.8.1)
 # ─────────────────────────────────────────────────────────
-resource "aws_s3_bucket_policy" "wazuh_storage" {
-  bucket = aws_s3_bucket.wazuh_storage.id
+resource "aws_s3_bucket_policy" "storage" {
+  bucket = aws_s3_bucket.storage.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -115,8 +115,8 @@ resource "aws_s3_bucket_policy" "wazuh_storage" {
           "s3:GetBucketLocation"
         ]
         Resource = [
-          aws_s3_bucket.wazuh_storage.arn,
-          "${aws_s3_bucket.wazuh_storage.arn}/*"
+          aws_s3_bucket.storage.arn,
+          "${aws_s3_bucket.storage.arn}/*"
         ]
       },
       {
@@ -125,8 +125,8 @@ resource "aws_s3_bucket_policy" "wazuh_storage" {
         Principal = "*"
         Action    = "s3:*"
         Resource = [
-          aws_s3_bucket.wazuh_storage.arn,
-          "${aws_s3_bucket.wazuh_storage.arn}/*"
+          aws_s3_bucket.storage.arn,
+          "${aws_s3_bucket.storage.arn}/*"
         ]
         Condition = {
           Bool = {
@@ -137,5 +137,5 @@ resource "aws_s3_bucket_policy" "wazuh_storage" {
     ]
   })
 
-  depends_on = [aws_s3_bucket_public_access_block.wazuh_storage]
+  depends_on = [aws_s3_bucket_public_access_block.storage]
 }
