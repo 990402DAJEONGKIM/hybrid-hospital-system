@@ -58,7 +58,7 @@ resource "aws_iam_instance_profile" "aws-wazuh-indexer-profile" {
 
 # EC2
 resource "aws_instance" "aws-wazuh-indexer" {
-  ami                    = data.aws_ami.ubuntu_22_04.id
+  ami                    = "ami-0eab39170eb2844c5"
   instance_type          = "t3.xlarge"
   subnet_id              = data.aws_subnet.aws-app-sub-2c.id
   vpc_security_group_ids = [aws_security_group.aws-wazuh-indexer-sg.id]
