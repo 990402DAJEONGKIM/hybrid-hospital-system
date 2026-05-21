@@ -1,5 +1,5 @@
 // ── API 공통 설정 ──────────────────────────────────────────
-// BASE_URL: AWS ALB DNS 이름 또는 연결된 도메인으로 교체
-// API_KEY : 백엔드 담당자에게 발급받은 키로 교체
-const BASE_URL = 'http://localhost:8000';
-const API_KEY  = 'local-dev-api-key';
+// BASE_URL: 상대 경로 사용 (NGINX가 /auth/, /portal/ 을 FastAPI로 프록시)
+// API_KEY : NGINX가 proxy_set_header로 주입 — 프론트엔드 노출 불필요
+const BASE_URL = '';
+const API_KEY  = '';

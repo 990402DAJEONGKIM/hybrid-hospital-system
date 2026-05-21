@@ -45,6 +45,10 @@ locals {
     { name = "JWT_SECRET",   valueFrom = data.aws_secretsmanager_secret.jwt_secret.arn },
     { name = "API_KEY",      valueFrom = data.aws_secretsmanager_secret.api_key.arn    },
   ]
+  # NGINX secrets — envsubst로 nginx.conf에 API_KEY 주입 (프론트엔드 노출 방지)
+  nginx_secrets = [
+    { name = "API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn },
+  ]
 }
 
 
@@ -83,6 +87,7 @@ resource "aws_ecs_task_definition" "patient" {
         containerPort = 80
         protocol      = "tcp"
       }]
+      secrets = local.nginx_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -144,6 +149,7 @@ resource "aws_ecs_task_definition" "staff" {
         containerPort = 80
         protocol      = "tcp"
       }]
+      secrets = local.nginx_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -193,6 +199,7 @@ resource "aws_ecs_service" "patient" {
   task_definition = aws_ecs_task_definition.patient.arn
   desired_count   = 2
 
+
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.main.name
     weight            = 1
@@ -216,7 +223,9 @@ resource "aws_ecs_service" "patient" {
   availability_zone_rebalancing      = "DISABLED"
 
   lifecycle {
-    ignore_changes = [desired_count]
+    # desired_count: 오토스케일링이 변경하므로 Terraform이 덮어쓰지 않음
+    # task_definition: CI/CD(GitHub Actions)가 관리하므로 Terraform이 덮어쓰지 않음
+    ignore_changes = [desired_count, task_definition]
   }
 
   depends_on = [aws_ecs_cluster_capacity_providers.main]
@@ -255,7 +264,7 @@ resource "aws_ecs_service" "staff" {
   availability_zone_rebalancing      = "DISABLED"
 
   lifecycle {
-    ignore_changes = [desired_count]
+    ignore_changes = [desired_count, task_definition]
   }
 
   depends_on = [aws_ecs_cluster_capacity_providers.main]
