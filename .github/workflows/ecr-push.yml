@@ -1,4 +1,4 @@
-name: Build & Push Docker Images to ECR
+name: Build, Push & Deploy to ECS
 
 on:
   push:
@@ -10,10 +10,11 @@ on:
 
 env:
   AWS_REGION: ap-south-2
+  ECS_CLUSTER: aws-ecs-cluster-01
 
 jobs:
-  build-and-push:
-    name: Build & Push
+  build-and-deploy:
+    name: Build, Push & Deploy
     runs-on: ubuntu-latest
 
     permissions:
@@ -34,49 +35,103 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # ── 이미지 빌드 & ECR 푸시 ───────────────────────────
       - name: Build & Push api-patient
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE: aws-hospital-api-patient
           TAG: ${{ github.sha }}
         run: |
-          docker build -f docker/api-patient/Dockerfile -t $REGISTRY/$IMAGE:$TAG .
-          docker push $REGISTRY/$IMAGE:$TAG
+          docker build -f docker/api-patient/Dockerfile \
+            -t $REGISTRY/aws-hospital-api-patient:$TAG .
+          docker push $REGISTRY/aws-hospital-api-patient:$TAG
 
       - name: Build & Push nginx-patient
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE: aws-hospital-nginx-patient
           TAG: ${{ github.sha }}
         run: |
-          docker build -f docker/nginx-patient/Dockerfile -t $REGISTRY/$IMAGE:$TAG .
-          docker push $REGISTRY/$IMAGE:$TAG
+          docker build -f docker/nginx-patient/Dockerfile \
+            -t $REGISTRY/aws-hospital-nginx-patient:$TAG .
+          docker push $REGISTRY/aws-hospital-nginx-patient:$TAG
 
       - name: Build & Push api-staff
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE: aws-hospital-api-staff
           TAG: ${{ github.sha }}
         run: |
-          docker build -f docker/api-staff/Dockerfile -t $REGISTRY/$IMAGE:$TAG .
-          docker push $REGISTRY/$IMAGE:$TAG
+          docker build -f docker/api-staff/Dockerfile \
+            -t $REGISTRY/aws-hospital-api-staff:$TAG .
+          docker push $REGISTRY/aws-hospital-api-staff:$TAG
 
       - name: Build & Push nginx-staff
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE: aws-hospital-nginx-staff
           TAG: ${{ github.sha }}
         run: |
-          docker build -f docker/nginx-staff/Dockerfile -t $REGISTRY/$IMAGE:$TAG .
-          docker push $REGISTRY/$IMAGE:$TAG
+          docker build -f docker/nginx-staff/Dockerfile \
+            -t $REGISTRY/aws-hospital-nginx-staff:$TAG .
+          docker push $REGISTRY/aws-hospital-nginx-staff:$TAG
 
-      - name: Print image URIs
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          TAG: ${{ github.sha }}
+      # ── patient-service 배포 ─────────────────────────────
+      - name: Download patient task definition
         run: |
-          echo "=== ECR Image URIs (TC-ECS Variables에 입력) ==="
-          echo "nginx_patient_image: $REGISTRY/aws-hospital-nginx-patient:$TAG"
-          echo "api_patient_image:   $REGISTRY/aws-hospital-api-patient:$TAG"
-          echo "nginx_staff_image:   $REGISTRY/aws-hospital-nginx-staff:$TAG"
-          echo "api_staff_image:     $REGISTRY/aws-hospital-api-staff:$TAG"
+          aws ecs describe-task-definition \
+            --task-definition patient-task \
+            --query taskDefinition \
+            > patient-task-def.json
+
+      - name: Update nginx-patient image
+        id: patient-render-nginx
+        uses: aws-actions/amazon-ecs-render-task-def@v1
+        with:
+          task-definition: patient-task-def.json
+          container-name: nginx-patient
+          image: ${{ steps.login-ecr.outputs.registry }}/aws-hospital-nginx-patient:${{ github.sha }}
+
+      - name: Update api-patient image
+        id: patient-render-api
+        uses: aws-actions/amazon-ecs-render-task-def@v1
+        with:
+          task-definition: ${{ steps.patient-render-nginx.outputs.task-definition }}
+          container-name: api-patient
+          image: ${{ steps.login-ecr.outputs.registry }}/aws-hospital-api-patient:${{ github.sha }}
+
+      - name: Deploy patient-service
+        uses: aws-actions/amazon-ecs-deploy-task-def@v1
+        with:
+          task-definition: ${{ steps.patient-render-api.outputs.task-definition }}
+          service: patient-service
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # ── staff-service 배포 ───────────────────────────────
+      - name: Download staff task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition staff-task \
+            --query taskDefinition \
+            > staff-task-def.json
+
+      - name: Update nginx-staff image
+        id: staff-render-nginx
+        uses: aws-actions/amazon-ecs-render-task-def@v1
+        with:
+          task-definition: staff-task-def.json
+          container-name: nginx-staff
+          image: ${{ steps.login-ecr.outputs.registry }}/aws-hospital-nginx-staff:${{ github.sha }}
+
+      - name: Update api-staff image
+        id: staff-render-api
+        uses: aws-actions/amazon-ecs-render-task-def@v1
+        with:
+          task-definition: ${{ steps.staff-render-nginx.outputs.task-definition }}
+          container-name: api-staff
+          image: ${{ steps.login-ecr.outputs.registry }}/aws-hospital-api-staff:${{ github.sha }}
+
+      - name: Deploy staff-service
+        uses: aws-actions/amazon-ecs-deploy-task-def@v1
+        with:
+          task-definition: ${{ steps.staff-render-api.outputs.task-definition }}
+          service: staff-service
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true

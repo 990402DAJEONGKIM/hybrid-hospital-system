@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws rds *)",
+      "Bash(aws secretsmanager *)",
+      "Bash(python3 -c ' *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(xargs ls)",
+      "Bash(xargs ls -la)"
+    ]
+  }
+}
