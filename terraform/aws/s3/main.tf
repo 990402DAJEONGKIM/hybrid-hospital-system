@@ -17,7 +17,7 @@ resource "aws_s3_bucket" "wazuh_storage" {
 
   tags = merge(local.common_tags, {
     Name    = "aws-wazuh-storage"
-    Purpose = "Wazuh SIEM 로그 장기 보존 — ISMS-P 2.9.1"
+    Purpose = "Wazuh-SIEM-log-retention-ISMS-P-2.9.1"
   })
 }
 
