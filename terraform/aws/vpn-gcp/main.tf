@@ -8,7 +8,7 @@
 #   - PSK 직접 지정 (TFC 변수로 관리)
 #   - 라우팅: DB 서브넷만 GCP 접근 허용
 ##############################################################
-#test
+
 # ── 기존 리소스 참조 ─────────────────────────────────────────
 
 data "aws_vpc" "main" {
@@ -80,15 +80,20 @@ resource "aws_vpn_connection" "gcp" {
   }
 }
 
-# ── 정적 라우트 — GCP 대역 ────────────────────────────────────
+# ── 정적 라우트 — GCP VPC 서브넷 대역 ────────────────────────
 
 resource "aws_vpn_connection_route" "gcp" {
   vpn_connection_id      = aws_vpn_connection.gcp.id
   destination_cidr_block = var.gcp_cidr
 }
 
-# ── 라우팅 테이블 — DB 서브넷만 GCP 허용 (최소 권한) ──────────
-# pglogical 복제는 RDS → Cloud SQL 단방향이므로 DB 서브넷만 필요
+# GCP Cloud SQL PSA 대역 VPN 라우트 (Cloud SQL 직접 연결용)
+resource "aws_vpn_connection_route" "gcp_psa" {
+  vpn_connection_id      = aws_vpn_connection.gcp.id
+  destination_cidr_block = var.gcp_psa_cidr
+}
+
+# ── 라우팅 테이블 — DB 서브넷 ─────────────────────────────────
 
 resource "aws_route" "db_to_gcp" {
   route_table_id         = data.aws_route_table.db.id
