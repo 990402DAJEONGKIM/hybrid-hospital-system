@@ -87,3 +87,15 @@ variable "bastion_count" {
   default     = 0 # 기본적으로는 꺼진 상태 유지
 }
 # =========================================================================================
+# GCP 연동 변수
+variable "gcp_subnet_cidr" {
+  description = "GCP VPC 서브넷 CIDR (HAProxy VM 대역)"
+  type        = string
+  default     = "10.10.1.0/24"
+}
+
+variable "gcp_psa_cidr" {
+  description = "GCP Cloud SQL PSA 대역"
+  type        = string
+  default     = "172.29.0.0/24"
+}

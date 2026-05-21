@@ -69,17 +69,6 @@ resource "aws_security_group" "rds" {
     description = "On-premises direct access"
   }
 
-  dynamic "ingress" {
-    for_each = var.app_subnet_cidrs
-    content {
-      from_port   = 5432
-      to_port     = 5432
-      protocol    = "tcp"
-      cidr_blocks = [ingress.value]
-      description = "ECS app subnet ${ingress.value} direct access"
-    }
-  }
-
   # bastion host -> Aurora
   ingress {
     from_port       = 5432
@@ -87,6 +76,24 @@ resource "aws_security_group" "rds" {
     protocol        = "tcp"
     security_groups = [aws_security_group.aws_bastion_sg.id]
     description     = "Bastion Host to Aurora"
+  }
+
+  # GCP HAProxy VM (gcp-vpc subnet) -> Aurora (pglogical)
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.gcp_subnet_cidr]
+    description = "GCP HAProxy to Aurora (pglogical replication)"
+  }
+
+  # GCP Cloud SQL PSA -> Aurora (pglogical fallback)
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.gcp_psa_cidr]
+    description = "GCP Cloud SQL PSA to Aurora (pglogical)"
   }
 
   egress {

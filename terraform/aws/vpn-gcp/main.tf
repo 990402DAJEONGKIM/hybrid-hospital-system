@@ -95,3 +95,10 @@ resource "aws_route" "db_to_gcp" {
   destination_cidr_block = var.gcp_cidr
   gateway_id             = data.aws_vpn_gateway.main.id
 }
+
+# GCP Cloud SQL PSA 대역 라우트 (pglogical 복제용)
+resource "aws_route" "db_to_gcp_psa" {
+  route_table_id         = data.aws_route_table.db.id
+  destination_cidr_block = var.gcp_psa_cidr
+  gateway_id             = data.aws_vpn_gateway.main.id
+}
