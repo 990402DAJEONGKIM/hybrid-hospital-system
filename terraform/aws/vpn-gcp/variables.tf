@@ -16,13 +16,19 @@ variable "gcp_cidr" {
 }
 
 variable "tunnel1_psk" {
-  description = "터널1 Pre-Shared Key (openssl rand -base64 32)"
+  description = "터널1 Pre-Shared Key (openssl rand -hex 32)"
   type        = string
   sensitive   = true
 }
 
 variable "tunnel2_psk" {
-  description = "터널2 Pre-Shared Key (openssl rand -base64 32)"
+  description = "터널2 Pre-Shared Key (openssl rand -hex 32)"
   type        = string
   sensitive   = true
+}
+
+variable "gcp_psa_cidr" {
+  description = "GCP Cloud SQL PSA 대역 (pglogical 복제용)"
+  type        = string
+  default     = "172.29.0.0/24"
 }
