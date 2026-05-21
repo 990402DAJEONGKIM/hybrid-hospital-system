@@ -72,6 +72,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   rule {
     id     = "wazuh-log-lifecycle"
     status = "Enabled"
+    filter {} 
 
     # 90일 후 Glacier Instant Retrieval로 전환 (비용 절감)
     transition {
