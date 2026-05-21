@@ -36,6 +36,12 @@ resource "google_sql_database_instance" "main" {
       value = "on"
     }
 
+    # pglogical subscriber 동작에 필요
+    database_flags {
+      name  = "cloudsql.logical_decoding"
+      value = "on"
+    }
+
     database_flags {
       name  = "max_replication_slots"
       value = "10"
