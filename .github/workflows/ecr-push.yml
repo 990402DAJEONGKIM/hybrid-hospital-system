@@ -78,18 +78,16 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ github.sha }}
         run: |
-          # 현재 task definition 다운로드 후 이미지만 교체
           aws ecs describe-task-definition \
             --task-definition patient-task \
             --query taskDefinition > patient-task-def.json
 
           python3 - <<'EOF'
-          import json
+          import json, os
 
           with open('patient-task-def.json') as f:
               td = json.load(f)
 
-          import os
           registry = os.environ['REGISTRY']
           tag      = os.environ['TAG']
 
@@ -100,7 +98,8 @@ jobs:
                   c['image'] = f"{registry}/aws-hospital-api-patient:{tag}"
 
           for key in ['taskDefinitionArn','revision','status','requiresAttributes',
-                      'compatibilities','registeredAt','registeredBy']:
+                      'compatibilities','registeredAt','registeredBy',
+                      'enableFaultInjection']:
               td.pop(key, None)
 
           with open('new-patient-task-def.json', 'w') as f:
@@ -110,15 +109,38 @@ jobs:
           NEW_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://new-patient-task-def.json \
             --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "Registered task definition: $NEW_ARN"
 
           aws ecs update-service \
             --cluster $ECS_CLUSTER \
             --service patient-service \
-            --task-definition $NEW_ARN
+            --task-definition $NEW_ARN \
+            --output text --query 'service.deployments[0].rolloutState'
 
-          aws ecs wait services-stable \
-            --cluster $ECS_CLUSTER \
-            --services patient-service
+          echo "Waiting for patient-service to stabilize (max 30 min)..."
+          for i in $(seq 1 60); do
+            RESULT=$(aws ecs describe-services \
+              --cluster $ECS_CLUSTER \
+              --services patient-service \
+              --query 'services[0].deployments[?status==`PRIMARY`].[rolloutState,desiredCount,runningCount]' \
+              --output text)
+            STATE=$(echo "$RESULT" | awk '{print $1}')
+            DESIRED=$(echo "$RESULT" | awk '{print $2}')
+            RUNNING=$(echo "$RESULT" | awk '{print $3}')
+            echo "[${i}/60] patient-service: state=$STATE desired=$DESIRED running=$RUNNING"
+            if [ "$STATE" = "COMPLETED" ]; then
+              echo "patient-service deployment succeeded."
+              break
+            elif [ "$STATE" = "FAILED" ]; then
+              echo "patient-service deployment FAILED."
+              exit 1
+            fi
+            if [ $i -eq 60 ]; then
+              echo "Timed out waiting for patient-service. Check ECS console."
+              exit 1
+            fi
+            sleep 30
+          done
 
       # ── staff-service 배포 (AWS CLI) ─────────────────────
       - name: Deploy staff-service
@@ -131,12 +153,11 @@ jobs:
             --query taskDefinition > staff-task-def.json
 
           python3 - <<'EOF'
-          import json
+          import json, os
 
           with open('staff-task-def.json') as f:
               td = json.load(f)
 
-          import os
           registry = os.environ['REGISTRY']
           tag      = os.environ['TAG']
 
@@ -147,7 +168,8 @@ jobs:
                   c['image'] = f"{registry}/aws-hospital-api-staff:{tag}"
 
           for key in ['taskDefinitionArn','revision','status','requiresAttributes',
-                      'compatibilities','registeredAt','registeredBy']:
+                      'compatibilities','registeredAt','registeredBy',
+                      'enableFaultInjection']:
               td.pop(key, None)
 
           with open('new-staff-task-def.json', 'w') as f:
@@ -157,12 +179,35 @@ jobs:
           NEW_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://new-staff-task-def.json \
             --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "Registered task definition: $NEW_ARN"
 
           aws ecs update-service \
             --cluster $ECS_CLUSTER \
             --service staff-service \
-            --task-definition $NEW_ARN
+            --task-definition $NEW_ARN \
+            --output text --query 'service.deployments[0].rolloutState'
 
-          aws ecs wait services-stable \
-            --cluster $ECS_CLUSTER \
-            --services staff-service
+          echo "Waiting for staff-service to stabilize (max 30 min)..."
+          for i in $(seq 1 60); do
+            RESULT=$(aws ecs describe-services \
+              --cluster $ECS_CLUSTER \
+              --services staff-service \
+              --query 'services[0].deployments[?status==`PRIMARY`].[rolloutState,desiredCount,runningCount]' \
+              --output text)
+            STATE=$(echo "$RESULT" | awk '{print $1}')
+            DESIRED=$(echo "$RESULT" | awk '{print $2}')
+            RUNNING=$(echo "$RESULT" | awk '{print $3}')
+            echo "[${i}/60] staff-service: state=$STATE desired=$DESIRED running=$RUNNING"
+            if [ "$STATE" = "COMPLETED" ]; then
+              echo "staff-service deployment succeeded."
+              break
+            elif [ "$STATE" = "FAILED" ]; then
+              echo "staff-service deployment FAILED."
+              exit 1
+            fi
+            if [ $i -eq 60 ]; then
+              echo "Timed out waiting for staff-service. Check ECS console."
+              exit 1
+            fi
+            sleep 30
+          done
