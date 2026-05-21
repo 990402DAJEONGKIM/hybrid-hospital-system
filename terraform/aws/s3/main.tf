@@ -13,10 +13,10 @@
 # Wazuh 로그 버킷
 # ─────────────────────────────────────────────────────────
 resource "aws_s3_bucket" "storage" {
-  bucket = "aws-storage-01"
+  bucket = "aws-k2p-storage-01"
 
   tags = merge(local.common_tags, {
-    Name    = "aws-storage-01"
+    Name    = "aws-k2p-storage-01"
     Purpose = "Wazuh-SIEM-log-retention-ISMS-P-2.9.1"
   })
 }
