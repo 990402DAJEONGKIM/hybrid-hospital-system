@@ -72,7 +72,7 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
           "kms:GenerateDataKey",
           "kms:Decrypt"
         ]
-        Resource = data.aws_kms_key.s3.arn
+        Resource = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
       },
       {
         Sid    = "CloudWatchLogsRead"

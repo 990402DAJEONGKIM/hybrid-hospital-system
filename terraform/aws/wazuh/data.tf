@@ -37,10 +37,15 @@ data "terraform_remote_state" "wazuh2" {
   }
 }
 
-data "aws_kms_key" "s3" {
-  key_id = "alias/aws-kms-s3-01"
+data "terraform_remote_state" "kms" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = {
+      name = "TC-aws-KMS"
+    }
+  }
 }
-
 output "wazuh_private_ip" {
   value = aws_instance.aws-wazuh-01.private_ip
 }
