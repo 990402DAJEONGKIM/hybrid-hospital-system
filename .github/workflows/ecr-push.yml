@@ -72,66 +72,97 @@ jobs:
             -t $REGISTRY/aws-hospital-nginx-staff:$TAG .
           docker push $REGISTRY/aws-hospital-nginx-staff:$TAG
 
-      # ── patient-service 배포 ─────────────────────────────
-      - name: Download patient task definition
+      # ── patient-service 배포 (AWS CLI) ───────────────────
+      - name: Deploy patient-service
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
         run: |
+          # 현재 task definition 다운로드 후 이미지만 교체
           aws ecs describe-task-definition \
             --task-definition patient-task \
-            --query taskDefinition \
-            > patient-task-def.json
+            --query taskDefinition > patient-task-def.json
 
-      - name: Update nginx-patient image
-        id: patient-render-nginx
-        uses: aws-actions/amazon-ecs-render-task-def@v1
-        with:
-          task-definition: patient-task-def.json
-          container-name: nginx-patient
-          image: ${{ steps.login-ecr.outputs.registry }}/aws-hospital-nginx-patient:${{ github.sha }}
+          python3 - <<'EOF'
+          import json
 
-      - name: Update api-patient image
-        id: patient-render-api
-        uses: aws-actions/amazon-ecs-render-task-def@v1
-        with:
-          task-definition: ${{ steps.patient-render-nginx.outputs.task-definition }}
-          container-name: api-patient
-          image: ${{ steps.login-ecr.outputs.registry }}/aws-hospital-api-patient:${{ github.sha }}
+          with open('patient-task-def.json') as f:
+              td = json.load(f)
 
-      - name: Deploy patient-service
-        uses: aws-actions/amazon-ecs-deploy-task-def@v1
-        with:
-          task-definition: ${{ steps.patient-render-api.outputs.task-definition }}
-          service: patient-service
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          import os
+          registry = os.environ['REGISTRY']
+          tag      = os.environ['TAG']
 
-      # ── staff-service 배포 ───────────────────────────────
-      - name: Download staff task definition
+          for c in td['containerDefinitions']:
+              if c['name'] == 'nginx-patient':
+                  c['image'] = f"{registry}/aws-hospital-nginx-patient:{tag}"
+              elif c['name'] == 'api-patient':
+                  c['image'] = f"{registry}/aws-hospital-api-patient:{tag}"
+
+          for key in ['taskDefinitionArn','revision','status','requiresAttributes',
+                      'compatibilities','registeredAt','registeredBy']:
+              td.pop(key, None)
+
+          with open('new-patient-task-def.json', 'w') as f:
+              json.dump(td, f)
+          EOF
+
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-patient-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service patient-service \
+            --task-definition $NEW_ARN
+
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services patient-service
+
+      # ── staff-service 배포 (AWS CLI) ─────────────────────
+      - name: Deploy staff-service
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
         run: |
           aws ecs describe-task-definition \
             --task-definition staff-task \
-            --query taskDefinition \
-            > staff-task-def.json
+            --query taskDefinition > staff-task-def.json
 
-      - name: Update nginx-staff image
-        id: staff-render-nginx
-        uses: aws-actions/amazon-ecs-render-task-def@v1
-        with:
-          task-definition: staff-task-def.json
-          container-name: nginx-staff
-          image: ${{ steps.login-ecr.outputs.registry }}/aws-hospital-nginx-staff:${{ github.sha }}
+          python3 - <<'EOF'
+          import json
 
-      - name: Update api-staff image
-        id: staff-render-api
-        uses: aws-actions/amazon-ecs-render-task-def@v1
-        with:
-          task-definition: ${{ steps.staff-render-nginx.outputs.task-definition }}
-          container-name: api-staff
-          image: ${{ steps.login-ecr.outputs.registry }}/aws-hospital-api-staff:${{ github.sha }}
+          with open('staff-task-def.json') as f:
+              td = json.load(f)
 
-      - name: Deploy staff-service
-        uses: aws-actions/amazon-ecs-deploy-task-def@v1
-        with:
-          task-definition: ${{ steps.staff-render-api.outputs.task-definition }}
-          service: staff-service
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          import os
+          registry = os.environ['REGISTRY']
+          tag      = os.environ['TAG']
+
+          for c in td['containerDefinitions']:
+              if c['name'] == 'nginx-staff':
+                  c['image'] = f"{registry}/aws-hospital-nginx-staff:{tag}"
+              elif c['name'] == 'api-staff':
+                  c['image'] = f"{registry}/aws-hospital-api-staff:{tag}"
+
+          for key in ['taskDefinitionArn','revision','status','requiresAttributes',
+                      'compatibilities','registeredAt','registeredBy']:
+              td.pop(key, None)
+
+          with open('new-staff-task-def.json', 'w') as f:
+              json.dump(td, f)
+          EOF
+
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-staff-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service staff-service \
+            --task-definition $NEW_ARN
+
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services staff-service
