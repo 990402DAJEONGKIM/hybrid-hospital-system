@@ -3,8 +3,8 @@ data "aws_vpc" "aws-vpc-01" {
   tags = { Name = "aws-vpc-01" }
 }
 
-data "aws_subnet" "aws-app-sub-2a" {
-  tags = { Name = "aws-app-sub-2a" }
+data "aws_subnet" "aws-app-sub-2c" {
+  tags = { Name = "aws-app-sub-2c" }
 }
 
 data "aws_ami" "ubuntu_22_04" {
@@ -40,4 +40,8 @@ data "terraform_remote_state" "wazuh2" {
       name = "TC-aws-wazuh2"
     }
   }
+}
+
+output "indexer_instance_id" {
+  value = aws_instance.aws-wazuh-indexer.id
 }

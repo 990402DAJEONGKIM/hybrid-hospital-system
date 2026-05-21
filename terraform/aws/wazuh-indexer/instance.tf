@@ -60,10 +60,10 @@ resource "aws_iam_instance_profile" "aws-wazuh-indexer-profile" {
 resource "aws_instance" "aws-wazuh-indexer" {
   ami                    = data.aws_ami.ubuntu_22_04.id
   instance_type          = "t3.xlarge"
-  subnet_id              = data.aws_subnet.aws-app-sub-2a.id
+  subnet_id              = data.aws_subnet.aws-app-sub-2c.id
   vpc_security_group_ids = [aws_security_group.aws-wazuh-indexer-sg.id]
   iam_instance_profile   = aws_iam_instance_profile.aws-wazuh-indexer-profile.name
-  private_ip             = "10.0.11.83" 
+  private_ip             = "10.0.13.83" 
   root_block_device {
     volume_size = 100
     volume_type = "gp3"
@@ -81,21 +81,3 @@ resource "aws_instance" "aws-wazuh-indexer" {
 
 }
 
-# hosts.ini
-resource "aws_s3_object" "aws-wazuh-indexer-hosts" {
-  bucket = "wazuh-ansible-ssm"
-  key    = "wazuh-indexer/hosts.ini"
-  content = <<-EOT
-    [wazuh-indexer]
-    ${aws_instance.aws-wazuh-indexer.id}
-
-    [wazuh-indexer:vars]
-    ansible_connection=community.aws.aws_ssm
-    ansible_aws_ssm_region=${var.aws_region}
-    ansible_aws_ssm_bucket_name=wazuh-ansible-ssm
-    ansible_aws_ssm_plugin_path=/usr/local/bin/session-manager-plugin
-    ansible_aws_ssm_timeout=3600
-    wazuh_manager1_ip=${data.terraform_remote_state.wazuh.outputs.wazuh_private_ip}
-    wazuh_manager2_ip=${data.terraform_remote_state.wazuh2.outputs.wazuh_private_ip}
-  EOT
-}

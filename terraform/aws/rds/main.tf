@@ -133,11 +133,11 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
     value        = "1"
     apply_method = "pending-reboot"
   }
-
+  
   # preload pglogical extension (reboot required)
   parameter {
     name         = "shared_preload_libraries"
-    value        = "pglogical"
+    value        = "pglogical,pgaudit"  # 2026-05-20 김강환 pgaudit 추가(누가 언제 어떤 데이터를 조회/수정/삭제했는지 기록)
     apply_method = "pending-reboot"
   }
 
@@ -167,6 +167,18 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
     name         = "wal_sender_timeout"
     value        = "0"
     apply_method = "immediate"
+  }
+  # 2026-05-20 김강환 pgaudit 추가(누가 언제 어떤 데이터를 조회/수정/삭제했는지 기록)
+  parameter {
+    name         = "pgaudit.log"
+    value        = "WRITE,DDL"
+    apply_method = "pending-reboot"
+  }
+  # 2026-05-20 김강환 pgaudit 추가(누가 언제 어떤 데이터를 조회/수정/삭제했는지 기록)
+  parameter {
+    name         = "log_connections"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
 
   tags = merge(local.common_tags, { Name = "aws-aurora-01-pglogical" })
