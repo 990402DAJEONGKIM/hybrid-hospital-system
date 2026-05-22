@@ -13,13 +13,17 @@ env:
   ECS_CLUSTER: aws-ecs-cluster-01
 
 jobs:
-  build-and-deploy:
-    name: Build, Push & Deploy
+  # ── 1단계: 이미지 빌드 & ECR 푸시 (4개 병렬) ─────────────────
+  build:
+    name: Build & Push Images
     runs-on: ubuntu-latest
 
     permissions:
       id-token: write
       contents: read
+
+    outputs:
+      registry: ${{ steps.login-ecr.outputs.registry }}
 
     steps:
       - name: Checkout
@@ -35,48 +39,65 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ── 이미지 빌드 & ECR 푸시 ───────────────────────────
-      - name: Build & Push api-patient
+      - name: Build all images (parallel)
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ github.sha }}
         run: |
           docker build -f docker/api-patient/Dockerfile \
-            -t $REGISTRY/aws-hospital-api-patient:$TAG .
-          docker push $REGISTRY/aws-hospital-api-patient:$TAG
-
-      - name: Build & Push nginx-patient
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          TAG: ${{ github.sha }}
-        run: |
+            -t $REGISTRY/aws-hospital-api-patient:$TAG . &
+          PID1=$!
           docker build -f docker/nginx-patient/Dockerfile \
-            -t $REGISTRY/aws-hospital-nginx-patient:$TAG .
-          docker push $REGISTRY/aws-hospital-nginx-patient:$TAG
-
-      - name: Build & Push api-staff
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          TAG: ${{ github.sha }}
-        run: |
+            -t $REGISTRY/aws-hospital-nginx-patient:$TAG . &
+          PID2=$!
           docker build -f docker/api-staff/Dockerfile \
-            -t $REGISTRY/aws-hospital-api-staff:$TAG .
-          docker push $REGISTRY/aws-hospital-api-staff:$TAG
+            -t $REGISTRY/aws-hospital-api-staff:$TAG . &
+          PID3=$!
+          docker build -f docker/nginx-staff/Dockerfile \
+            -t $REGISTRY/aws-hospital-nginx-staff:$TAG . &
+          PID4=$!
+          wait $PID1 $PID2 $PID3 $PID4
 
-      - name: Build & Push nginx-staff
+      - name: Push all images (parallel)
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ github.sha }}
         run: |
-          docker build -f docker/nginx-staff/Dockerfile \
-            -t $REGISTRY/aws-hospital-nginx-staff:$TAG .
-          docker push $REGISTRY/aws-hospital-nginx-staff:$TAG
+          docker push $REGISTRY/aws-hospital-api-patient:$TAG &
+          PID1=$!
+          docker push $REGISTRY/aws-hospital-nginx-patient:$TAG &
+          PID2=$!
+          docker push $REGISTRY/aws-hospital-api-staff:$TAG &
+          PID3=$!
+          docker push $REGISTRY/aws-hospital-nginx-staff:$TAG &
+          PID4=$!
+          wait $PID1 $PID2 $PID3 $PID4
 
-      # ── patient-service 배포 (AWS CLI) ───────────────────
+  # ── 2단계: patient-service 배포 (build 완료 후 병렬 실행) ─────
+  deploy-patient:
+    name: Deploy patient-service
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      REGISTRY: ${{ needs.build.outputs.registry }}
+      TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Deploy patient-service
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          TAG: ${{ github.sha }}
         run: |
           aws ecs describe-task-definition \
             --task-definition patient-task \
@@ -142,11 +163,31 @@ jobs:
             sleep 30
           done
 
-      # ── staff-service 배포 (AWS CLI) ─────────────────────
+  # ── 2단계: staff-service 배포 (build 완료 후 병렬 실행) ───────
+  deploy-staff:
+    name: Deploy staff-service
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      REGISTRY: ${{ needs.build.outputs.registry }}
+      TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Deploy staff-service
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          TAG: ${{ github.sha }}
         run: |
           aws ecs describe-task-definition \
             --task-definition staff-task \
