@@ -3,11 +3,14 @@
 #
 # ALB 2개:
 #   - patient-alb : Public ALB (인터넷 → 환자 포털)
-#   - staff-alb   : Internal ALB (VPN → 의료진 포털)
+#   - staff-alb   : 통합 ALB (의료진 포털 + Wazuh 대시보드)
+#                   host-based 라우팅으로 두 서비스 분기
+#                   WAF IP 화이트리스트로 병원 내부 IP만 허용
 #
-# 각 ALB 구성:
-#   - HTTP(80)  → HTTPS(443) 리다이렉트
-#   - HTTPS(443) → ECS Target Group 포워드
+# staff-alb 라우팅:
+#   - staff.mzclinic.cloud  → ECS staff TG  (HTTPS:443, WAF IP 제한)
+#   - wazuh.mzclinic.cloud  → Wazuh EC2 TG  (HTTPS:443, private subnet)
+#   - 그 외 host            → 403 고정 응답
 # =========================================================
 
 
@@ -132,6 +135,38 @@ resource "aws_lb_target_group" "staff" {
 
 
 # ─────────────────────────────────────────────────────────
+# Target Group — Wazuh 대시보드 (private subnet EC2, HTTPS)
+# Wazuh 대시보드는 port 443 HTTPS (자체 서명 인증서)
+# ALB → 타겟 HTTPS 연결 시 인증서 검증 없음 (기본 동작)
+# ─────────────────────────────────────────────────────────
+resource "aws_lb_target_group" "wazuh" {
+  name        = "aws-wazuh-tg"
+  port        = 443
+  protocol    = "HTTPS"
+  vpc_id      = data.aws_vpc.main.id
+  target_type = "instance"
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTPS"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    interval            = 30
+    timeout             = 10
+    matcher             = "200-302"
+  }
+
+  tags = { Name = "aws-wazuh-tg" }
+}
+
+resource "aws_lb_target_group_attachment" "wazuh" {
+  target_group_arn = aws_lb_target_group.wazuh.arn
+  target_id        = data.aws_instance.wazuh.id
+  port             = 443
+}
+
+
+# ─────────────────────────────────────────────────────────
 # Public ALB — 환자 포털
 # ─────────────────────────────────────────────────────────
 resource "aws_lb" "patient" {
@@ -178,7 +213,8 @@ resource "aws_lb_listener" "patient_https" {
 
 
 # ─────────────────────────────────────────────────────────
-# Internal ALB — 의료진 포털
+# 통합 ALB — 의료진 포털 + Wazuh 대시보드
+# host-based 라우팅으로 두 서비스 분기
 # ─────────────────────────────────────────────────────────
 resource "aws_lb" "staff" {
   name               = "aws-staff-alb"
@@ -208,7 +244,8 @@ resource "aws_lb_listener" "staff_http" {
   }
 }
 
-# HTTPS → Target Group 포워드
+# HTTPS 리스너 — 기본 인증서: staff.mzclinic.cloud
+# 매칭되지 않는 host → 403 고정 응답
 resource "aws_lb_listener" "staff_https" {
   load_balancer_arn = aws_lb.staff.arn
   port              = 443
@@ -217,8 +254,52 @@ resource "aws_lb_listener" "staff_https" {
   certificate_arn   = data.aws_acm_certificate.staff.arn
 
   default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "403 Forbidden"
+      status_code  = "403"
+    }
+  }
+}
+
+# 추가 인증서 — wazuh.mzclinic.cloud (SNI)
+resource "aws_lb_listener_certificate" "wazuh" {
+  listener_arn    = aws_lb_listener.staff_https.arn
+  certificate_arn = data.aws_acm_certificate.wazuh.arn
+}
+
+# 라우팅 규칙 — staff.mzclinic.cloud → ECS staff TG
+resource "aws_lb_listener_rule" "staff" {
+  listener_arn = aws_lb_listener.staff_https.arn
+  priority     = 10
+
+  condition {
+    host_header {
+      values = ["staff.${var.base_domain}"]
+    }
+  }
+
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.staff.arn
+  }
+}
+
+# 라우팅 규칙 — wazuh.mzclinic.cloud → Wazuh EC2 TG
+resource "aws_lb_listener_rule" "wazuh" {
+  listener_arn = aws_lb_listener.staff_https.arn
+  priority     = 20
+
+  condition {
+    host_header {
+      values = ["wazuh.${var.base_domain}"]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.wazuh.arn
   }
 }
 
@@ -246,6 +327,18 @@ resource "aws_route53_record" "patient" {
 resource "aws_route53_record" "staff" {
   zone_id = data.aws_route53_zone.main.zone_id
   name    = "staff.${var.base_domain}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.staff.dns_name
+    zone_id                = aws_lb.staff.zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "wazuh" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "wazuh.${var.base_domain}"
   type    = "A"
 
   alias {

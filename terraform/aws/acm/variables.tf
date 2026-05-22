@@ -21,3 +21,9 @@ variable "staff_subdomain" {
   type        = string
   default     = "staff"
 }
+
+variable "wazuh_subdomain" {
+  description = "Wazuh 대시보드 서브도메인 prefix"
+  type        = string
+  default     = "wazuh"
+}

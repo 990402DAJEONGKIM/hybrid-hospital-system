@@ -22,6 +22,7 @@ data "aws_route53_zone" "main" {
 locals {
   patient_domain = "${var.patient_subdomain}.${var.base_domain}"
   staff_domain   = "${var.staff_subdomain}.${var.base_domain}"
+  wazuh_domain   = "${var.wazuh_subdomain}.${var.base_domain}"
 }
 
 
@@ -98,4 +99,42 @@ resource "aws_route53_record" "staff_validation" {
 resource "aws_acm_certificate_validation" "staff" {
   certificate_arn         = aws_acm_certificate.staff.arn
   validation_record_fqdns = [for r in aws_route53_record.staff_validation : r.fqdn]
+}
+
+
+# ─────────────────────────────────────────────────────────
+# 3. Wazuh 대시보드 인증서 (통합 ALB 추가 인증서)
+# ─────────────────────────────────────────────────────────
+resource "aws_acm_certificate" "wazuh" {
+  domain_name       = local.wazuh_domain
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = { Name = "acm-wazuh-dashboard" }
+}
+
+resource "aws_route53_record" "wazuh_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.wazuh.domain_validation_options :
+    dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      record = dvo.resource_record_value
+    }
+  }
+
+  zone_id         = data.aws_route53_zone.main.zone_id
+  name            = each.value.name
+  type            = each.value.type
+  records         = [each.value.record]
+  ttl             = 60
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "wazuh" {
+  certificate_arn         = aws_acm_certificate.wazuh.arn
+  validation_record_fqdns = [for r in aws_route53_record.wazuh_validation : r.fqdn]
 }

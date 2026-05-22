@@ -47,10 +47,29 @@ data "aws_acm_certificate" "staff" {
   most_recent = true
 }
 
+# ACM 인증서 (wazuh.mzclinic.cloud) — 통합 ALB 추가 인증서
+data "aws_acm_certificate" "wazuh" {
+  domain      = "wazuh.${var.base_domain}"
+  statuses    = ["ISSUED"]
+  most_recent = true
+}
+
 # ECS EC2 보안그룹 (ALB → ECS 트래픽 허용 규칙 추가용)
 data "aws_security_group" "ecs_ec2" {
   filter {
     name   = "tag:Name"
     values = ["aws-ecs-ec2-sg"]
+  }
+}
+
+# Wazuh EC2 (private subnet, 포트 443 — 대시보드)
+data "aws_instance" "wazuh" {
+  filter {
+    name   = "tag:Name"
+    values = ["aws-wazuh-01"]
+  }
+  filter {
+    name   = "instance-state-name"
+    values = ["running", "stopped"]
   }
 }
