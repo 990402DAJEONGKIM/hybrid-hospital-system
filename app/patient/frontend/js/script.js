@@ -35,12 +35,17 @@ async function logout() {
 }
 
 async function requireLogin() {
-    const res = await apiCall('/auth/me');
-    if (!res || !res.ok) { window.location.href = 'login.html'; return null; }
-    const me = await res.json();
-    if (me.role !== 'patient') { window.location.href = 'login.html'; return null; }
-    if (me.password_expired) { window.location.href = 'change-password.html'; return null; }
-    return me;
+    try {
+        const res = await apiCall('/auth/me');
+        if (!res || !res.ok) { window.location.href = 'login.html'; return null; }
+        const me = await res.json();
+        if (me.role !== 'patient') { window.location.href = 'login.html'; return null; }
+        if (me.password_expired) { window.location.href = 'change-password.html'; return null; }
+        return me;
+    } catch {
+        window.location.href = 'login.html';
+        return null;
+    }
 }
 
 // ── DOMContentLoaded ──────────────────────────────────────
