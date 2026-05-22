@@ -89,11 +89,17 @@ resource "google_compute_instance" "proxy" {
     scopes = ["cloud-platform"]
   }
 
-  # HAProxy 자동 설치 및 설정
+  # HAProxy + PostgreSQL 클라이언트 자동 설치 및 설정
   metadata_startup_script = <<-SCRIPT
     #!/bin/bash
     apt-get update -y
-    apt-get install -y haproxy
+    apt-get install -y haproxy wget
+
+    # PostgreSQL 17 클라이언트 설치 (pglogical_setup.sh에서 psql 사용)
+    sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+    wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | tee /etc/apt/trusted.gpg.d/pgdg.asc
+    apt-get update -y
+    apt-get install -y postgresql-client-17
 
     cat > /etc/haproxy/haproxy.cfg << 'HAPROXY'
 global
