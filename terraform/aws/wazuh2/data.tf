@@ -28,3 +28,6 @@ output "wazuh_private_ip" {
 output "wazuh_instance_id" {
   value = aws_instance.aws-wazuh-02.id
 }
+output "wazuh_instance_arn" {
+  value = "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/${aws_instance.aws-wazuh-02.id}"
+}

@@ -81,16 +81,19 @@
     # 설치 여부 확인
     # ──────────────────────────────────────────
     - name: Wazuh 설치 여부 확인
-      stat:
-        path: /var/ossec/etc/ossec.conf
+      shell: |
+        test -f /var/ossec/etc/ossec.conf && \
+        test -d /etc/wazuh-dashboard && \
+        echo "installed" || echo "not_installed"
       register: wazuh_installed
+      changed_when: false
       tags: always
 
     # ──────────────────────────────────────────
     # 설치 블록 (최초 1회)
     # ──────────────────────────────────────────
     - name: Wazuh 신규 설치
-      when: not wazuh_installed.stat.exists
+      when: wazuh_installed.stdout == "not_installed"
       tags: install
       block:
         - name: Wazuh 잔재 정리
@@ -127,8 +130,8 @@
 
         - name: wazuh-install-files.tar S3 다운로드
           shell: >
-            aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar /tmp/wazuh-install-files.tar
-            --region ap-south-2
+            aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar
+            /tmp/wazuh-install-files.tar --region ap-south-2
           environment:
             AWS_DEFAULT_REGION: "ap-south-2"
 
@@ -202,11 +205,15 @@
 
     - name: 커스텀 룰 배포
       copy:
-        src: local_rules.xml
-        dest: /var/ossec/etc/rules/local_rules.xml
+        src: rules/{{ item }}
+        dest: /var/ossec/etc/rules/{{ item }}
         owner: root
         group: wazuh
         mode: '0640'
+      loop:
+        - local_rules.xml
+        - rds_rules.xml
+        - onprem_rules.xml
       tags: config
 
     - name: Agent 중앙 설정 배포
@@ -350,15 +357,80 @@
       no_log: true
       tags: config
 
+    - name: wazuh-passwords-tool 다운로드
+      get_url:
+        url: https://packages.wazuh.com/4.14/wazuh-passwords-tool.sh
+        dest: /tmp/wazuh-passwords-tool.sh
+        mode: '0755'
+        force: yes
+      tags: config
+
+    - name: wazuh API admin 비밀번호 추출
+      shell: >
+        tar -axf /tmp/wazuh-install-files.tar
+        wazuh-install-files/wazuh-passwords.txt -O |
+        grep -P "'wazuh'$" -A1 |
+        grep api_password | awk -F"'" '{print $2}'
+      register: wazuh_api_pw
+      no_log: true
+      tags: config
+
+    - name: wazuh-wui API 비밀번호 설정
+      shell: >
+        bash /tmp/wazuh-passwords-tool.sh --api
+        -u wazuh-wui
+        -p '{{ wazuh_wui_password }}'
+        -au wazuh
+        -ap '{{ wazuh_api_pw.stdout }}'
+      no_log: true
+      tags: config
+
+    - name: wazuh.yml run_as false 설정
+      replace:
+        path: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+        regexp: 'run_as: true'
+        replace: 'run_as: false'
+      tags: config
+
     # ──────────────────────────────────────────
     # Vector
     # ──────────────────────────────────────────
     - name: Vector 설치
       shell: |
-        curl -1sLf 'https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh' | sudo -E bash
-        sudo apt-get install -y vector
+        bash -c "$(curl -L https://setup.vector.dev)"
+        apt-get install -y vector
       args:
         creates: /usr/bin/vector
+      tags: vector
+
+    - name: vector 유저 wazuh 그룹 추가    
+      user:
+        name: vector
+        groups: wazuh
+        append: yes
+      tags: vector
+
+    - name: Vector 기본 설정 파일 삭제
+      file:
+        path: /etc/vector/vector.yaml
+        state: absent
+      tags: vector
+
+    - name: Vector config 경로 설정
+      copy:
+        dest: /etc/default/vector
+        content: |
+          VECTOR_CONFIG=/etc/vector/vector.toml
+        mode: '0644'
+      tags: vector
+
+    - name: /var/lib/vector 디렉토리 권한 설정
+      file:
+        path: /var/lib/vector
+        state: directory
+        owner: vector
+        group: vector
+        mode: '0755'
       tags: vector
 
     - name: Vector systemd override 디렉토리 생성
