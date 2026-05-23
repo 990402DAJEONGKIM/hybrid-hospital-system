@@ -1,3 +1,5 @@
+
+#vector.toml.j2
 # =============================================================
 # Vector 설정 - Wazuh alerts.json → S3 백업
 # ISMS-P 2.9.1 로그 보존 목적
@@ -33,6 +35,7 @@ codec = "text"
 
 [sinks.s3_backup.batch]
 timeout_secs = 300
+max_bytes = 10737418242
 
 [sinks.s3_backup.buffer]
 type = "disk"

@@ -1,3 +1,4 @@
+# wazuh.yaml
 ---
 - name: Wazuh Manager + Dashboard 설치
   hosts: wazuh
@@ -81,16 +82,19 @@
     # 설치 여부 확인
     # ──────────────────────────────────────────
     - name: Wazuh 설치 여부 확인
-      stat:
-        path: /var/ossec/etc/ossec.conf
+      shell: |
+        test -f /var/ossec/etc/ossec.conf && \
+        test -d /etc/wazuh-dashboard && \
+        echo "installed" || echo "not_installed"
       register: wazuh_installed
+      changed_when: false
       tags: always
 
     # ──────────────────────────────────────────
     # 설치 블록 (최초 1회)
     # ──────────────────────────────────────────
     - name: Wazuh 신규 설치
-      when: not wazuh_installed.stat.exists
+      when: wazuh_installed.stdout == "not_installed"
       tags: install
       block:
         - name: Wazuh 잔재 정리
@@ -125,10 +129,11 @@
             - /tmp/wazuh-install-files
             - /tmp/wazuh-install-files.tar
 
+
         - name: wazuh-install-files.tar S3 다운로드
           shell: >
-            aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar /tmp/wazuh-install-files.tar
-            --region ap-south-2
+            aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar
+            /tmp/wazuh-install-files.tar --region ap-south-2
           environment:
             AWS_DEFAULT_REGION: "ap-south-2"
 
@@ -140,7 +145,7 @@
           poll: 30
 
         - name: Wazuh Dashboard 설치
-          shell: bash /tmp/wazuh-install.sh --wazuh-dashboard dashboard-1 --overwrite
+          shell: bash /tmp/wazuh-install.sh --wazuh-dashboard dashboard-1 --overwrite -fd
           args:
             chdir: /tmp/
           async: 1800
@@ -202,11 +207,15 @@
 
     - name: 커스텀 룰 배포
       copy:
-        src: local_rules.xml
-        dest: /var/ossec/etc/rules/local_rules.xml
+        src: rules/{{ item }}
+        dest: /var/ossec/etc/rules/{{ item }}
         owner: root
         group: wazuh
         mode: '0640'
+      loop:
+        - local_rules.xml
+        - rds_rules.xml
+        - onprem_rules.xml
       tags: config
 
     - name: Agent 중앙 설정 배포
@@ -350,6 +359,42 @@
       no_log: true
       tags: config
 
+    - name: wazuh-passwords-tool 다운로드
+      get_url:
+        url: https://packages.wazuh.com/4.14/wazuh-passwords-tool.sh
+        dest: /tmp/wazuh-passwords-tool.sh
+        mode: '0755'
+        force: yes
+      tags: config
+
+    - name: wazuh API admin 비밀번호 추출
+      shell: >
+        tar -axf /tmp/wazuh-install-files.tar
+        wazuh-install-files/wazuh-passwords.txt -O |
+        grep -P "'wazuh'$" -A1 |
+        grep api_password | awk -F"'" '{print $2}'
+      register: wazuh_api_pw
+      no_log: true
+      tags: config
+
+    - name: wazuh-wui API 비밀번호 설정
+      shell: >
+        bash /tmp/wazuh-passwords-tool.sh --api
+        -u wazuh-wui
+        -p '{{ wazuh_wui_password }}'
+        -au wazuh
+        -ap '{{ wazuh_api_pw.stdout }}'
+      no_log: true
+      tags: config
+
+    - name: wazuh.yml run_as false 설정
+      replace:
+        path: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+        regexp: 'run_as: true'
+        replace: 'run_as: false'
+      tags: config
+
+
     # ──────────────────────────────────────────
     # Vector
     # ──────────────────────────────────────────
@@ -478,6 +523,41 @@
         -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
       args:
         creates: /var/run/amazon-cloudwatch-agent.pid
+      tags: cloudwatch
+
+
+    # ──────────────────────────────────────────
+    # wazuh-manager 헬스체크 크론
+    # ──────────────────────────────────────────
+    - name: 헬스체크 스크립트 배포
+      copy:
+        dest: /usr/local/bin/wazuh-manager-health.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+          REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+
+          if systemctl is-active --quiet wazuh-manager; then
+            VALUE=1
+          else
+            VALUE=0
+          fi
+
+          aws cloudwatch put-metric-data \
+            --namespace "Custom/Wazuh" \
+            --metric-name "wazuh_manager_running" \
+            --value $VALUE \
+            --dimensions InstanceId=$INSTANCE_ID \
+            --region $REGION
+      tags: cloudwatch
+
+    - name: 헬스체크 크론 등록
+      cron:
+        name: "wazuh-manager-health"
+        minute: "* "
+        job: "/usr/local/bin/wazuh-manager-health.sh >> /var/log/wazuh-health.log 2>&1"
+        user: root
       tags: cloudwatch
 
     # ──────────────────────────────────────────
