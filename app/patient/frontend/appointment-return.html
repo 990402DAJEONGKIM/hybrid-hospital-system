@@ -114,10 +114,15 @@
 
         document.getElementById('apptDate').min = new Date().toISOString().split('T')[0];
 
-        const r = await apiCall('/portal/departments');
+        const r = await apiCall('/portal/departments?visited_only=true');
         if (!r || !r.ok) return;
         const depts = await r.json();
         const deptSel = document.getElementById('deptSelect');
+        if (!depts.length) {
+            deptSel.innerHTML = '<option value="">내원 이력이 없습니다</option>';
+            document.getElementById('toStep2Btn').disabled = true;
+            return;
+        }
         depts.forEach(d => {
             const o = document.createElement('option');
             o.value = d.department_code;

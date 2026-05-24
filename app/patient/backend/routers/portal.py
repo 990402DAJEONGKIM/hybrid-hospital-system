@@ -151,13 +151,27 @@ def get_appointment_types(
 
 @router.get("/departments")
 def get_departments(
+    visited_only: bool     = Query(default=False),
     current_user: dict     = Depends(get_current_user),
     db:           DbSession = Depends(get_db),
 ):
-    depts = db.query(SyncDepartment).filter(SyncDepartment.is_active == True).all()
+    query = db.query(SyncDepartment).filter(SyncDepartment.is_active == True)
+
+    if visited_only:
+        pid = current_user.get("pid")
+        if pid:
+            visited_codes = [
+                row[0] for row in
+                db.query(SyncEncounter.department_code)
+                  .filter(SyncEncounter.patient_id_hash == pid)
+                  .distinct()
+                  .all()
+            ]
+            query = query.filter(SyncDepartment.department_code.in_(visited_codes))
+
     return [
         {"department_code": d.department_code, "department_name": d.department_name}
-        for d in depts
+        for d in query.all()
     ]
 
 

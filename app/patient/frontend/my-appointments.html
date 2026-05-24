@@ -2,148 +2,188 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>내 예약 내역 - MZ Clinic</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>예약 조회 및 변경 - 김이박 클리닉</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
-        .page-wrap { max-width:900px; margin:100px auto 40px; padding:0 16px; }
-        .filter-bar { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
-        .filter-btn { padding:7px 18px; border:1px solid #cfd8dc; border-radius:20px; background:#fff; font-size:13px; cursor:pointer; color:#546e7a; }
-        .filter-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
-        .appt-card { border:1px solid #e0e0e0; border-radius:8px; padding:16px 20px; margin-bottom:12px; background:#fff; }
-        .appt-card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-        .appt-meta { font-size:13px; color:#78909c; }
-        .appt-type { font-weight:700; font-size:15px; color:#263238; }
-        .status-badge { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
-        .status-pending   { background:#fff8e1; color:#f57f17; }
-        .status-confirmed { background:#e8f5e9; color:#2e7d32; }
-        .status-cancelled { background:#ffebee; color:#c62828; }
-        .status-completed { background:#e3f2fd; color:#1565c0; }
-        .status-no_show   { background:#f3e5f5; color:#6a1b9a; }
-        .appt-actions { display:flex; gap:8px; margin-top:12px; }
-        .btn-sm { padding:6px 14px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer; border:none; }
-        .btn-edit   { background:#e3f2fd; color:#1565c0; }
-        .btn-cancel { background:#ffebee; color:#c62828; }
-        .empty-msg { text-align:center; color:#90a4ae; padding:40px 0; font-size:15px; }
-        #errMsg { color:#e53935; font-size:13px; margin-bottom:12px; min-height:18px; }
+        .appt-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 14px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .appt-date-box {
+            min-width: 64px;
+            text-align: center;
+            background: var(--primary, #1976d2);
+            color: #fff;
+            border-radius: 8px;
+            padding: 10px 6px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        .appt-date-box .month { font-size: 11px; opacity: 0.85; }
+        .appt-date-box .day   { font-size: 22px; font-weight: 700; line-height: 1; }
+        .appt-body { flex: 1; }
+        .appt-body h4 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #263238; }
+        .appt-body p  { margin: 2px 0; font-size: 13px; color: #607d8b; }
+        .appt-status {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .status-pending   { background: #fff8e1; color: #f57f17; }
+        .status-confirmed { background: #e8f5e9; color: #2e7d32; }
+        .status-cancelled { background: #fce4ec; color: #c62828; }
+        .status-completed { background: #e3f2fd; color: #1565c0; }
+        .appt-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-edit   { padding: 5px 14px; background: #e3f2fd; color: #1565c0; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .btn-cancel { padding: 5px 14px; background: #fce4ec; color: #c62828; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .btn-edit:hover   { background: #bbdefb; }
+        .btn-cancel:hover { background: #f8bbd0; }
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #90a4ae;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 24px 0 10px;
+        }
     </style>
 </head>
 <body style="background:#f0f4f8;min-height:100vh;">
-<div class="page-wrap">
-    <h2 style="margin-bottom:6px;">내 진료 예약</h2>
-    <p style="color:#78909c;font-size:14px;margin-bottom:20px;">예약 현황을 확인하고 대기 중인 예약을 수정하거나 취소할 수 있습니다.</p>
+<nav id="navbar"></nav>
 
-    <div class="filter-bar">
-        <button class="filter-btn active" id="fAll"       onclick="applyFilter('all')">전체</button>
-        <button class="filter-btn"        id="fPending"   onclick="applyFilter('pending')">대기</button>
-        <button class="filter-btn"        id="fConfirmed" onclick="applyFilter('confirmed')">확정</button>
-        <button class="filter-btn"        id="fDone"      onclick="applyFilter('completed')">완료</button>
-        <button class="filter-btn"        id="fCancelled" onclick="applyFilter('cancelled')">취소</button>
+<div class="page-wrap">
+    <h2><i class="fas fa-calendar-check" style="color:var(--primary);margin-right:8px;"></i>예약 조회 및 변경</h2>
+    <p style="font-size:13px;color:#90a4ae;margin-bottom:24px;">
+        * 대기 중인 예약만 변경·취소 가능합니다.
+    </p>
+
+    <div id="loadingMsg" style="text-align:center;padding:40px;color:#90a4ae;">
+        <i class="fas fa-spinner fa-spin" style="font-size:24px;"></i>
+        <p style="margin-top:8px;">불러오는 중...</p>
     </div>
 
-    <div id="errMsg"></div>
-    <div id="apptList"></div>
+    <div id="apptList" style="display:none;"></div>
+
+    <div id="emptyMsg" class="empty-state" style="display:none;">
+        <i class="fas fa-calendar-times"></i>
+        <p>예약 내역이 없습니다.</p>
+    </div>
 </div>
 
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
 <script>
-    const STATUS_LABEL = {
-        pending: '대기', confirmed: '확정',
-        cancelled: '취소', completed: '완료', no_show: '미내원',
-    };
-    const TYPE_LABEL = {
-        outpatient_new: '초진', outpatient_return: '재진',
-        inpatient: '입원', pre_surgery: '수술 전',
+    const DEPT_NAMES = {
+        'INTERNAL': '내과', 'CARDIO': '심장내과', 'NEURO': '신경과',
+        'ORTHO': '정형외과', 'ANESTHESIA': '마취통증의학과',
+        'SURGERY': '외과', 'PEDIATRICS': '소아청소년과',
     };
 
-    let allAppts = [];
-    let deptMap  = {};
-    let currentFilter = 'all';
-
-    async function init() {
-        const me = await requireLogin();
-        if (!me) return;
-
-        const dr = await apiCall('/portal/departments');
-        if (dr && dr.ok) {
-            const depts = await dr.json();
-            depts.forEach(d => { deptMap[d.department_code] = d.department_name; });
-        }
-
-        await loadAppointments();
+    function statusClass(code) {
+        if (code === 'pending')   return 'status-pending';
+        if (code === 'confirmed') return 'status-confirmed';
+        if (code === 'cancelled') return 'status-cancelled';
+        if (code === 'completed') return 'status-completed';
+        return '';
     }
 
-    async function loadAppointments() {
-        const res = await apiCall('/portal/appointments');
-        if (!res || !res.ok) {
-            document.getElementById('errMsg').textContent = '예약 목록을 불러오지 못했습니다.';
-            return;
-        }
-        allAppts = await res.json();
-        renderList(currentFilter);
-    }
-
-    function applyFilter(filter) {
-        currentFilter = filter;
-        ['All', 'Pending', 'Confirmed', 'Done', 'Cancelled'].forEach(k => {
-            const id = 'f' + k;
-            const el = document.getElementById(id);
-            if (el) el.classList.remove('active');
+    function renderCard(a) {
+        const [year, month, day] = (a.appointment_date || '').split('-');
+        const deptName   = DEPT_NAMES[a.department_code] || a.department_code || '-';
+        const canEdit    = a.status_code === 'pending';
+        const editParams = new URLSearchParams({
+            id:    a.appointment_id,
+            date:  a.appointment_date  || '',
+            time:  a.appointment_time  || '',
+            notes: a.notes             || '',
         });
-        const map = { all: 'fAll', pending: 'fPending', confirmed: 'fConfirmed', completed: 'fDone', cancelled: 'fCancelled' };
-        const btn = document.getElementById(map[filter]);
-        if (btn) btn.classList.add('active');
-        renderList(filter);
-    }
 
-    function renderList(filter) {
-        const list = filter === 'all' ? allAppts : allAppts.filter(a => a.status_code === filter);
-        const el = document.getElementById('apptList');
-        if (!list.length) {
-            el.innerHTML = '<div class="empty-msg">해당 조건의 예약이 없습니다.</div>';
-            return;
-        }
-        el.innerHTML = list.map(appt => {
-            const deptName  = deptMap[appt.department_code] || appt.department_code || '-';
-            const typeName  = TYPE_LABEL[appt.type_code]   || appt.type_name       || '-';
-            const statusLbl = STATUS_LABEL[appt.status_code] || appt.status_name   || '-';
-            const isPending = appt.status_code === 'pending';
-            const actions   = isPending
-                ? `<button class="btn-sm btn-edit"   onclick="editAppt('${appt.appointment_id}','${appt.appointment_date}','${appt.appointment_time}','${(appt.notes||'').replace(/'/g,'&apos;')}')">일정 변경</button>
-                   <button class="btn-sm btn-cancel" onclick="cancelAppt('${appt.appointment_id}')">예약 취소</button>`
-                : '';
-            return `
-            <div class="appt-card">
-                <div class="appt-card-header">
-                    <span class="appt-type">${typeName} — ${deptName}</span>
-                    <span class="status-badge status-${appt.status_code}">${statusLbl}</span>
-                </div>
-                <div class="appt-meta">
-                    📅 ${appt.appointment_date}&nbsp;&nbsp;⏰ ${appt.appointment_time || '-'}
-                    ${appt.notes ? `<br>📝 ${appt.notes}` : ''}
-                </div>
-                ${actions ? `<div class="appt-actions">${actions}</div>` : ''}
-            </div>`;
-        }).join('');
-    }
+        const actionBtns = canEdit ? `
+            <div class="appt-actions">
+                <button class="btn-edit"   onclick="location.href='appointment-edit.html?${editParams}'">변경</button>
+                <button class="btn-cancel" onclick="cancelAppt('${a.appointment_id}')">취소</button>
+            </div>` : '';
 
-    function editAppt(id, date, time, notes) {
-        location.href = `appointment-edit.html?id=${id}&date=${date}&time=${encodeURIComponent(time)}&notes=${encodeURIComponent(notes)}`;
+        return `
+        <div class="appt-card" id="card-${a.appointment_id}">
+            <div class="appt-date-box">
+                <div class="month">${year ? year + '.' + month : '-'}</div>
+                <div class="day">${day || '-'}</div>
+                <div class="month">${a.appointment_time || ''}</div>
+            </div>
+            <div class="appt-body">
+                <span class="appt-status ${statusClass(a.status_code)}">${a.status_name || a.status_code}</span>
+                <h4>${deptName} · ${a.type_name || a.type_code}</h4>
+                ${a.notes ? `<p><i class="fas fa-comment-alt" style="margin-right:4px;"></i>${a.notes}</p>` : ''}
+                ${actionBtns}
+            </div>
+        </div>`;
     }
 
     async function cancelAppt(id) {
         if (!confirm('예약을 취소하시겠습니까?')) return;
-        const res = await apiCall(`/portal/appointments/${id}`, { method: 'DELETE' });
+        const res = await apiCall(`/portal/appointments/${id}/cancel`, { method: 'POST' });
         if (res && res.ok) {
             alert('예약이 취소되었습니다.');
-            await loadAppointments();
+            loadAppointments();
         } else {
             const err = await res?.json().catch(() => ({}));
-            document.getElementById('errMsg').textContent = err.detail || '취소 처리 중 오류가 발생했습니다.';
+            alert(err.detail || '취소 처리 중 오류가 발생했습니다.');
         }
     }
 
-    init();
+    async function loadAppointments() {
+        document.getElementById('apptList').style.display  = 'none';
+        document.getElementById('emptyMsg').style.display  = 'none';
+        document.getElementById('loadingMsg').style.display = 'block';
+
+        const me = await requireLogin();
+        if (!me) return;
+
+        const res = await apiCall('/portal/appointments');
+        document.getElementById('loadingMsg').style.display = 'none';
+
+        if (!res || !res.ok) {
+            document.getElementById('emptyMsg').style.display = 'block';
+            return;
+        }
+
+        const data = await res.json();
+        if (!data.length) {
+            document.getElementById('emptyMsg').style.display = 'block';
+            return;
+        }
+
+        const active    = data.filter(a => ['pending', 'confirmed'].includes(a.status_code));
+        const past      = data.filter(a => !['pending', 'confirmed'].includes(a.status_code));
+        const container = document.getElementById('apptList');
+
+        let html = '';
+        if (active.length) {
+            html += `<div class="section-title">예정된 예약 (${active.length}건)</div>`;
+            html += active.map(renderCard).join('');
+        }
+        if (past.length) {
+            html += `<div class="section-title">지난 예약 (${past.length}건)</div>`;
+            html += past.map(renderCard).join('');
+        }
+
+        container.innerHTML = html;
+        container.style.display = 'block';
+    }
+
+    loadAppointments();
 </script>
 </body>
 </html>

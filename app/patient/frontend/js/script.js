@@ -107,10 +107,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const navHospitalIntro        = document.getElementById('nav-hospital-intro');
     const mobileNavHospitalIntro  = document.getElementById('mobile-nav-hospital-intro');
     const manageAppointmentsBtn   = document.getElementById('nav-manage-appointments');
-    const manageAppointmentsModal = document.getElementById('manageAppointmentsModal');
-    const myAppointmentList       = document.getElementById('myAppointmentList');
-    const closeManageModal        = document.getElementById('closeManageModal');
-    const manageModalCloseBtn     = document.getElementById('manageModalCloseBtn');
     const navNewAppointmentBtn    = document.getElementById('nav-new-appointment');
     const navMyRecordsBtn         = document.getElementById('nav-my-records');
     const navChangePasswordBtn    = document.getElementById('nav-change-password');
@@ -254,60 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (closeCalendarModal)  closeCalendarModal.addEventListener('click', hideModal);
     if (modalConfirmBtn)     modalConfirmBtn.addEventListener('click', hideModal);
 
-    // ── 나의 예약 관리 모달 ─────────────────────────────────
-    const renderMyAppointments = () => {
-        myAppointmentList.innerHTML = '';
-        const allAppts = Object.entries(appointmentsMap).flatMap(([date, list]) =>
-            list.map(a => ({ ...a, visit_date: date }))
-        );
-        if (allAppts.length === 0) {
-            myAppointmentList.innerHTML = '<p class="text-gray-500 text-center py-10">예약 내역이 없습니다.</p>';
-            return;
-        }
-        allAppts.sort((a, b) => a.appointment_date.localeCompare(b.appointment_date)).forEach(appt => {
-            const item = document.createElement('div');
-            item.className = 'flex justify-between items-center p-4 bg-gray-50 border border-gray-100 rounded-lg';
-            const isModifiable = appt.status_code === 'pending';
-            item.innerHTML = `
-                <div>
-                    <p class="text-xs text-gray-500 font-bold">${appt.appointment_date} ${appt.appointment_time || ''}</p>
-                    <p class="text-gray-800 font-medium">${DEPT_LABEL[appt.department_code] || appt.department_code || '-'}</p>
-                    <p class="text-xs text-gray-500">${appt.type_name || ''} · ${STATUS_LABEL[appt.status_code] || appt.status_code}</p>
-                </div>
-                ${isModifiable ? `
-                <div class="flex gap-2 ml-4 shrink-0">
-                    <button data-id="${appt.appointment_id}" class="edit-appt-btn px-3 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded text-xs font-bold hover:bg-blue-100">수정</button>
-                    <button data-id="${appt.appointment_id}" class="del-appt-btn px-3 py-1 bg-red-50 text-red-600 border border-red-200 rounded text-xs font-bold hover:bg-red-100">취소</button>
-                </div>` : ''}
-            `;
-            myAppointmentList.appendChild(item);
-        });
-        myAppointmentList.querySelectorAll('.edit-appt-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const appt = allAppts.find(a => a.appointment_id === btn.dataset.id);
-                if (appt) openEditModalFn(appt);
-            });
-        });
-        myAppointmentList.querySelectorAll('.del-appt-btn').forEach(btn => {
-            btn.addEventListener('click', () => deleteAppointment(btn.dataset.id));
-        });
-    };
-
-    const openManageModal = (e) => {
-        e.preventDefault();
-        renderMyAppointments();
-        manageAppointmentsModal.classList.remove('hidden');
-        manageAppointmentsModal.classList.add('flex');
-        document.body.style.overflow = 'hidden';
-    };
-    const closeManageModalFn = () => {
-        manageAppointmentsModal.classList.add('hidden');
-        manageAppointmentsModal.classList.remove('flex');
-        document.body.style.overflow = '';
-    };
-    if (manageAppointmentsBtn) manageAppointmentsBtn.addEventListener('click', openManageModal);
-    if (closeManageModal)      closeManageModal.addEventListener('click', closeManageModalFn);
-    if (manageModalCloseBtn)   manageModalCloseBtn.addEventListener('click', closeManageModalFn);
+    if (manageAppointmentsBtn) manageAppointmentsBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'my-appointments.html'; });
 
 
     // ── 예약 수정 ───────────────────────────────────────────
@@ -443,7 +386,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (navMyRecordsBtn)         navMyRecordsBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'my-records.html'; });
     if (navChangePasswordBtn)    navChangePasswordBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'change-password.html'; });
     if (navEditProfile)          navEditProfile.addEventListener('click', async (e) => { e.preventDefault(); await showSection('profile-edit'); closeMenuIfOpen(); });
-    if (manageAppointmentsBtn)   manageAppointmentsBtn.addEventListener('click', openManageModal);
+    if (manageAppointmentsBtn)   manageAppointmentsBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'my-appointments.html'; });
     if (headerAppointmentBtn)    headerAppointmentBtn.addEventListener('click', goToNewAppointment);
     if (mobileAppointmentBtn)    mobileAppointmentBtn.addEventListener('click', goToNewAppointment);
     if (navHome)                 navHome.addEventListener('click', async (e) => { e.preventDefault(); await showSection('calendar'); closeMenuIfOpen(); });
