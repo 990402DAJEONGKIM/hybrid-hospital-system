@@ -30,10 +30,9 @@ REFRESH_TOKEN_EXPIRE_HOURS  = 8
 class RegisterRequest(BaseModel):
     email:       EmailStr
     password:    str
-    name:        str
-    birth_date:  str   # YYYY-MM-DD
-    phone:       str
+    birth_year:  int   # YYYY
     gender_code: str   # M or F
+    phone:       str   # 원본 — 서버에서 SHA256 후 폐기
 
 class LoginRequest(BaseModel):
     email:    EmailStr
@@ -103,24 +102,23 @@ def register(
     if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
 
-    # 이름 + 생년월일 + 전화번호로 기존 내원 환자 매칭
-    from datetime import date as date_type
-    try:
-        birth = date_type.fromisoformat(body.birth_date)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="birth_date 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+    # 생년 + 성별 + SHA256(전화번호) 로 내원 환자 매칭 (1등급 PII 서버 미저장)
+    if body.gender_code not in ('M', 'F'):
+        raise HTTPException(status_code=422, detail="gender_code는 M 또는 F 이어야 합니다.")
+
+    phone_hash = sha256_hex(body.phone)
 
     patient = db.query(SyncPatient).filter(
-        SyncPatient.patient_name == body.name,
-        SyncPatient.birth_date   == birth,
-        SyncPatient.phone        == body.phone,
+        SyncPatient.birth_year   == body.birth_year,
+        SyncPatient.gender_code  == body.gender_code,
+        SyncPatient.phone_hash   == phone_hash,
     ).first()
 
     if not patient:
         raise HTTPException(
             status_code=404,
             detail="병원 진료 기록과 일치하는 환자를 찾을 수 없습니다. "
-                   "성명·생년월일·연락처를 확인하거나 원무과에 문의해주세요.",
+                   "생년·성별·전화번호를 확인하거나 원무과에 문의해주세요.",
         )
 
     if db.query(User).filter(User.patient_id_hash == patient.patient_id_hash).first():
@@ -350,6 +348,7 @@ def me(
 
     result = {
         "user_id":              str(user.user_id),
+        "email":                user.email,
         "role":                 user.role_ref.role_code,
         "password_expired":     password_expired,
         "password_expire_days": policy.expire_days,

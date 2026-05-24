@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>감사 로그 - MZ Clinic 관리자</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .page-wrap { max-width:1200px; margin:80px auto 40px; padding:0 16px; }
@@ -24,10 +25,13 @@
         .code-ok    { color:#2e7d32; font-weight:600; }
         .code-err   { color:#c62828; font-weight:600; }
         .empty-msg  { text-align:center; padding:40px; color:#90a4ae; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
     </style>
 </head>
 <body style="background:#f5f7fa;min-height:100vh;">
 <div class="page-wrap">
+    <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <h2 style="margin-bottom:6px;">시스템 감사 로그</h2>
     <p style="color:#78909c;font-size:14px;margin-bottom:20px;">ISMS-P 2.9.1 — 전체 사용자 활동 로그 (최신순)</p>
 

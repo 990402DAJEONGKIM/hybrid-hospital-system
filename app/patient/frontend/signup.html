@@ -39,24 +39,13 @@
                 <i class="fas fa-info-circle text-blue-400 mt-0.5 flex-shrink-0 text-sm"></i>
                 <p class="text-xs text-blue-700 leading-relaxed">
                     <strong>기존 내원 환자만 가입 가능합니다.</strong><br>
-                    병원에 등록된 성명·생년월일·연락처와 일치해야 합니다.<br>
+                    병원에 등록된 출생연도·성별·연락처와 일치해야 합니다.<br>
                     처음 방문하시는 분은 원무과 접수 후 가입해주세요.
                 </p>
             </div>
 
             <form id="signupForm" class="space-y-4">
 
-                <!-- 성함 -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">성함</label>
-                    <div class="relative">
-                        <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
-                            <i class="fas fa-user text-sm"></i>
-                        </span>
-                        <input type="text" id="userName" required
-                            class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white transition">
-                    </div>
-                </div>
 
                 <!-- 이메일 -->
                 <div>
@@ -84,11 +73,12 @@
                     <p id="pwError" class="text-xs text-red-500 mt-1 pl-1 hidden"></p>
                 </div>
 
-                <!-- 생년월일 + 성별 -->
+                <!-- 출생연도 + 성별 -->
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">생년월일</label>
-                        <input type="date" id="userBirth" required
+                        <label class="block text-sm font-medium text-gray-700 mb-1">출생연도</label>
+                        <input type="number" id="userBirthYear" required
+                            placeholder="예) 1990" min="1900" max="2100"
                             class="w-full px-3 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white transition text-sm">
                     </div>
                     <div>
@@ -119,7 +109,7 @@
                     <p class="text-xs font-medium text-gray-700 mb-2">개인정보 수집 및 이용 동의</p>
                     <div class="text-xs text-gray-500 h-16 overflow-y-auto leading-relaxed mb-3">
                         [개인정보 수집 및 이용 안내]<br>
-                        1. 수집 항목: 성함, 이메일, 비밀번호<br>
+                        1. 수집 항목: 이메일, 비밀번호 (출생연도·성별·연락처는 본인확인 후 즉시 폐기)<br>
                         2. 이용 목적: 회원 식별 및 병원 서비스(예약, 조회 등) 제공<br>
                         3. 보유 및 이용 기간: 회원 탈퇴 시까지<br>
                         * 귀하는 동의를 거부할 권리가 있으나, 거부 시 서비스 이용이 제한됩니다.
@@ -182,13 +172,12 @@
         document.getElementById('signupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const name    = document.getElementById('userName').value.trim();
-            const email   = document.getElementById('userEmail').value.trim();
-            const pw      = document.getElementById('userPw').value;
-            const birth   = document.getElementById('userBirth').value;
-            const gender  = document.getElementById('userGender').value;
-            const contact = document.getElementById('userContact').value.trim();
-            const consent = document.getElementById('privacyConsent').checked;
+            const email     = document.getElementById('userEmail').value.trim();
+            const pw        = document.getElementById('userPw').value;
+            const birthYear = parseInt(document.getElementById('userBirthYear').value, 10);
+            const gender    = document.getElementById('userGender').value;
+            const contact   = document.getElementById('userContact').value.trim();
+            const consent   = document.getElementById('privacyConsent').checked;
             const errorBox  = document.getElementById('apiError');
             const errorMsg  = document.getElementById('apiErrorMsg');
             const submitBtn = document.getElementById('submitBtn');
@@ -217,11 +206,10 @@
                     headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
                     body: JSON.stringify({
                         email,
-                        password: pw,
-                        name,
-                        birth_date: birth,
-                        phone: contact,
+                        password:    pw,
+                        birth_year:  birthYear,
                         gender_code: gender,
+                        phone:       contact,
                     }),
                 });
 

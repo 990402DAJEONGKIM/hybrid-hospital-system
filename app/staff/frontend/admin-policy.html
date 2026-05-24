@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>보안 정책 관리 - MZ Clinic 관리자</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .page-wrap { max-width:680px; margin:80px auto 40px; padding:0 16px; }
@@ -21,10 +22,13 @@
         #statusMsg { margin-top:12px; font-size:13px; min-height:18px; }
         .msg-ok  { color:#2e7d32; }
         .msg-err { color:#c62828; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
     </style>
 </head>
 <body style="background:#f5f7fa;min-height:100vh;">
 <div class="page-wrap">
+    <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <h2 style="margin-bottom:6px;">보안 정책 관리</h2>
     <p style="color:#78909c;font-size:14px;margin-bottom:24px;">ISMS-P 2.5.3 / 2.5.4 — 비밀번호 및 계정 잠금 정책</p>
 

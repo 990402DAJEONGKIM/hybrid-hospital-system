@@ -2,39 +2,82 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>내 진료 기록 - MZ Clinic</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>진료기록 - 김이박 클리닉</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-    <nav id="navbar"></nav>
-    <div class="container">
-        <h2>진료 및 진단 이력</h2>
-        <p class="text-sm text-gray-500 mb-4">* 민감 의료정보 보호를 위해 상세 진단명 대신 코드로 표기됩니다.</p>
-        <div id="recordList" class="timeline">
-            <!-- 데이터 동적 삽입 -->
-        </div>
+<body style="background:#f0f4f8;min-height:100vh;">
+<nav id="navbar"></nav>
+
+<div class="page-wrap">
+    <h2><i class="fas fa-notes-medical" style="color:var(--primary);margin-right:8px;"></i>진료 및 진단 이력</h2>
+    <p style="font-size:13px;color:#90a4ae;margin-bottom:24px;">
+        * 개인정보 보호를 위해 진단명은 코드로 표기됩니다.
+    </p>
+
+    <div id="loadingMsg" style="text-align:center;padding:40px;color:#90a4ae;">
+        <i class="fas fa-spinner fa-spin" style="font-size:24px;"></i>
+        <p style="margin-top:8px;">불러오는 중...</p>
     </div>
-    <script src="/js/config.js"></script>
-    <script src="/js/script.js"></script>
-    <script>
-        async function loadRecords() {
-            const res = await apiCall('/portal/my-records');
-            const data = await res.json();
-            const container = document.getElementById('recordList');
-            container.innerHTML = data.map(record => `
-                <div class="timeline-item">
-                    <div class="date">${record.visit_date}</div>
-                    <div class="content">
-                        <h4>${record.dept_name} 진료</h4>
-                        <p>담당의: ${record.doctor_name}</p>
-                        <div class="badges">
-                            ${record.diagnoses.map(d => `<span class="badge">진단코드: ${d.code}</span>`).join('')}
-                        </div>
-                    </div>
-                </div>
-            `).join('');
+
+    <div id="recordList" class="timeline" style="display:none;"></div>
+
+    <div id="emptyMsg" class="empty-state" style="display:none;">
+        <i class="fas fa-file-medical-alt"></i>
+        <p>진료 기록이 없습니다.</p>
+    </div>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    const DEPT_NAMES = {
+        'INTERNAL': '내과', 'CARDIO': '심장내과', 'NEURO': '신경과',
+        'ORTHO': '정형외과', 'ANESTHESIA': '마취통증의학과',
+        'SURGERY': '외과', 'PEDIATRICS': '소아청소년과',
+    };
+    const ENC_TYPE = { 'outpatient': '외래', 'inpatient': '입원', 'surgery': '수술' };
+
+    async function loadRecords() {
+        const me = await requireLogin();
+        if (!me) return;
+
+        const res = await apiCall('/portal/my-records');
+        document.getElementById('loadingMsg').style.display = 'none';
+
+        if (!res || !res.ok) {
+            document.getElementById('emptyMsg').style.display = 'block';
+            return;
         }
-        window.onload = loadRecords;
-    </script>
+
+        const data = await res.json();
+        if (!data.length) {
+            document.getElementById('emptyMsg').style.display = 'block';
+            return;
+        }
+
+        const container = document.getElementById('recordList');
+        container.style.display = 'flex';
+        container.innerHTML = data.map(r => {
+            const deptName = DEPT_NAMES[r.department_code] || r.department_code;
+            const encType  = ENC_TYPE[r.encounter_type]    || r.encounter_type;
+            const diagBadges = (r.diagnoses || []).map(code =>
+                `<span class="badge"><i class="fas fa-tag" style="margin-right:4px;"></i>진단코드: ${code}</span>`
+            ).join('');
+            return `
+            <div class="timeline-item">
+                <div class="date">${r.visit_date || '-'}</div>
+                <div class="content">
+                    <h4>${deptName} ${encType}</h4>
+                    <p>상태: ${r.status_code === 'completed' ? '완료' : r.status_code}</p>
+                    ${diagBadges ? `<div class="badges">${diagBadges}</div>` : '<p style="font-size:12px;color:#b0bec5;">진단 코드 없음</p>'}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    loadRecords();
+</script>
 </body>
 </html>

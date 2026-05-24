@@ -17,7 +17,7 @@ from core.security import (
     verify_api_key, verify_password,
 )
 from core.ses import send_lockout_alert
-from models.db import AuditLog, LoginHistory, Role, Session as SessionModel, User
+from models.db import AuditLog, LoginHistory, Menu, Role, RoleMenu, Session as SessionModel, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -370,6 +370,86 @@ def change_password(
 
     response.delete_cookie(key="access_token",  path="/")
     response.delete_cookie(key="refresh_token", path="/auth/refresh")
+
+
+_ROLE_MENUS = {
+    "nurse": [
+        {"menu_code": "NURSE_DASHBOARD",  "menu_name": "예약 현황",      "menu_url": "/nurse-dashboard.html",       "icon": "calendar-alt"},
+        {"menu_code": "NURSE_APPT_NEW",   "menu_name": "수동 예약 등록", "menu_url": "/nurse-appointment-new.html", "icon": "plus-circle"},
+        {"menu_code": "WARD_STATUS",      "menu_name": "병동 현황",      "menu_url": "/ward-status.html",           "icon": "hospital"},
+        {"menu_code": "CHANGE_PW",        "menu_name": "비밀번호 변경",  "menu_url": "/change-password.html",       "icon": "key"},
+    ],
+    "doctor": [
+        {"menu_code": "DOCTOR_SCHEDULE",  "menu_name": "오늘 진료",      "menu_url": "/doctor-schedule.html",       "icon": "stethoscope"},
+        {"menu_code": "PATIENT_DETAIL",   "menu_name": "환자 조회",      "menu_url": "/patient-detail.html",        "icon": "user-injured"},
+        {"menu_code": "CHANGE_PW",        "menu_name": "비밀번호 변경",  "menu_url": "/change-password.html",       "icon": "key"},
+    ],
+    "admin": [
+        {"menu_code": "ADMIN_USERS",      "menu_name": "사용자 관리",    "menu_url": "/admin-users.html",           "icon": "users"},
+        {"menu_code": "ADMIN_ROLES",      "menu_name": "역할/권한 관리", "menu_url": "/admin-roles.html",           "icon": "shield-alt"},
+        {"menu_code": "ADMIN_POLICY",     "menu_name": "보안 정책",      "menu_url": "/admin-policy.html",          "icon": "lock"},
+        {"menu_code": "ADMIN_LOGS",       "menu_name": "감사 로그",      "menu_url": "/admin-logs.html",            "icon": "clipboard-list"},
+        {"menu_code": "ADMIN_LOGIN_HIST", "menu_name": "로그인 이력",    "menu_url": "/admin-login-history.html",   "icon": "history"},
+        {"menu_code": "CHANGE_PW",        "menu_name": "비밀번호 변경",  "menu_url": "/change-password.html",       "icon": "key"},
+    ],
+}
+
+
+@router.get("/me/permissions")
+def get_my_permissions(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """현재 로그인 사용자의 권한 목록 반환 (ISMS-P 2.5.4)."""
+    user = db.query(User).filter(User.user_id == current_user["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+
+    from models.db import Permission, RolePermission
+    perms = (
+        db.query(Permission)
+        .join(RolePermission, Permission.permission_id == RolePermission.permission_id)
+        .filter(RolePermission.role_id == user.role_id)
+        .all()
+    )
+    return [
+        {
+            "permission_code": p.permission_code,
+            "permission_name": p.permission_name,
+            "category":        p.category,
+        }
+        for p in perms
+    ]
+
+
+@router.get("/me/menus")
+def get_menus(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """역할에 따른 메뉴 목록 반환. DB role_menus 우선, 없으면 기본값 사용."""
+    user = db.query(User).filter(User.user_id == current_user["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+
+    role_code = user.role_ref.role_code
+
+    db_menus = (
+        db.query(Menu)
+        .join(RoleMenu, Menu.menu_id == RoleMenu.menu_id)
+        .join(Role, RoleMenu.role_id == Role.role_id)
+        .filter(Role.role_code == role_code, Menu.is_active == True)
+        .order_by(Menu.sort_order)
+        .all()
+    )
+
+    if db_menus:
+        return [
+            {"menu_code": m.menu_code, "menu_name": m.menu_name, "menu_url": m.menu_url, "icon": "circle"}
+            for m in db_menus
+        ]
+
+    return _ROLE_MENUS.get(role_code, [])
 
 
 @router.get("/session-status")

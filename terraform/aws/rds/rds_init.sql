@@ -53,16 +53,14 @@ CREATE INDEX IF NOT EXISTS idx_sync_doctors_dept ON sync_doctors(department_code
 -- 2-3. sync_patients
 CREATE TABLE IF NOT EXISTS sync_patients (
     patient_id_hash VARCHAR(64) PRIMARY KEY,  -- SHA-256(patient_id)
-    patient_name    VARCHAR(50),              -- 성명 (포털 본인 확인용)
-    birth_date      DATE,                     -- 생년월일 (YYYY-MM-DD)
-    birth_year      SMALLINT GENERATED ALWAYS AS (EXTRACT(YEAR FROM birth_date)::SMALLINT) STORED,
+    birth_year      SMALLINT,                 -- 출생연도 (YYYY) — 비식별
     gender_code     CHAR(1) CHECK (gender_code IN ('M','F','U')),
-    phone           VARCHAR(20),              -- 연락처 (포털 본인 확인용)
+    phone_hash      VARCHAR(64),              -- SHA-256(phone_number) — 포털 본인확인용, 원본 미저장
     created_at      TIMESTAMPTZ,
     synced_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE sync_patients IS 'EMR 동기화 환자 기본정보 — 포털 본인확인용 (이름·연락처 포함)';
-CREATE INDEX IF NOT EXISTS idx_sync_pat_verify ON sync_patients(patient_name, birth_date, phone);
+COMMENT ON TABLE sync_patients IS 'EMR 동기화 환자 기본정보 — 1등급 PII(성명·주민번호·전화번호) 제외, 해시/비식별만 보관';
+CREATE INDEX IF NOT EXISTS idx_sync_pat_verify ON sync_patients(birth_year, gender_code, phone_hash);
 
 -- 2-4. sync_encounters
 CREATE TABLE IF NOT EXISTS sync_encounters (

@@ -112,6 +112,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const closeManageModal        = document.getElementById('closeManageModal');
     const manageModalCloseBtn     = document.getElementById('manageModalCloseBtn');
     const navNewAppointmentBtn    = document.getElementById('nav-new-appointment');
+    const navMyRecordsBtn         = document.getElementById('nav-my-records');
+    const navChangePasswordBtn    = document.getElementById('nav-change-password');
     const navEditProfile          = document.getElementById('nav-edit-profile');
     const headerAppointmentBtn    = document.getElementById('headerAppointmentBtn');
     const mobileAppointmentBtn    = document.getElementById('mobileAppointmentBtn');
@@ -127,19 +129,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const saveEditBtn          = document.getElementById('saveEditBtn');
     let currentEditEncounterId = null;
 
-    const newAppointmentModal = document.getElementById('newAppointmentModal');
-    const newAppDateInput     = document.getElementById('newAppDate');
-    const newAppDeptSelect    = document.getElementById('newAppDept');
-    const newAppNoteInput     = document.getElementById('newAppNote');
-    const closeNewAppModal    = document.getElementById('closeNewAppModal');
-    const cancelNewAppBtn     = document.getElementById('cancelNewAppBtn');
-    const saveNewAppBtn       = document.getElementById('saveNewAppBtn');
 
     const profileEditSection  = document.getElementById('profile-edit-section');
-    const profileNameInput    = document.getElementById('profileName');
+    const profileEmailInput   = document.getElementById('profileEmail');
     const profileBirthInput   = document.getElementById('profileBirth');
     const profileGenderInput  = document.getElementById('profileGender');
-    const profileContactInput = document.getElementById('profileContact');
+    const profileMsg          = document.getElementById('profileMsg');
     const saveProfileBtn      = document.getElementById('saveProfileBtn');
     const hospitalIntroSection = document.getElementById('hospital-intro-section');
 
@@ -169,19 +164,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         pending: '대기', confirmed: '확정',
         cancelled: '취소', completed: '완료', no_show: '미내원',
     };
-    let DEPT_LABEL = {};   // API에서 동적 로드
-    // 진료과 목록 미리 로드
+    let DEPT_LABEL = {};
+    let _deptList  = [];
     apiCall('/portal/departments').then(r => r && r.ok && r.json()).then(list => {
-        if (list) list.forEach(d => { DEPT_LABEL[d.department_code] = d.department_name; });
-        // 신규 예약 모달 옵션 채우기
-        if (newAppDeptSelect && newAppDeptSelect.options.length <= 1) {
-            if (list) list.forEach(d => {
-                const o = document.createElement('option');
-                o.value = d.department_code;
-                o.textContent = d.department_name;
-                newAppDeptSelect.appendChild(o);
-            });
-        }
+        if (!list) return;
+        _deptList = list;
+        list.forEach(d => { DEPT_LABEL[d.department_code] = d.department_name; });
     }).catch(() => {});
 
     async function loadAppointments() {
@@ -321,53 +309,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (closeManageModal)      closeManageModal.addEventListener('click', closeManageModalFn);
     if (manageModalCloseBtn)   manageModalCloseBtn.addEventListener('click', closeManageModalFn);
 
-    // ── 신규 예약 ───────────────────────────────────────────
-    const openNewAppModal = (date) => {
-        newAppDateInput.value = date;
-        newAppointmentModal.classList.remove('hidden');
-        newAppointmentModal.classList.add('flex');
-    };
-    const closeNewAppModalFn = () => {
-        newAppointmentModal.classList.add('hidden');
-        newAppointmentModal.classList.remove('flex');
-    };
-    if (closeNewAppModal) closeNewAppModal.addEventListener('click', closeNewAppModalFn);
-    if (cancelNewAppBtn)  cancelNewAppBtn.addEventListener('click', closeNewAppModalFn);
-    if (saveNewAppBtn) {
-        saveNewAppBtn.addEventListener('click', async () => {
-            const visitDate = newAppDateInput.value;
-            const deptCode  = newAppDeptSelect.value;
-            if (!visitDate) { alert('날짜를 선택해주세요.'); return; }
-            saveNewAppBtn.disabled = true;
-            const timeVal = document.getElementById('newAppTime')?.value || '09:00';
-            const res = await apiCall('/portal/appointments', {
-                method: 'POST',
-                body: JSON.stringify({
-                    type_code:        'outpatient_new',
-                    department_code:  deptCode,
-                    appointment_date: visitDate,
-                    appointment_time: timeVal,
-                    notes:            newAppNoteInput?.value || null,
-                }),
-            });
-            saveNewAppBtn.disabled = false;
-            if (!res || !res.ok) {
-                const err = await res?.json().catch(() => ({}));
-                alert(err.detail || '예약 등록에 실패했습니다.');
-                return;
-            }
-            closeNewAppModalFn();
-            await loadAppointments();
-            renderCalendar();
-            alert('예약이 등록되었습니다.');
-        });
-    }
 
     // ── 예약 수정 ───────────────────────────────────────────
     const openEditModalFn = (appt) => {
         currentEditEncounterId = appt.appointment_id;
         editAppDateInput.value = appt.appointment_date;
-        if (editAppDeptSelect) editAppDeptSelect.value = appt.department_code || '';
+        if (editAppDeptSelect) {
+            editAppDeptSelect.innerHTML = '<option value="">진료과 선택</option>';
+            _deptList.forEach(d => {
+                const o = document.createElement('option');
+                o.value = d.department_code;
+                o.textContent = d.department_name;
+                if (d.department_code === appt.department_code) o.selected = true;
+                editAppDeptSelect.appendChild(o);
+            });
+        }
         editAppointmentModal.classList.remove('hidden');
         editAppointmentModal.classList.add('flex');
         document.body.style.overflow = 'hidden';
@@ -384,7 +340,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         saveEditBtn.addEventListener('click', async () => {
             if (!currentEditEncounterId) return;
             const body = {};
-            if (editAppDateInput.value)  body.appointment_date = editAppDateInput.value;
+            if (editAppDateInput.value)              body.appointment_date  = editAppDateInput.value;
+            if (editAppDeptSelect && editAppDeptSelect.value) body.department_code = editAppDeptSelect.value;
             saveEditBtn.disabled = true;
             const res = await apiCall(`/portal/appointments/${currentEditEncounterId}`, {
                 method: 'PATCH',
@@ -417,17 +374,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // ── 개인정보 수정 ───────────────────────────────────────
+    const GENDER_LABEL = { M: '남성', F: '여성', U: '미확인' };
+
     const renderUserProfile = async () => {
-        const res = await apiCall('/auth/me');
+        const res = await apiCall('/portal/my-profile');
         if (!res || !res.ok) return;
         const data = await res.json();
-        if (profileNameInput)    profileNameInput.value    = data.user_id || '-';
-        if (profileBirthInput)   profileBirthInput.value   = '-';
-        if (profileGenderInput)  profileGenderInput.value  = data.role || '-';
-        if (profileContactInput) profileContactInput.value = '';
+        if (profileEmailInput)  profileEmailInput.value  = data.email || '';
+        if (profileBirthInput)  profileBirthInput.value  = data.birth_year ? `${data.birth_year}년생` : '-';
+        if (profileGenderInput) profileGenderInput.value = GENDER_LABEL[data.gender_code] || '-';
     };
+
     if (saveProfileBtn) {
-        saveProfileBtn.addEventListener('click', () => alert('수정 기능은 준비 중입니다.'));
+        saveProfileBtn.addEventListener('click', async () => {
+            const email = profileEmailInput?.value?.trim();
+            if (!email) { return; }
+            saveProfileBtn.disabled = true;
+            if (profileMsg) { profileMsg.classList.add('hidden'); }
+
+            const res = await apiCall('/portal/my-profile', {
+                method: 'PATCH',
+                body: JSON.stringify({ email }),
+            });
+
+            if (profileMsg) {
+                profileMsg.classList.remove('hidden');
+                if (res && res.ok) {
+                    profileMsg.textContent = '이메일이 변경되었습니다.';
+                    profileMsg.className = 'text-sm font-medium text-center py-2 rounded-lg bg-green-50 text-green-700';
+                } else {
+                    const err = await res?.json().catch(() => ({}));
+                    profileMsg.textContent = err.detail || '저장 중 오류가 발생했습니다.';
+                    profileMsg.className = 'text-sm font-medium text-center py-2 rounded-lg bg-red-50 text-red-600';
+                }
+            }
+            saveProfileBtn.disabled = false;
+        });
     }
 
     // ── 섹션 전환 ───────────────────────────────────────────
@@ -452,21 +434,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (mobileMenu.classList.contains('sass-active')) toggleMenu();
     };
 
-    const openNewAppToday = (e) => {
+    const goToNewAppointment = (e) => {
         e.preventDefault();
-        const today = new Date();
-        openNewAppModal(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
+        window.location.href = 'appointment.html';
     };
 
-    if (navNewAppointmentBtn)    navNewAppointmentBtn.addEventListener('click', (e) => { e.preventDefault(); openNewAppToday(e); });
+    if (navNewAppointmentBtn)    navNewAppointmentBtn.addEventListener('click', goToNewAppointment);
+    if (navMyRecordsBtn)         navMyRecordsBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'my-records.html'; });
+    if (navChangePasswordBtn)    navChangePasswordBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'change-password.html'; });
     if (navEditProfile)          navEditProfile.addEventListener('click', async (e) => { e.preventDefault(); await showSection('profile-edit'); closeMenuIfOpen(); });
     if (manageAppointmentsBtn)   manageAppointmentsBtn.addEventListener('click', openManageModal);
-    if (headerAppointmentBtn)    headerAppointmentBtn.addEventListener('click', openNewAppToday);
-    if (mobileAppointmentBtn)    mobileAppointmentBtn.addEventListener('click', openNewAppToday);
+    if (headerAppointmentBtn)    headerAppointmentBtn.addEventListener('click', goToNewAppointment);
+    if (mobileAppointmentBtn)    mobileAppointmentBtn.addEventListener('click', goToNewAppointment);
     if (navHome)                 navHome.addEventListener('click', async (e) => { e.preventDefault(); await showSection('calendar'); closeMenuIfOpen(); });
     if (mobileNavHome)           mobileNavHome.addEventListener('click', async (e) => { e.preventDefault(); await showSection('calendar'); closeMenuIfOpen(); });
     if (navHospitalIntro)        navHospitalIntro.addEventListener('click', (e) => { e.preventDefault(); showSection('hospital-intro'); closeMenuIfOpen(); });
     if (mobileNavHospitalIntro)  mobileNavHospitalIntro.addEventListener('click', (e) => { e.preventDefault(); showSection('hospital-intro'); closeMenuIfOpen(); });
+
+    // ── 진료과 드롭다운 동적 로드 ────────────────────────────
+    const deptDropdown = document.getElementById('deptDropdown');
+    if (deptDropdown) {
+        try {
+            const r = await apiCall('/portal/departments');
+            if (r && r.ok) {
+                const depts = await r.json();
+                deptDropdown.innerHTML = depts.map(d =>
+                    `<a href="/department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`
+                ).join('');
+            }
+        } catch (_) { /* 드롭다운 실패 시 무시 */ }
+    }
 
     // ── 초기 로드 ────────────────────────────────────────────
     await loadAppointments();

@@ -5,7 +5,7 @@ from datetime import time as time_type
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db
@@ -13,7 +13,7 @@ from core.security import get_current_user, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
-    Notification, SyncDepartment, SyncDoctor, SyncEncounter, User,
+    Notification, SyncDepartment, SyncDiagnosis, SyncDoctor, SyncEncounter, SyncPatient, User,
 )
 
 logger = logging.getLogger(__name__)
@@ -449,3 +449,98 @@ def cancel_appointment(
     db.commit()
     db.refresh(appt)
     return {"message": "예약이 취소되었습니다.", "appointment": _appt_out(appt)}
+
+
+# ── 개인정보 조회/수정 ────────────────────────────────────────────
+
+class UpdateProfileRequest(BaseModel):
+    email: EmailStr
+
+
+@router.get("/my-profile")
+def get_my_profile(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """본인 이메일 + 비식별 인적정보 조회."""
+    user = db.query(User).filter(User.user_id == current_user["sub"]).first()
+    result: dict = {"email": user.email}
+
+    if user.patient_id_hash:
+        patient = db.query(SyncPatient).filter(
+            SyncPatient.patient_id_hash == user.patient_id_hash
+        ).first()
+        if patient:
+            result["birth_year"]  = patient.birth_year
+            result["gender_code"] = patient.gender_code
+
+    return result
+
+
+@router.patch("/my-profile", status_code=200)
+def update_my_profile(
+    body:         UpdateProfileRequest,
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """이메일(로그인 아이디) 변경."""
+    user = db.query(User).filter(User.user_id == current_user["sub"]).first()
+
+    if db.query(User).filter(
+        User.email == body.email,
+        User.user_id != user.user_id,
+    ).first():
+        raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
+
+    user.email = body.email
+    db.commit()
+    return {"email": user.email, "message": "이메일이 변경되었습니다."}
+
+
+# ── 진료기록 조회 ─────────────────────────────────────────────────
+
+@router.get("/my-records")
+def get_my_records(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """본인 진료기록 조회 (sync_encounters + sync_diagnoses 기반, 비식별)."""
+    pid = current_user.get("pid")
+    if not pid:
+        raise HTTPException(status_code=403, detail="환자 계정만 진료기록을 조회할 수 있습니다.")
+
+    encounters = (
+        db.query(SyncEncounter)
+        .filter(SyncEncounter.patient_id_hash == pid)
+        .order_by(SyncEncounter.visit_date.desc())
+        .all()
+    )
+
+    encounter_ids = [e.encounter_id for e in encounters]
+    diagnoses = (
+        db.query(SyncDiagnosis)
+        .filter(SyncDiagnosis.encounter_id.in_(encounter_ids))
+        .all()
+    ) if encounter_ids else []
+
+    diag_map: dict = {}
+    for d in diagnoses:
+        diag_map.setdefault(str(d.encounter_id), []).append(d.diagnosis_code)
+
+    record_audit(
+        db, action_type="RECORD_VIEW", result_code="200",
+        user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+    )
+
+    return [
+        {
+            "encounter_id":    str(e.encounter_id),
+            "visit_date":      str(e.visit_date) if e.visit_date else None,
+            "encounter_type":  e.encounter_type,
+            "department_code": e.department_code,
+            "doctor_id":       str(e.doctor_id) if e.doctor_id else None,
+            "status_code":     e.status_code,
+            "diagnoses":       diag_map.get(str(e.encounter_id), []),
+        }
+        for e in encounters
+    ]

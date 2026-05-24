@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>병동 현황 - MZ Clinic</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .page-wrap { max-width:1100px; margin:80px auto 40px; padding:0 16px; }
@@ -21,10 +22,13 @@
         .occupied-label { font-size:11px; color:#546e7a; margin-top:4px; }
         .empty-msg { text-align:center; padding:40px; color:#90a4ae; }
         .refresh-btn { padding:8px 18px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; cursor:pointer; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:12px; }
+        .back-link:hover { text-decoration:underline; }
     </style>
 </head>
 <body style="background:#f5f7fa;min-height:100vh;">
 <div class="page-wrap">
+    <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <h2>병동 현황</h2>
         <button class="refresh-btn" onclick="load()">새로고침</button>

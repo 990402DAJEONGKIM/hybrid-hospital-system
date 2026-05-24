@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>수동 예약 등록 - MZ Clinic 원무과</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .page-wrap { max-width:720px; margin:80px auto 40px; padding:0 16px; }
+        .card { background:#fff; border-radius:10px; border:1px solid #e0e0e0; padding:28px; }
+        .section-title { font-size:12px; font-weight:700; color:#90a4ae; text-transform:uppercase; letter-spacing:.5px; margin:22px 0 12px; padding-bottom:6px; border-bottom:1px solid #f0f0f0; }
+        .section-title:first-child { margin-top:0; }
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+        @media(max-width:560px){ .form-row { grid-template-columns:1fr; } }
+        .form-group { margin-bottom:14px; }
+        .form-group label { display:block; font-size:13px; font-weight:600; color:#546e7a; margin-bottom:5px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width:100%; padding:9px 11px; border:1px solid #cfd8dc; border-radius:6px; font-size:14px; box-sizing:border-box;
+        }
+        .form-group input:focus, .form-group select:focus { outline:none; border-color:var(--primary); }
+        .form-group textarea { resize:vertical; min-height:72px; }
+        .patient-result { background:#f0f4f8; border-radius:6px; padding:10px 14px; font-size:13px; color:#37474f; margin-top:6px; display:none; }
+        .patient-result.found { display:block; border-left:3px solid #059669; }
+        .patient-result.not-found { display:block; border-left:3px solid #e53935; color:#c62828; }
+        .btn-row { display:flex; gap:10px; margin-top:24px; }
+        .btn-primary { flex:1; padding:12px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:15px; font-weight:600; cursor:pointer; }
+        .btn-secondary { flex:1; padding:12px; background:#eceff1; color:#546e7a; border:none; border-radius:6px; font-size:15px; font-weight:600; cursor:pointer; }
+        .btn-primary:disabled { background:#b0bec5; cursor:not-allowed; }
+        #statusMsg { margin-top:12px; font-size:13px; padding:10px 14px; border-radius:6px; display:none; }
+        .msg-ok  { background:#e8f5e9; color:#2e7d32; display:block !important; }
+        .msg-err { background:#ffebee; color:#c62828; display:block !important; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
+        .lookup-btn { padding:9px 14px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+        .hash-row { display:flex; gap:8px; align-items:flex-end; }
+        .hash-row .form-group { flex:1; margin-bottom:0; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <a class="back-link" href="/nurse-dashboard.html"><i class="fas fa-arrow-left"></i> 예약 현황으로</a>
+    <h2 style="margin-bottom:4px;">수동 예약 등록</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:20px;">방문 환자의 예약을 원무과에서 직접 등록합니다.</p>
+
+    <div class="card">
+        <!-- 환자 확인 -->
+        <div class="section-title">1. 환자 확인</div>
+        <div class="hash-row">
+            <div class="form-group">
+                <label>환자 ID (Hash)</label>
+                <input type="text" id="patientHash" placeholder="abc123def456..." oninput="clearPatientResult()">
+            </div>
+            <button class="lookup-btn" onclick="lookupPatient()">조회</button>
+        </div>
+        <div class="patient-result" id="patientResult"></div>
+
+        <!-- 예약 유형 / 진료과 -->
+        <div class="section-title">2. 예약 정보</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>예약 유형</label>
+                <select id="typeCode">
+                    <option value="">선택하세요</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>진료과</label>
+                <select id="deptCode" onchange="loadDoctors()">
+                    <option value="">선택하세요</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>담당 의사 (선택)</label>
+            <select id="doctorId">
+                <option value="">미지정</option>
+            </select>
+        </div>
+
+        <!-- 날짜 / 시간 -->
+        <div class="section-title">3. 일정</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>예약 날짜</label>
+                <input type="date" id="apptDate">
+            </div>
+            <div class="form-group">
+                <label>예약 시간</label>
+                <input type="time" id="apptTime" value="09:00">
+            </div>
+        </div>
+
+        <!-- 선택 항목 -->
+        <div class="section-title">4. 추가 정보 (선택)</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>병실 선호 (입원 시)</label>
+                <select id="roomType">
+                    <option value="">미지정</option>
+                    <option value="1인실">1인실</option>
+                    <option value="2인실">2인실</option>
+                    <option value="다인실">다인실</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>기저질환 유무</label>
+                <select id="chronicCond">
+                    <option value="">미확인</option>
+                    <option value="true">있음</option>
+                    <option value="false">없음</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>메모</label>
+            <textarea id="notes" placeholder="특이사항을 입력하세요..."></textarea>
+        </div>
+
+        <div id="statusMsg"></div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="history.back()">취소</button>
+            <button class="btn-primary" id="submitBtn" onclick="submitAppointment()">예약 등록</button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    let foundPatientHash = null;
+
+    async function init() {
+        const me = await requireLogin();
+        if (!me) return;
+        if (!['nurse', 'admin'].includes(me.role)) {
+            alert('원무과 또는 관리자만 접근 가능합니다.');
+            location.href = 'index.html';
+            return;
+        }
+        await Promise.all([loadTypes(), loadDepts()]);
+
+        // 기본 날짜: 오늘
+        const today = new Date().toISOString().slice(0, 10);
+        document.getElementById('apptDate').value = today;
+        document.getElementById('apptDate').min   = today;
+    }
+
+    async function loadTypes() {
+        const res = await apiCall('/portal/doctor/appointment-types');
+        if (!res || !res.ok) return;
+        const types = await res.json();
+        const sel = document.getElementById('typeCode');
+        types.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value       = t.type_code;
+            opt.textContent = t.type_name;
+            sel.appendChild(opt);
+        });
+    }
+
+    async function loadDepts() {
+        const res = await apiCall('/portal/doctor/staff/departments');
+        if (!res || !res.ok) return;
+        const depts = await res.json();
+        const sel = document.getElementById('deptCode');
+        depts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value       = d.department_code;
+            opt.textContent = d.department_name;
+            sel.appendChild(opt);
+        });
+    }
+
+    async function loadDoctors() {
+        const deptCode = document.getElementById('deptCode').value;
+        const sel = document.getElementById('doctorId');
+        sel.innerHTML = '<option value="">미지정</option>';
+        if (!deptCode) return;
+        const res = await apiCall(`/portal/doctor/staff/doctors?department_code=${deptCode}`);
+        if (!res || !res.ok) return;
+        const doctors = await res.json();
+        doctors.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value       = d.doctor_id;
+            opt.textContent = d.doctor_name;
+            sel.appendChild(opt);
+        });
+    }
+
+    async function lookupPatient() {
+        const hash = document.getElementById('patientHash').value.trim();
+        const result = document.getElementById('patientResult');
+        if (!hash) { result.className = 'patient-result not-found'; result.textContent = 'Patient ID를 입력하세요.'; return; }
+
+        const res = await apiCall(`/portal/doctor/patients/${hash}`);
+        if (!res) return;
+
+        if (res.ok) {
+            const data = await res.json();
+            const p = data.patient;
+            result.className = 'patient-result found';
+            result.innerHTML = `<i class="fas fa-check-circle mr-1"></i>환자 확인: <strong>출생년도 ${p.birth_year}년</strong> · 성별 ${p.gender_code === 'M' ? '남' : '여'} · Hash: ${p.patient_id_hash.slice(0, 12)}…`;
+            foundPatientHash = p.patient_id_hash;
+        } else {
+            result.className = 'patient-result not-found';
+            result.textContent = '해당 환자 정보를 찾을 수 없습니다. Patient ID를 다시 확인하세요.';
+            foundPatientHash = null;
+        }
+    }
+
+    function clearPatientResult() {
+        foundPatientHash = null;
+        const result = document.getElementById('patientResult');
+        result.className = 'patient-result';
+    }
+
+    async function submitAppointment() {
+        const hash      = document.getElementById('patientHash').value.trim();
+        const typeCode  = document.getElementById('typeCode').value;
+        const deptCode  = document.getElementById('deptCode').value;
+        const doctorId  = document.getElementById('doctorId').value;
+        const apptDate  = document.getElementById('apptDate').value;
+        const apptTime  = document.getElementById('apptTime').value;
+        const roomType  = document.getElementById('roomType').value;
+        const chronic   = document.getElementById('chronicCond').value;
+        const notes     = document.getElementById('notes').value.trim();
+        const btn       = document.getElementById('submitBtn');
+
+        if (!hash)     { setStatus('환자 ID를 입력하고 조회해주세요.', false); return; }
+        if (!typeCode) { setStatus('예약 유형을 선택해주세요.', false); return; }
+        if (!deptCode) { setStatus('진료과를 선택해주세요.', false); return; }
+        if (!apptDate) { setStatus('예약 날짜를 입력해주세요.', false); return; }
+        if (!apptTime) { setStatus('예약 시간을 입력해주세요.', false); return; }
+
+        btn.disabled    = true;
+        btn.textContent = '등록 중...';
+
+        const body = {
+            patient_id_hash:       hash,
+            type_code:             typeCode,
+            department_code:       deptCode,
+            appointment_date:      apptDate,
+            appointment_time:      apptTime,
+        };
+        if (doctorId)  body.doctor_id             = doctorId;
+        if (roomType)  body.room_type_pref         = roomType;
+        if (chronic)   body.has_chronic_condition  = chronic === 'true';
+        if (notes)     body.notes                  = notes;
+
+        const res = await apiCall('/portal/doctor/staff/appointments', {
+            method: 'POST',
+            body:   JSON.stringify(body),
+        });
+
+        if (res && res.status === 201) {
+            setStatus('예약이 성공적으로 등록되었습니다.', true);
+            setTimeout(() => { location.href = '/nurse-dashboard.html'; }, 1200);
+        } else {
+            const err = await res?.json().catch(() => ({}));
+            setStatus(err.detail || '등록 중 오류가 발생했습니다.', false);
+        }
+
+        btn.disabled    = false;
+        btn.textContent = '예약 등록';
+    }
+
+    function setStatus(msg, ok) {
+        const el = document.getElementById('statusMsg');
+        el.textContent = msg;
+        el.className   = ok ? 'msg-ok' : 'msg-err';
+    }
+
+    init();
+</script>
+</body>
+</html>

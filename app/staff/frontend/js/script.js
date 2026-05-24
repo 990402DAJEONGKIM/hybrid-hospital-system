@@ -11,12 +11,44 @@ async function _refreshTokens() {
     } catch { return false; }
 }
 
+// ── 세션 만료 경고 배너 ──────────────────────────────────────
+let _sessionWarnShown = false;
+
+function _showSessionWarning(remaining) {
+    if (_sessionWarnShown) return;
+    _sessionWarnShown = true;
+    const mins = Math.ceil(remaining / 60);
+    let banner = document.getElementById('_sessionWarnBanner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = '_sessionWarnBanner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ff9800;color:#fff;text-align:center;padding:10px 16px;font-weight:bold;font-size:14px;';
+        banner.innerHTML = `세션이 약 ${mins}분 후 만료됩니다.
+            <button onclick="extendSession()" style="margin-left:12px;padding:4px 14px;background:#fff;color:#ff9800;border:none;border-radius:4px;font-weight:bold;cursor:pointer;">세션 연장</button>`;
+        document.body.prepend(banner);
+    }
+}
+
+async function extendSession() {
+    const ok = await _refreshTokens();
+    if (ok) {
+        _sessionWarnShown = false;
+        const b = document.getElementById('_sessionWarnBanner');
+        if (b) b.remove();
+    } else {
+        logout();
+    }
+}
+
 async function apiCall(path, options = {}) {
     const res = await fetch(`${BASE_URL}${path}`, {
         ..._fetchDefaults,
         ...options,
         headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
     });
+    if (res && res.headers.get('X-Session-Expiring-Soon') === 'true') {
+        _showSessionWarning(parseInt(res.headers.get('X-Session-Remaining-Seconds') || '300'));
+    }
     if (res.status === 401) {
         const ok = await _refreshTokens();
         if (!ok) { logout(); return null; }

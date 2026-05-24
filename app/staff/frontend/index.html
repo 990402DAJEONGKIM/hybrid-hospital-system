@@ -4,175 +4,176 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>김이박 클리닉 - 의료진 포털</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
-    <script src="js/config.js"></script>
-    <script src="js/script.js" defer></script>
+    <style>
+        .portal-wrap { max-width:1100px; margin:80px auto 40px; padding:0 24px; }
+        .welcome-bar {
+            background: linear-gradient(90deg, #0f172a, #1e3a5f);
+            color:#fff; border-radius:12px; padding:20px 28px;
+            display:flex; justify-content:space-between; align-items:center;
+            margin-bottom:32px;
+        }
+        .welcome-bar h2 { margin:0; font-size:20px; }
+        .welcome-bar p  { margin:4px 0 0; font-size:13px; opacity:.75; }
+        .role-badge {
+            background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+            border-radius:20px; padding:4px 14px; font-size:12px; font-weight:700;
+            letter-spacing:.5px; text-transform:uppercase;
+        }
+        .menu-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px; }
+        .menu-card {
+            background:#fff; border-radius:12px; padding:24px 22px;
+            box-shadow:0 2px 12px rgba(0,0,0,.07); cursor:pointer;
+            transition:transform .15s, box-shadow .15s;
+            border-left:4px solid var(--primary);
+            text-decoration:none; display:block; color:inherit;
+        }
+        .menu-card:hover { transform:translateY(-3px); box-shadow:0 6px 20px rgba(0,0,0,.12); }
+        .menu-card .icon {
+            width:44px; height:44px; border-radius:10px;
+            background:#e3f2fd; color:var(--primary);
+            display:flex; align-items:center; justify-content:center;
+            font-size:20px; margin-bottom:14px;
+        }
+        .menu-card h3 { margin:0 0 4px; font-size:16px; color:#1e293b; }
+        .menu-card p  { margin:0; font-size:13px; color:#78909c; }
+
+        /* 역할별 accent */
+        .role-nurse  .menu-card { border-left-color:#059669; }
+        .role-nurse  .menu-card .icon { background:#d1fae5; color:#059669; }
+        .role-doctor .menu-card { border-left-color:#7c3aed; }
+        .role-doctor .menu-card .icon { background:#ede9fe; color:#7c3aed; }
+        .role-admin  .menu-card { border-left-color:#dc2626; }
+        .role-admin  .menu-card .icon { background:#fee2e2; color:#dc2626; }
+
+        .logout-btn {
+            background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4);
+            color:#fff; padding:7px 16px; border-radius:8px; font-size:13px;
+            cursor:pointer; transition:background .2s;
+        }
+        .logout-btn:hover { background:rgba(255,255,255,.25); }
+        .pw-expired-banner {
+            background:#fef3c7; border:1px solid #f59e0b; border-radius:8px;
+            padding:12px 18px; margin-bottom:20px; font-size:13px; color:#92400e;
+            display:flex; align-items:center; gap:10px;
+        }
+    </style>
 </head>
+<body style="background:#f5f7fa;min-height:100vh;">
 
-<body>
-    <header class="sass-header">
-        <div class="sass-announcement">
-            <div class="sass-announcement-content">
-                의료진 포털 — 김이박 클리닉 내부 시스템
-            </div>
-        </div>
-
-        <div class="container mx-auto px-4">
-            <div class="flex justify-between items-center py-4">
-                <a href="#" class="sass-logo">
-                    <i class="fas fa-heartbeat mr-2"></i>
-                    <span>김이박 클리닉</span>
-                </a>
-
-                <nav class="hidden md:block">
-                    <ul class="flex items-center space-x-4">
-                        <li><a href="#" id="nav-home" class="sass-nav-link">홈</a></li>
-                        <li class="sass-dropdown">
-                            <a href="#" class="sass-nav-link">의료진 <i class="fas fa-chevron-down text-xs"></i></a>
-                            <div class="sass-dropdown-content">
-                                <a href="#" id="nav-doctor-appointments-status" class="sass-dropdown-link">예약현황</a>
-                                <a href="#" id="nav-patient-info-management" class="sass-dropdown-link">환자 정보 관리</a>
-                            </div>
-                        </li>
-                        <li><a href="#" id="nav-hospital-intro" class="sass-nav-link">병원 소개</a></li>
-                        <li id="userWelcomeItem" class="hidden flex items-center"><span id="userWelcome" class="text-sm font-medium text-gray-700 mr-2"></span></li>
-                        <li><button id="logoutBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold hover:bg-gray-300 transition-colors hidden">로그아웃</button></li>
-                    </ul>
-                </nav>
-
-                <button class="md:hidden text-2xl" id="sassMobileMenuBtn">
-                    <i class="fas fa-bars"></i>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <div class="sass-overlay" id="sassOverlay"></div>
-    <div class="sass-mobile-menu" id="sassMobileMenu">
-        <div class="flex justify-end">
-            <button id="sassMobileMenuClose" class="text-2xl">&times;</button>
-        </div>
-        <nav class="flex flex-col space-y-4 mt-8">
-            <a href="#" id="mobile-nav-home" class="text-lg font-medium">홈</a>
-            <a href="#" class="text-lg font-medium">의료진</a>
-            <a href="#" id="mobile-nav-hospital-intro" class="text-lg font-medium">병원 소개</a>
-        </nav>
+<div class="portal-wrap" id="portalWrap">
+    <!-- pw expired banner -->
+    <div class="pw-expired-banner" id="pwBanner" style="display:none;">
+        <i class="fas fa-exclamation-triangle"></i>
+        비밀번호가 만료되었습니다. 지금 바로 변경해주세요.
+        <a href="/change-password.html" style="margin-left:auto;font-weight:700;color:#92400e;text-decoration:underline;">변경하기</a>
     </div>
 
-    <main class="pt-36 pb-6 px-6 w-full main-content" style="max-width:100%;">
-        <!-- 예약 스케줄 달력 섹션 -->
-        <section id="appointment-section" class="bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-3xl font-bold text-blue-900">예약 스케줄</h2>
-                <div class="flex items-center space-x-4">
-                    <button id="prevMonth" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-chevron-left"></i></button>
-                    <h3 id="currentMonthYear" class="text-xl font-semibold"></h3>
-                    <button id="nextMonth" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-chevron-right"></i></button>
-                </div>
-            </div>
-
-            <div class="calendar-grid-container grid grid-cols-7 border-t border-l border-gray-100 rounded-xl overflow-hidden shadow-sm">
-                <div class="calendar-weekday is-sunday">일</div>
-                <div class="calendar-weekday">월</div>
-                <div class="calendar-weekday">화</div>
-                <div class="calendar-weekday">수</div>
-                <div class="calendar-weekday">목</div>
-                <div class="calendar-weekday">금</div>
-                <div class="calendar-weekday is-saturday">토</div>
-                <div id="calendar-grid" class="contents"></div>
-            </div>
-        </section>
-
-        <!-- 환자 기본정보 관리 섹션 -->
-        <section id="patient-management-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-3xl font-bold text-blue-900">환자 정보 관리</h2>
-            </div>
-            <div class="mb-6 flex gap-2">
-                <input type="text" id="patientSearchInput" placeholder="이름 또는 연락처로 검색..." class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                <button id="patientSearchBtn" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700">검색</button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500">
-                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3">환자 식별자 (비식별)</th>
-                            <th class="px-4 py-3">출생연도</th>
-                            <th class="px-4 py-3">성별</th>
-                            <th class="px-4 py-3">마지막 방문일</th>
-                            <th class="px-4 py-3">상세</th>
-                        </tr>
-                    </thead>
-                    <tbody id="patientTableBody"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- 병원 소개 섹션 -->
-        <section id="hospital-intro-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="mb-8 text-center">
-                <h2 class="text-3xl font-bold text-blue-900 mb-4">병원 소개</h2>
-                <p class="text-xl text-gray-700 font-medium">김이박 클리닉입니다.</p>
-            </div>
-            <div class="max-w-4xl mx-auto w-full">
-                <h3 class="text-xl font-bold text-blue-800 mb-4"><i class="fas fa-history mr-2"></i>병원 연혁</h3>
-                <div class="overflow-x-auto border border-gray-100 rounded-xl shadow-sm">
-                    <table class="w-full text-sm text-left text-gray-500">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 w-1/4">연도</th>
-                                <th class="px-6 py-3">주요 연혁</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2020년</td><td class="px-6 py-4">김이박 클리닉 개원</td></tr>
-                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2021년</td><td class="px-6 py-4">보건복지부 지정 의료기관 획득</td></tr>
-                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2022년</td><td class="px-6 py-4">최첨단 MRI 및 CT 장비 도입</td></tr>
-                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2024년</td><td class="px-6 py-4">지역 거점 응급의료센터 선정</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- 예약 상세 내역 모달 -->
-    <div id="calendarModal" class="fixed inset-0 z-[2000] hidden items-center justify-center bg-black bg-opacity-50">
-        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 id="modalDateHeader" class="text-xl font-bold text-blue-900"></h3>
-                <button id="closeCalendarModal" class="text-2xl">&times;</button>
-            </div>
-            <div id="modalAppointmentList" class="space-y-3 mb-6 max-h-60 overflow-y-auto"></div>
-            <div class="flex justify-end">
-                <button id="modalConfirmBtn" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">닫기</button>
-            </div>
+    <!-- welcome bar -->
+    <div class="welcome-bar" id="welcomeBar">
+        <div>
+            <h2 id="welcomeTitle">의료진 포털</h2>
+            <p id="welcomeSub">로딩 중...</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <span class="role-badge" id="roleBadge"></span>
+            <button class="logout-btn" onclick="doLogout()"><i class="fas fa-sign-out-alt mr-1"></i>로그아웃</button>
         </div>
     </div>
 
-    <!-- 환자 상세 정보 모달 -->
-    <div id="patientDetailModal" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
-        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-blue-900">환자 상세 정보</h3>
-                <button id="closePatientDetailModal" class="text-2xl">&times;</button>
-            </div>
-            <div class="space-y-4 mb-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">출생연도</label>
-                    <input type="text" id="patientAge" readonly class="w-full p-2 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">진단/알레르기/수술 (비식별화)</label>
-                    <textarea id="patientDiagnosis" readonly rows="4" class="w-full p-2 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none resize-none"></textarea>
-                </div>
-            </div>
-            <div class="flex justify-end">
-                <button id="closePatientDetailBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-bold">닫기</button>
-            </div>
-        </div>
-    </div>
+    <!-- menu grid -->
+    <div class="menu-grid" id="menuGrid"></div>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    const ROLE_LABELS = { nurse:'원무과', doctor:'의사', admin:'관리자' };
+    const MENU_DESC = {
+        NURSE_DASHBOARD:  '날짜·상태별 예약 목록 및 처리',
+        NURSE_APPT_NEW:   '방문 환자 직접 예약 등록',
+        WARD_STATUS:      '병동별 가용 병상 현황',
+        DOCTOR_SCHEDULE:  '오늘 확정된 진료 일정',
+        PATIENT_DETAIL:   '예약 정보 및 진료기록 조회',
+        ADMIN_USERS:      '계정 생성·수정·잠금·삭제',
+        ADMIN_ROLES:      '역할 추가 및 권한 할당',
+        ADMIN_POLICY:     '비밀번호 복잡도·만료 설정',
+        ADMIN_LOGS:       '전체 사용자 활동 감사 로그',
+        ADMIN_LOGIN_HIST: '로그인 성공·실패·잠금 이력',
+        CHANGE_PW:        '비밀번호 주기적 변경',
+    };
+
+    async function init() {
+        const me = await requireLogin();
+        if (!me) return;
+
+        if (me.password_expired) {
+            document.getElementById('pwBanner').style.display = 'flex';
+        }
+
+        const roleLabel = ROLE_LABELS[me.role] || me.role;
+        document.getElementById('welcomeTitle').textContent = `${roleLabel} 포털`;
+        document.getElementById('welcomeSub').textContent   = `ISMS-P 보안 정책 적용 시스템 — 모든 접근이 기록됩니다.`;
+        document.getElementById('roleBadge').textContent    = roleLabel;
+        document.getElementById('portalWrap').classList.add(`role-${me.role}`);
+
+        // 메뉴 로드
+        const res = await apiCall('/auth/me/menus');
+        if (!res || !res.ok) { renderDefaultMenu(me.role); return; }
+        const menus = await res.json();
+        renderMenus(menus);
+    }
+
+    function renderMenus(menus) {
+        const grid = document.getElementById('menuGrid');
+        grid.innerHTML = menus.map(m => `
+            <a class="menu-card" href="${m.menu_url}">
+                <div class="icon"><i class="fas fa-${m.icon || 'circle'}"></i></div>
+                <h3>${m.menu_name}</h3>
+                <p>${MENU_DESC[m.menu_code] || ''}</p>
+            </a>
+        `).join('');
+    }
+
+    function renderDefaultMenu(role) {
+        const defaults = {
+            nurse:  [
+                {url:'/nurse-dashboard.html',       icon:'calendar-alt',  name:'예약 현황',      desc:'날짜·상태별 예약 목록 및 처리'},
+                {url:'/nurse-appointment-new.html', icon:'plus-circle',   name:'수동 예약 등록', desc:'방문 환자 직접 예약 등록'},
+                {url:'/ward-status.html',           icon:'hospital',      name:'병동 현황',      desc:'병동별 가용 병상 현황'},
+                {url:'/change-password.html',       icon:'key',           name:'비밀번호 변경',  desc:'비밀번호 주기적 변경'},
+            ],
+            doctor: [
+                {url:'/doctor-schedule.html',  icon:'stethoscope',   name:'오늘 진료',      desc:'오늘 확정된 진료 일정'},
+                {url:'/patient-detail.html',   icon:'user-injured',  name:'환자 조회',      desc:'예약 정보 및 진료기록 조회'},
+                {url:'/change-password.html',  icon:'key',           name:'비밀번호 변경',  desc:'비밀번호 주기적 변경'},
+            ],
+            admin: [
+                {url:'/admin-users.html',           icon:'users',          name:'사용자 관리',    desc:'계정 생성·수정·잠금·삭제'},
+                {url:'/admin-roles.html',           icon:'shield-alt',     name:'역할/권한 관리', desc:'역할 추가 및 권한 할당'},
+                {url:'/admin-policy.html',          icon:'lock',           name:'보안 정책',      desc:'비밀번호 복잡도·만료 설정'},
+                {url:'/admin-logs.html',            icon:'clipboard-list', name:'감사 로그',      desc:'전체 사용자 활동 감사 로그'},
+                {url:'/admin-login-history.html',   icon:'history',        name:'로그인 이력',    desc:'로그인 성공·실패·잠금 이력'},
+                {url:'/change-password.html',       icon:'key',            name:'비밀번호 변경',  desc:'비밀번호 주기적 변경'},
+            ],
+        };
+        const grid = document.getElementById('menuGrid');
+        grid.innerHTML = (defaults[role] || []).map(m => `
+            <a class="menu-card" href="${m.url}">
+                <div class="icon"><i class="fas fa-${m.icon}"></i></div>
+                <h3>${m.name}</h3>
+                <p>${m.desc}</p>
+            </a>
+        `).join('');
+    }
+
+    async function doLogout() {
+        await apiCall('/auth/logout', { method: 'POST' }).catch(() => {});
+        window.location.href = 'login.html';
+    }
+
+    init();
+</script>
 </body>
 </html>

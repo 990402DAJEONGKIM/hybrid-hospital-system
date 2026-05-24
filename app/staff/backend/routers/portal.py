@@ -11,7 +11,7 @@ from core.database import get_db
 from core.security import get_current_user, has_permission
 from core.ses import send_appointment_notification
 from models.db import (
-    Appointment, AppointmentHistory, AppointmentStatus,
+    Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
     AuditLog, Notification, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
     SyncEncounter, SyncPatient, SyncSurgery, SyncWard, User,
 )
@@ -107,7 +107,58 @@ class StatusUpdate(BaseModel):
     reason:      Optional[str] = None
 
 
+class ManualAppointmentRequest(BaseModel):
+    patient_id_hash:       str
+    type_code:             str
+    department_code:       str
+    doctor_id:             Optional[str] = None
+    appointment_date:      str            # YYYY-MM-DD
+    appointment_time:      str            # HH:MM
+    room_type_pref:        Optional[str]  = None
+    has_chronic_condition: Optional[bool] = None
+    notes:                 Optional[str]  = None
+
+
 # ── 공통 참조 데이터 ──────────────────────────────────────────
+
+@router.get("/appointment-types")
+def get_appointment_types(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """예약 유형 목록 (수동 예약 폼용)."""
+    _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
+    from models.db import AppointmentType as ApptType
+    types = (
+        db.query(ApptType)
+        .filter(ApptType.is_active == True)
+        .order_by(ApptType.sort_order)
+        .all()
+    )
+    return [
+        {"type_code": t.type_code, "type_name": t.type_name,
+         "requires_previous_visit": t.requires_previous_visit}
+        for t in types
+    ]
+
+
+@router.get("/staff/doctors")
+def get_doctors(
+    department_code: Optional[str] = Query(default=None),
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """의사 목록 (진료과 필터 선택)."""
+    _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
+    query = db.query(SyncDoctor).filter(SyncDoctor.is_active == True)
+    if department_code:
+        query = query.filter(SyncDoctor.department_code == department_code)
+    return [
+        {"doctor_id": str(d.doctor_id), "doctor_name": d.doctor_name,
+         "department_code": d.department_code}
+        for d in query.all()
+    ]
+
 
 @router.get("/staff/departments")
 def get_departments(
@@ -370,3 +421,143 @@ def get_ward_status(
         }
         for w in wards
     ]
+
+
+# ── 예약 단건 조회 ────────────────────────────────────────────────
+
+@router.get("/staff/appointments/{appointment_id}")
+def get_appointment_detail(
+    appointment_id: uuid.UUID,
+    current_user:   dict     = Depends(get_current_user),
+    db:             DbSession = Depends(get_db),
+):
+    """예약 단건 상세 조회 (원무과·의사 공용)."""
+    _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
+
+    appt = db.query(Appointment).filter(
+        Appointment.appointment_id == appointment_id
+    ).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    patient = db.query(SyncPatient).filter(
+        SyncPatient.patient_id_hash == appt.patient_id_hash
+    ).first() if appt.patient_id_hash else None
+
+    history = [
+        {
+            "changed_at":    h.changed_at.isoformat() if h.changed_at else None,
+            "change_reason": h.change_reason,
+            "new_date":      str(h.new_date) if h.new_date else None,
+            "new_time":      h.new_time.strftime("%H:%M") if h.new_time else None,
+        }
+        for h in sorted(appt.history, key=lambda x: x.changed_at or datetime.min.replace(tzinfo=timezone.utc))
+    ]
+
+    result = _appt_out(appt)
+    result["history"] = history
+    if patient:
+        result["patient_birth_year"] = patient.birth_year
+        result["patient_gender"]     = patient.gender_code
+    return result
+
+
+# ── 수동 예약 등록 (원무과) ───────────────────────────────────────
+
+@router.post("/staff/appointments", status_code=201)
+def create_manual_appointment(
+    body:         ManualAppointmentRequest,
+    request:      Request,
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """원무과 직원이 방문 환자를 직접 예약 등록."""
+    _verify(current_user, db, "MANAGE_APPOINTMENTS")
+
+    now = datetime.now(timezone.utc)
+
+    patient = db.query(SyncPatient).filter(
+        SyncPatient.patient_id_hash == body.patient_id_hash
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="해당 환자 정보를 찾을 수 없습니다.")
+
+    # 환자 포털 계정 조회 (없어도 예약 가능)
+    from models.db import User as UserModel
+    patient_user = db.query(UserModel).filter(
+        UserModel.patient_id_hash == body.patient_id_hash
+    ).first()
+
+    appt_type = db.query(AppointmentType).filter(
+        AppointmentType.type_code == body.type_code,
+        AppointmentType.is_active == True,
+    ).first()
+    if not appt_type:
+        raise HTTPException(status_code=400, detail="유효하지 않은 예약 유형입니다.")
+
+    dept = db.query(SyncDepartment).filter(
+        SyncDepartment.department_code == body.department_code,
+        SyncDepartment.is_active == True,
+    ).first()
+    if not dept:
+        raise HTTPException(status_code=400, detail="존재하지 않는 진료과입니다.")
+
+    doctor_uuid = None
+    if body.doctor_id:
+        try:
+            doctor_uuid = uuid.UUID(body.doctor_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="유효하지 않은 의사 ID입니다.")
+
+    from datetime import date as date_type, time as time_type
+    try:
+        appt_date = date_type.fromisoformat(body.appointment_date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+
+    try:
+        h, m = body.appointment_time.split(":")
+        appt_time = time_type(int(h), int(m))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="시간 형식이 올바르지 않습니다. (HH:MM)")
+
+    pending_status = db.query(AppointmentStatus).filter(
+        AppointmentStatus.status_code == "pending"
+    ).first()
+    if not pending_status:
+        raise HTTPException(status_code=500, detail="시스템 오류: 예약 상태 설정이 없습니다.")
+
+    staff_user_id = uuid.UUID(current_user["sub"])
+
+    appt = Appointment(
+        patient_user_id       = patient_user.user_id if patient_user else staff_user_id,
+        patient_id_hash       = body.patient_id_hash,
+        type_id               = appt_type.type_id,
+        status_id             = pending_status.status_id,
+        department_code       = body.department_code,
+        doctor_id             = doctor_uuid,
+        room_type_pref        = body.room_type_pref,
+        has_chronic_condition = body.has_chronic_condition,
+        appointment_date      = appt_date,
+        appointment_time      = appt_time,
+        notes                 = body.notes,
+    )
+    db.add(appt)
+    db.flush()
+
+    db.add(AppointmentHistory(
+        appointment_id = appt.appointment_id,
+        changed_by     = staff_user_id,
+        new_status_id  = pending_status.status_id,
+        new_date       = appt_date,
+        new_time       = appt_time,
+        change_reason  = "원무과 수동 등록",
+    ))
+
+    _record_audit(
+        db, current_user["sub"], "CREATE_APPOINTMENT_MANUAL", "201",
+        request, appt.appointment_id,
+    )
+    db.commit()
+    db.refresh(appt)
+    return _appt_out(appt)

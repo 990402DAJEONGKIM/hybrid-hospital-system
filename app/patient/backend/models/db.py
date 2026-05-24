@@ -294,11 +294,9 @@ class SyncPatient(Base):
     __tablename__ = "sync_patients"
 
     patient_id_hash = Column(String(64), primary_key=True)
-    patient_name    = Column(String(50))
-    birth_date      = Column(Date)
     birth_year      = Column(SmallInteger)
     gender_code     = Column(String(1))
-    phone           = Column(String(20))
+    phone_hash      = Column(String(64))   # SHA-256(phone_number) — 원본 미저장
     created_at      = Column(DateTime(timezone=True))
     synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

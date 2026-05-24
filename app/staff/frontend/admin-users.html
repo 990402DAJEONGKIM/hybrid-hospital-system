@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>사용자 계정 관리 - MZ Clinic 관리자</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .page-wrap { max-width:1200px; margin:80px auto 40px; padding:0 16px; }
@@ -17,6 +18,9 @@
         .btn-sm { padding:5px 12px; border:none; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; }
         .btn-lock   { background:#fff8e1; color:#e65100; }
         .btn-unlock { background:#e8f5e9; color:#2e7d32; }
+        .btn-edit   { background:#e3f2fd; color:#1565c0; }
+        .btn-delete { background:#ffebee; color:#c62828; }
+        .action-cell { display:flex; gap:5px; flex-wrap:wrap; }
 
         /* 모달 */
         .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:center; justify-content:center; }
@@ -29,14 +33,18 @@
         .modal-footer { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
         .btn-cancel-modal { padding:9px 18px; background:#eceff1; color:#546e7a; border:none; border-radius:6px; font-size:14px; cursor:pointer; }
         #errMsg { color:#e53935; font-size:13px; margin-top:6px; min-height:16px; }
+        #editErrMsg { color:#e53935; font-size:13px; margin-top:6px; min-height:16px; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
     </style>
 </head>
 <body style="background:#f5f7fa;min-height:100vh;">
 <div class="page-wrap">
+    <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <div class="toolbar">
         <div>
             <h2 style="margin-bottom:4px;">사용자 계정 관리</h2>
-            <p style="color:#78909c;font-size:13px;margin:0;">ISMS-P 2.5.1 — 계정 생성·잠금·해제</p>
+            <p style="color:#78909c;font-size:13px;margin:0;">ISMS-P 2.5.1 — 계정 생성·수정·잠금·삭제</p>
         </div>
         <button class="btn-primary" onclick="openCreateModal()">+ 신규 계정 생성</button>
     </div>
@@ -88,6 +96,30 @@
     </div>
 </div>
 
+<!-- 역할 변경 모달 -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+        <h3>역할 / 상태 변경</h3>
+        <div class="form-group">
+            <label>역할</label>
+            <select id="editRole">
+                <option value="doctor">의사</option>
+                <option value="nurse">간호사 / 원무과</option>
+                <option value="admin">관리자</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Doctor ID (UUID, 의사 역할 변경 시 선택)</label>
+            <input type="text" id="editDoctorId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+        </div>
+        <div id="editErrMsg"></div>
+        <div class="modal-footer">
+            <button class="btn-cancel-modal" onclick="closeEditModal()">취소</button>
+            <button class="btn-primary" onclick="saveEdit()">저장</button>
+        </div>
+    </div>
+</div>
+
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
 <script>
@@ -125,13 +157,71 @@
                 <td>${loginAt}</td>
                 <td>${createdAt}</td>
                 <td>
-                    <button class="btn-sm ${isActive ? 'btn-lock' : 'btn-unlock'}"
-                        onclick="toggleLock('${u.user_id}', ${isActive})">
-                        ${isActive ? '잠금' : '해제'}
-                    </button>
+                    <div class="action-cell">
+                        <button class="btn-sm ${isActive ? 'btn-lock' : 'btn-unlock'}"
+                            onclick="toggleLock('${u.user_id}', ${isActive})">
+                            ${isActive ? '잠금' : '해제'}
+                        </button>
+                        <button class="btn-sm btn-edit"
+                            onclick="openEditModal('${u.user_id}', '${u.role_code || ''}', ${isActive})">
+                            역할 변경
+                        </button>
+                        <button class="btn-sm btn-delete"
+                            onclick="deleteUser('${u.user_id}', '${u.email}')">
+                            삭제
+                        </button>
+                    </div>
                 </td>
             </tr>`;
         }).join('');
+    }
+
+    let editingUserId = null;
+
+    function openEditModal(userId, roleCode, isActive) {
+        editingUserId = userId;
+        document.getElementById('editRole').value    = roleCode || 'doctor';
+        document.getElementById('editDoctorId').value = '';
+        document.getElementById('editErrMsg').textContent = '';
+        document.getElementById('editModal').classList.add('open');
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('open');
+        editingUserId = null;
+    }
+
+    async function saveEdit() {
+        const roleCode = document.getElementById('editRole').value;
+        const doctorId = document.getElementById('editDoctorId').value.trim();
+        const errEl    = document.getElementById('editErrMsg');
+        if (!editingUserId) return;
+
+        const body = { role_code: roleCode };
+        if (doctorId) body.doctor_id = doctorId;
+
+        const res = await apiCall(`/admin/users/${editingUserId}`, {
+            method: 'PATCH',
+            body:   JSON.stringify(body),
+        });
+        if (res && res.ok) {
+            closeEditModal();
+            await loadUsers();
+        } else {
+            const err = await res?.json().catch(() => ({}));
+            errEl.textContent = err.detail || '변경 중 오류가 발생했습니다.';
+        }
+    }
+
+    async function deleteUser(id, email) {
+        if (!confirm(`"${email}" 계정을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+        const res = await apiCall(`/admin/users/${id}`, { method: 'DELETE' });
+        if (res && (res.ok || res.status === 204)) {
+            await loadUsers();
+        } else {
+            const err = await res?.json().catch(() => ({}));
+            alert(err.detail || '삭제 중 오류가 발생했습니다.');
+        }
     }
 
     async function toggleLock(id, currentActive) {
@@ -162,6 +252,11 @@
         document.getElementById('doctorIdGroup').style.display = e.target.value === 'doctor' ? 'block' : 'none';
     });
     document.getElementById('doctorIdGroup').style.display = 'block';
+
+    document.getElementById('editRole').addEventListener('change', (e) => {
+        document.getElementById('editDoctorId').parentElement.style.display =
+            e.target.value === 'doctor' ? 'block' : 'none';
+    });
 
     async function createUser() {
         const email    = document.getElementById('newEmail').value.trim();
