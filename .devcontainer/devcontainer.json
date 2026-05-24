@@ -8,8 +8,10 @@
 		"ghcr.io/devcontainers/features/aws-cli:1": {},
 		"ghcr.io/devcontainers/features/github-cli:1": {},
 		"ghcr.io/devcontainers/features/terraform:1": {},
-		"ghcr.io/siri404/devcontainer-ai-features/gcloud:1": {}
+		"ghcr.io/siri404/devcontainer-ai-features/gcloud:1": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
 	}
+}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},

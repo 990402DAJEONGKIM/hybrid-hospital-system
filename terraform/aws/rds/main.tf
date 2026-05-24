@@ -96,6 +96,15 @@ resource "aws_security_group" "rds" {
     description = "GCP Cloud SQL PSA to Aurora (pglogical)"
   }
 
+  # ecs ec2 -> Aurora  (by 김다정 2026.05.24)
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [data.aws_security_group.ecs_ec2.id]
+    description     = "ECS tasks to Aurora"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -363,5 +372,13 @@ resource "aws_instance" "aws_bastion_01" {
   tags = {
     Name = "aws-bastion-01"
   }
+}
+# =========================================================================================
+
+
+# ecs 용 (by 김다정 2026.05.24)
+# =========================================================================================
+data "aws_security_group" "ecs_ec2" {
+  name = "aws-ecs-ec2-sg"
 }
 # =========================================================================================
