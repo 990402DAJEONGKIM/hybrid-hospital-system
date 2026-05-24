@@ -3,57 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>로그인 - 김이박 종합병원</title>
+    <title>직원 로그인 - 김이박 클리닉</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 100%);
+            min-height: 100vh;
+        }
+        .login-card {
+            border-top: 4px solid #1d4ed8;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+        }
+        .login-btn {
+            background: #1d3a6e;
+            transition: background 0.2s;
+        }
+        .login-btn:hover { background: #1e40af; }
+        .security-badge {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 h-screen flex items-center justify-center">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-blue-900 mb-2">김이박 종합병원</h1>
-            <p class="text-gray-500">서비스 이용을 위해 로그인해주세요.</p>
+<body style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:1rem;">
+
+    <div class="w-full max-w-md">
+
+        <!-- 로고 영역 -->
+        <div class="text-center mb-4">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white bg-opacity-10 mb-2">
+                <i class="fas fa-shield-alt text-2xl text-blue-300"></i>
+            </div>
+            <h1 class="text-xl font-bold text-white">김이박 클리닉</h1>
+            <p class="text-xs text-blue-300 mt-0.5 font-medium tracking-widest uppercase">직원 전용 시스템</p>
         </div>
 
-        <form id="loginForm" class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-                <input type="email" id="loginEmail" required placeholder="example@email.com"
-                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
-                <input type="password" id="loginPw" required
-                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-            </div>
-
-            <div id="apiError" class="hidden p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600"></div>
-
-            <button type="submit" id="submitBtn"
-                class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                로그인
-            </button>
-        </form>
-
-        <div class="mt-6 text-center text-sm text-gray-600">
-            계정이 없으신가요?
-            <a href="signup.html" class="text-blue-600 font-bold hover:underline">회원가입</a>
+        <!-- 보안 경고 배너 -->
+        <div class="security-badge rounded-xl px-3 py-2 mb-3 flex items-start gap-2">
+            <i class="fas fa-exclamation-triangle text-amber-500 mt-0.5 flex-shrink-0 text-xs"></i>
+            <p class="text-xs text-amber-800 leading-relaxed">
+                <strong>보안 공지:</strong> 본 시스템은 인가된 직원만 접근 가능합니다.
+                무단 접근 시도는 보안 정책에 따라 기록 및 처리됩니다.
+            </p>
         </div>
+
+        <!-- 카드 -->
+        <div class="login-card bg-white rounded-2xl p-6">
+            <h2 class="text-base font-bold text-gray-800 mb-0.5">직원 로그인</h2>
+            <p class="text-xs text-gray-500 mb-4">사번 이메일과 비밀번호를 입력하세요.</p>
+
+            <form id="loginForm" class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">사번 이메일</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                            <i class="fas fa-id-card text-sm"></i>
+                        </span>
+                        <input type="email" id="loginEmail" required placeholder="staff@clinic.com"
+                            class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-700 outline-none bg-gray-50 focus:bg-white transition text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                            <i class="fas fa-lock text-sm"></i>
+                        </span>
+                        <input type="password" id="loginPw" required
+                            class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-700 outline-none bg-gray-50 focus:bg-white transition text-sm">
+                    </div>
+                </div>
+
+                <div id="apiError" class="hidden p-2.5 bg-red-50 border border-red-300 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                    <i class="fas fa-exclamation-circle flex-shrink-0"></i>
+                    <span id="apiErrorMsg"></span>
+                </div>
+
+                <button type="submit" id="submitBtn"
+                    class="login-btn w-full text-white py-2.5 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                    <i class="fas fa-sign-in-alt mr-2"></i>로그인
+                </button>
+            </form>
+
+            <!-- 직원용 안내 -->
+            <div class="mt-4 pt-3 border-t border-gray-100">
+                <p class="text-xs text-gray-400 text-center leading-relaxed">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    계정 발급 및 비밀번호 초기화는 IT 지원팀에 문의하세요.
+                    로그인 5회 실패 시 계정이 잠깁니다.
+                </p>
+            </div>
+        </div>
+
+        <!-- 하단 -->
+        <p class="text-center text-xs text-gray-500 mt-3">
+            모든 접근 기록은 보안 감사 로그에 기록됩니다 (ISMS-P 2.9.1)
+        </p>
     </div>
 
     <script src="js/config.js"></script>
     <script>
-
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const email = document.getElementById('loginEmail').value.trim();
-            const pw    = document.getElementById('loginPw').value;
-            const apiErrorEl = document.getElementById('apiError');
-            const submitBtn  = document.getElementById('submitBtn');
+            const email     = document.getElementById('loginEmail').value.trim();
+            const pw        = document.getElementById('loginPw').value;
+            const errorBox  = document.getElementById('apiError');
+            const errorMsg  = document.getElementById('apiErrorMsg');
+            const submitBtn = document.getElementById('submitBtn');
 
-            apiErrorEl.classList.add('hidden');
+            errorBox.classList.add('hidden');
             submitBtn.disabled = true;
-            submitBtn.textContent = '로그인 중...';
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>확인 중...';
 
             try {
                 const res = await fetch(`${BASE_URL}/auth/login`, {
@@ -66,8 +129,6 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    // 토큰은 서버가 httpOnly 쿠키로 설정 — 클라이언트에서 저장 불필요
-                    // /auth/me로 비밀번호 만료 여부 확인 (쿠키 자동 전송)
                     const meRes = await fetch(`${BASE_URL}/auth/me`, {
                         credentials: 'include',
                         headers: { 'X-API-Key': API_KEY },
@@ -78,19 +139,17 @@
                         window.location.href = 'change-password.html';
                         return;
                     }
-
                     window.location.href = 'index.html';
                 } else {
-                    const message = data.detail || '로그인 중 오류가 발생했습니다.';
-                    apiErrorEl.textContent = message;
-                    apiErrorEl.classList.remove('hidden');
+                    errorMsg.textContent = data.detail || '로그인 중 오류가 발생했습니다.';
+                    errorBox.classList.remove('hidden');
                 }
-            } catch (err) {
-                apiErrorEl.textContent = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.';
-                apiErrorEl.classList.remove('hidden');
+            } catch {
+                errorMsg.textContent = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.';
+                errorBox.classList.remove('hidden');
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.textContent = '로그인';
+                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>로그인';
             }
         });
     </script>

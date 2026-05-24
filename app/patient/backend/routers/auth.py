@@ -1,4 +1,5 @@
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -11,18 +12,17 @@ from core.database import get_db
 from core.security import (
     COOKIE_SECURE,
     create_access_token, generate_refresh_token,
-    get_current_user, hash_password, sha256_hex,
+    get_current_user, get_password_policy,
+    hash_password, sha256_hex,
     verify_api_key, verify_password,
 )
-from models.db import Session as SessionModel, SyncPatient, User
+from core.ses import send_lockout_alert
+from models.db import AuditLog, LoginHistory, Role, Session as SessionModel, SyncPatient, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 ACCESS_TOKEN_EXPIRE_SECONDS = 1800
 REFRESH_TOKEN_EXPIRE_HOURS  = 8
-MAX_FAILED_LOGINS           = 5
-LOCKOUT_MINUTES             = 30
-PASSWORD_EXPIRE_DAYS        = 90
 
 
 # ── Pydantic 스키마 ─────────────────────────────────────────
@@ -62,8 +62,24 @@ def validate_password(password: str) -> str | None:
     return None
 
 
+def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result: str, request: Request, patient_hash: str = None):
+    """감사 로그 기록 (ISMS-P 2.9.1)"""
+    log = AuditLog(
+        user_id=user_id,
+        patient_id_hash=patient_hash,
+        action_type=action,
+        source_ip=request.client.host if request.client else None,
+        result_code=result
+    )
+    db.add(log)
+    db.commit()
+
+
 def _build_token_payload(user: User) -> dict:
-    payload = {"sub": str(user.user_id), "role": user.role}
+    payload = {
+        "sub":  str(user.user_id),
+        "role": user.role_ref.role_code,   # role_code from roles table (ISMS-P 2.5.4)
+    }
     if user.patient_id_hash:
         payload["pid"] = user.patient_id_hash
     if user.doctor_id:
@@ -76,6 +92,7 @@ def _build_token_payload(user: User) -> dict:
 @router.post("/register", status_code=201)
 def register(
     body: RegisterRequest,
+    request: Request,
     db:   DbSession = Depends(get_db),
     _:    str       = Depends(verify_api_key),
 ):
@@ -86,39 +103,53 @@ def register(
     if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
 
+    # 이름 + 생년월일 + 전화번호로 기존 내원 환자 매칭
+    from datetime import date as date_type
     try:
-        birth_year = int(body.birth_date.split("-")[0])
-    except (ValueError, IndexError):
+        birth = date_type.fromisoformat(body.birth_date)
+    except ValueError:
         raise HTTPException(status_code=422, detail="birth_date 형식이 올바르지 않습니다. (YYYY-MM-DD)")
 
-    # birth_year + gender_code로 기존 환자 단독 매칭 시도
-    matched = db.query(SyncPatient).filter(
-        SyncPatient.birth_year  == birth_year,
-        SyncPatient.gender_code == body.gender_code,
-    ).all()
+    patient = db.query(SyncPatient).filter(
+        SyncPatient.patient_name == body.name,
+        SyncPatient.birth_date   == birth,
+        SyncPatient.phone        == body.phone,
+    ).first()
 
-    patient_id_hash = matched[0].patient_id_hash if len(matched) == 1 else None
-    is_pending      = patient_id_hash is None
+    if not patient:
+        raise HTTPException(
+            status_code=404,
+            detail="병원 진료 기록과 일치하는 환자를 찾을 수 없습니다. "
+                   "성명·생년월일·연락처를 확인하거나 원무과에 문의해주세요.",
+        )
+
+    if db.query(User).filter(User.patient_id_hash == patient.patient_id_hash).first():
+        raise HTTPException(status_code=400, detail="이미 해당 환자 정보로 등록된 계정이 있습니다.")
+
+    # 'patient' 역할 ID 조회
+    role = db.query(Role).filter(Role.role_code == "patient").first()
+    if not role:
+        raise HTTPException(status_code=500, detail="시스템 설정 오류: 기본 역할을 찾을 수 없습니다.")
 
     user = User(
         email           = body.email,
         password_hash   = hash_password(body.password),
-        role            = "patient",
-        patient_id_hash = patient_id_hash,
+        role_id         = role.role_id,
+        patient_id_hash = patient.patient_id_hash,
     )
     db.add(user)
     try:
         db.commit()
         db.refresh(user)
+        _record_audit(db, user.user_id, "REGISTER", "201", request, patient.patient_id_hash)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="이미 계정이 존재합니다.")
+        raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
 
     return {
-        "user_id":    str(user.user_id),
-        "role":       user.role,
-        "is_pending": is_pending,
-        "message":    "계정이 생성되었습니다.",
+        "user_id":   str(user.user_id),
+        "role_code": role.role_code,
+        "message":   "계정이 생성되었습니다.",
     }
 
 
@@ -129,13 +160,23 @@ def login(
     db:      DbSession = Depends(get_db),
     _:       str       = Depends(verify_api_key),
 ):
+    # 로그인 시도 기록 준비 (ISMS-P 2.9.1)
+    history = LoginHistory(email=body.email, ip_address=request.client.host if request.client else None, user_agent=request.headers.get("user-agent"))
+
     user = db.query(User).filter(User.email == body.email).first()
     if not user:
+        history.result = "fail"
+        db.add(history)
+        db.commit()
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
     now = datetime.now(timezone.utc)
 
     if user.locked_until and user.locked_until > now:
+        history.user_id = user.user_id
+        history.result = "locked"
+        db.add(history)
+        db.commit()
         remaining = int((user.locked_until - now).total_seconds() / 60)
         raise HTTPException(
             status_code=401,
@@ -143,15 +184,32 @@ def login(
         )
 
     if not verify_password(body.password, user.password_hash):
+        policy = get_password_policy(db)
+        history.user_id = user.user_id
+        history.result = "fail"
         user.failed_login_cnt += 1
-        if user.failed_login_cnt >= MAX_FAILED_LOGINS:
-            user.locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
+        if user.failed_login_cnt >= policy.max_failed_logins:
+            user.locked_until = now + timedelta(minutes=policy.lockout_minutes)
+            history.result = "locked"
+            _record_audit(db, user.user_id, "ACCOUNT_LOCKED", "401", request)
+            # 관리자 SES 알림 (실패해도 로그인 흐름에 영향 없음)
+            send_lockout_alert(
+                target_email = user.email,
+                ip_address   = request.client.host if request.client else None,
+                locked_until = user.locked_until.isoformat(),
+            )
+        db.add(history)
         db.commit()
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
+    # 성공 기록
     user.failed_login_cnt = 0
     user.locked_until     = None
     user.last_login_at    = now
+    history.user_id = user.user_id
+    history.result = "success"
+    db.add(history)
+    _record_audit(db, user.user_id, "LOGIN", "200", request)
 
     access_token  = create_access_token(_build_token_payload(user), ACCESS_TOKEN_EXPIRE_SECONDS)
     refresh_token = generate_refresh_token()
@@ -165,9 +223,14 @@ def login(
     ))
     db.commit()
 
+    access_token_expires_at = (
+        now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)
+    ).isoformat()
+
     response = JSONResponse({
-        "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_SECONDS,
+        "token_type":              "bearer",
+        "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
+        "access_token_expires_at": access_token_expires_at,
     })
     _set_auth_cookies(response, access_token, refresh_token)
     return response
@@ -233,8 +296,17 @@ def refresh(
         expires_at         = now + timedelta(hours=REFRESH_TOKEN_EXPIRE_HOURS),
     ))
     db.commit()
+    _record_audit(db, user.user_id, "TOKEN_REFRESH", "200", request)
 
-    response = JSONResponse({"token_type": "bearer", "expires_in": ACCESS_TOKEN_EXPIRE_SECONDS})
+    new_expires_at = (
+        now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)
+    ).isoformat()
+
+    response = JSONResponse({
+        "token_type":              "bearer",
+        "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
+        "access_token_expires_at": new_expires_at,
+    })
     _set_auth_cookies(response, new_access_token, new_refresh_token)
     return response
 
@@ -253,7 +325,9 @@ def logout(
         ).first()
         if session:
             session.is_revoked = True
+            _record_audit(db, session.user_id, "LOGOUT", "204", request)
             db.commit()
+
     response.delete_cookie(key="access_token",  path="/")
     response.delete_cookie(key="refresh_token", path="/auth/refresh")
 
@@ -267,17 +341,18 @@ def me(
     if not user:
         raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
 
-    now             = datetime.now(timezone.utc)
+    policy = get_password_policy(db)
+    now    = datetime.now(timezone.utc)
     password_expired = (
-        (now - user.password_changed_at).days >= PASSWORD_EXPIRE_DAYS
+        (now - user.password_changed_at).days >= policy.expire_days
         if user.password_changed_at else False
     )
 
     result = {
-        "user_id":             str(user.user_id),
-        "role":                user.role,
-        "password_expired":    password_expired,
-        "password_expire_days": PASSWORD_EXPIRE_DAYS,
+        "user_id":              str(user.user_id),
+        "role":                 user.role_ref.role_code,
+        "password_expired":     password_expired,
+        "password_expire_days": policy.expire_days,
     }
     if user.patient_id_hash:
         result["patient_id_hash"] = user.patient_id_hash
@@ -287,6 +362,7 @@ def me(
 @router.post("/change-password", status_code=204)
 def change_password(
     body:         ChangePasswordRequest,
+    request:      Request,
     response:     Response,
     current_user: dict      = Depends(get_current_user),
     db:           DbSession = Depends(get_db),
@@ -309,7 +385,27 @@ def change_password(
         SessionModel.is_revoked == False,
     ).update({"is_revoked": True})
 
+    _record_audit(db, user.user_id, "PASSWORD_CHANGE", "204", request)
     db.commit()
 
     response.delete_cookie(key="access_token",  path="/")
     response.delete_cookie(key="refresh_token", path="/auth/refresh")
+
+
+@router.get("/session-status")
+def session_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """액세스 토큰 잔여 시간 반환. 프론트엔드 만료 경고 타이머용."""
+    exp = current_user.get("exp")
+    if not exp:
+        return {"remaining_seconds": 0, "will_expire_soon": True, "expires_at": None}
+
+    now_ts    = datetime.now(timezone.utc).timestamp()
+    remaining = max(0, int(exp - now_ts))
+
+    return {
+        "remaining_seconds": remaining,
+        "will_expire_soon":  remaining < 300,
+        "expires_at":        datetime.fromtimestamp(exp, tz=timezone.utc).isoformat(),
+    }

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>내 진료 일정 - MZ Clinic 의사</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .page-wrap { max-width:1100px; margin:80px auto 40px; padding:0 16px; }
+        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table th { background:#eceff1; padding:10px 12px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
+        .data-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+        .data-table tr:hover td { background:#f5f5f5; }
+        .status-badge { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+        .status-pending   { background:#fff8e1; color:#f57f17; }
+        .status-confirmed { background:#e8f5e9; color:#2e7d32; }
+        .status-cancelled { background:#ffebee; color:#c62828; }
+        .status-completed { background:#e3f2fd; color:#1565c0; }
+        .status-no_show   { background:#f3e5f5; color:#6a1b9a; }
+        .btn-sm { padding:5px 12px; background:#e3f2fd; color:#1565c0; border:none; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; }
+        .btn-sm:hover { background:#bbdefb; }
+        .empty-msg { text-align:center; padding:40px; color:#90a4ae; }
+        .section-title { font-size:13px; color:#78909c; margin-bottom:16px; }
+        .filter-bar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+        .filter-bar label { font-size:14px; color:#546e7a; font-weight:600; }
+        .filter-bar input[type="date"] { padding:7px 10px; border:1px solid #cfd8dc; border-radius:6px; font-size:14px; }
+        .filter-bar button { padding:7px 16px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; cursor:pointer; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <h2 style="margin-bottom:6px;">내 진료 일정</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:20px;">담당 예약 일정 전체 목록입니다.</p>
+
+    <div class="filter-bar">
+        <label>날짜 필터</label>
+        <input type="date" id="dateFilter">
+        <button onclick="applyFilter()">적용</button>
+        <button onclick="clearFilter()" style="background:#eceff1;color:#546e7a;">초기화</button>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>예약일</th>
+                <th>시간</th>
+                <th>유형</th>
+                <th>진료과</th>
+                <th>환자(Hash)</th>
+                <th>상태</th>
+                <th>상세</th>
+            </tr>
+        </thead>
+        <tbody id="scheduleBody"></tbody>
+    </table>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    const STATUS_LBL = {
+        pending: '대기', confirmed: '확정',
+        cancelled: '취소', completed: '완료', no_show: '미내원',
+    };
+    const TYPE_LBL = {
+        outpatient_new: '초진', outpatient_return: '재진',
+        inpatient: '입원', pre_surgery: '수술 전',
+    };
+
+    let allSchedule = [];
+    let deptMap = {};
+
+    async function init() {
+        const me = await requireLogin();
+        if (!me) return;
+
+        if (me.role !== 'doctor') {
+            alert('의사 계정만 접근할 수 있습니다.');
+            location.href = 'index.html';
+            return;
+        }
+
+        const dr = await apiCall('/portal/doctor/staff/departments');
+        if (dr && dr.ok) {
+            const depts = await dr.json();
+            depts.forEach(d => { deptMap[d.department_code] = d.department_name; });
+        }
+
+        const res = await apiCall('/portal/doctor/schedule');
+        if (!res || !res.ok) {
+            document.getElementById('scheduleBody').innerHTML =
+                `<tr><td colspan="7" class="empty-msg">일정을 불러오지 못했습니다.</td></tr>`;
+            return;
+        }
+        allSchedule = await res.json();
+        renderTable(allSchedule);
+    }
+
+    function applyFilter() {
+        const date = document.getElementById('dateFilter').value;
+        const filtered = date ? allSchedule.filter(a => a.appointment_date === date) : allSchedule;
+        renderTable(filtered);
+    }
+
+    function clearFilter() {
+        document.getElementById('dateFilter').value = '';
+        renderTable(allSchedule);
+    }
+
+    function renderTable(list) {
+        const tbody = document.getElementById('scheduleBody');
+        if (!list.length) {
+            tbody.innerHTML = `<tr><td colspan="7" class="empty-msg">해당 일정이 없습니다.</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = list.map(a => {
+            const dept   = deptMap[a.department_code] || a.department_code || '-';
+            const type   = TYPE_LBL[a.type_code] || a.type_name || '-';
+            const status = STATUS_LBL[a.status_code] || a.status_name || '-';
+            const hash   = a.patient_id_hash ? a.patient_id_hash.slice(0, 12) + '…' : '-';
+            return `
+            <tr>
+                <td>${a.appointment_date}</td>
+                <td>${a.appointment_time || '-'}</td>
+                <td>${type}</td>
+                <td>${dept}</td>
+                <td style="font-family:monospace;font-size:12px;">${hash}</td>
+                <td><span class="status-badge status-${a.status_code}">${status}</span></td>
+                <td>
+                    ${a.patient_id_hash
+                        ? `<button class="btn-sm" onclick="location.href='patient-detail.html?hash=${a.patient_id_hash}'">상세조회</button>`
+                        : '-'}
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    init();
+</script>
+</body>
+</html>

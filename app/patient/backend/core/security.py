@@ -2,12 +2,20 @@ import os
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import Cookie, HTTPException, Security, Depends
 from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+from models.db import User, Role, Permission, RolePermission
+
+# DB 정책 로드 실패 시 사용되는 안전 기본값
+_DEFAULT_MAX_FAILED     = 5
+_DEFAULT_LOCKOUT_MIN    = 30
+_DEFAULT_PW_EXPIRE_DAYS = 90
 
 load_dotenv()
 
@@ -62,3 +70,97 @@ def get_current_user(
     if not access_token:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     return decode_access_token(access_token)
+
+
+def has_permission(user_id: str, permission_code: str, db: Session) -> bool:
+    """사용자의 역할이 특정 권한 코드를 가지고 있는지 확인 (ISMS-P 2.5.4)"""
+    return db.query(Permission).join(RolePermission).join(Role).join(User).\
+        filter(User.user_id == user_id, Permission.permission_code == permission_code).count() > 0
+
+
+def require_permission(permission_code: str):
+    """FastAPI Depends 팩토리. 권한 없으면 403 반환."""
+    from core.database import get_db
+
+    def _dependency(
+        current_user: dict = Depends(get_current_user),
+        db:           Session = Depends(get_db),
+    ) -> dict:
+        if not has_permission(current_user["sub"], permission_code, db):
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+        return current_user
+
+    return _dependency
+
+
+# ── 비밀번호 정책 ────────────────────────────────────────────────
+
+def get_password_policy(db: Session):
+    """password_policy 테이블에서 정책 로드. 행이 없으면 기본값 객체 반환."""
+    from models.db import PasswordPolicy
+    policy = db.query(PasswordPolicy).first()
+    if policy:
+        return policy
+    # 테이블에 행이 없을 때 — DB에 저장하지 않는 임시 객체
+    p = object.__new__(PasswordPolicy)
+    p.max_failed_logins = _DEFAULT_MAX_FAILED
+    p.lockout_minutes   = _DEFAULT_LOCKOUT_MIN
+    p.expire_days       = _DEFAULT_PW_EXPIRE_DAYS
+    p.min_length        = 8
+    p.require_uppercase = True
+    p.require_lowercase = True
+    p.require_digit     = True
+    p.require_special   = True
+    return p
+
+
+# ── 감사 로그 (ISMS-P 2.9.1) ────────────────────────────────────
+
+def record_audit(
+    db:              Session,
+    action_type:     str,
+    result_code:     str,
+    user_id=None,
+    patient_id_hash: Optional[str] = None,
+    target_table:    Optional[str] = None,
+    target_id=None,
+    source_ip:       Optional[str] = None,
+) -> None:
+    """audit_logs 테이블에 단일 행 삽입. 예외가 발생해도 메인 트랜잭션을 끊지 않는다."""
+    from models.db import AuditLog
+    try:
+        db.add(AuditLog(
+            user_id         = user_id,
+            patient_id_hash = patient_id_hash,
+            action_type     = action_type,
+            target_table    = target_table,
+            target_id       = target_id,
+            source_ip       = source_ip,
+            result_code     = result_code,
+        ))
+    except Exception:
+        pass  # 감사 로그 실패가 비즈니스 흐름을 막으면 안 됨
+
+
+# ── 로그인 이력 (ISMS-P 2.5.1) ──────────────────────────────────
+
+def record_login_history(
+    db:         Session,
+    result:     str,           # 'success' | 'fail' | 'locked'
+    email:      Optional[str] = None,
+    user_id=None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    """login_history 테이블에 단일 행 삽입."""
+    from models.db import LoginHistory
+    try:
+        db.add(LoginHistory(
+            user_id    = user_id,
+            email      = email,
+            result     = result,
+            ip_address = ip_address,
+            user_agent = user_agent,
+        ))
+    except Exception:
+        pass

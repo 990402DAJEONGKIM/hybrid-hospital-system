@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>예약 유형 선택 - MZ Clinic</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav id="navbar"></nav>
+    <div class="container appointment-selector">
+        <h2>어떤 예약을 도와드릴까요?</h2>
+        <div class="card-grid">
+            <div class="card" onclick="location.href='/appointment-new.html'">
+                <h3>초진 예약</h3>
+                <p>MZ Clinic이 처음이신 분들을 위한 일반 진료 예약</p>
+            </div>
+            <div class="card" onclick="location.href='/appointment-return.html'">
+                <h3>재진 예약</h3>
+                <p>진료 받으셨던 내역을 바탕으로 담당의 예약</p>
+            </div>
+            <div class="card" onclick="location.href='/appointment-inpatient.html'">
+                <h3>입원 예약</h3>
+                <p>병동 입원 및 병상 배정 신청</p>
+            </div>
+            <div class="card" onclick="location.href='/appointment-surgery.html'">
+                <h3>수술 전 예약</h3>
+                <p>수술 전 필수 검사 및 일정 확인</p>
+            </div>
+        </div>
+    </div>
+    <script src="/js/config.js"></script>
+    <script src="/js/script.js"></script>
+    <script>
+        window.onload = () => {
+            if (typeof renderNavbar === 'function') renderNavbar();
+        };
+    </script>
+</body>
+</html>

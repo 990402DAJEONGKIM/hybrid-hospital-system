@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>환자 상세 정보 - MZ Clinic</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .page-wrap { max-width:1000px; margin:80px auto 40px; padding:0 16px; }
+        .back-btn { display:inline-flex; align-items:center; gap:6px; color:#546e7a; font-size:14px; text-decoration:none; margin-bottom:20px; cursor:pointer; border:none; background:none; padding:0; }
+        .back-btn:hover { color:var(--primary); }
+        .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+        @media(max-width:600px) { .info-grid { grid-template-columns:1fr; } }
+        .card { border:1px solid #e0e0e0; border-radius:8px; padding:16px 20px; background:#fff; }
+        .card h3 { font-size:14px; color:#546e7a; font-weight:700; margin-bottom:12px; }
+        .info-row { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; border-bottom:1px solid #f5f5f5; }
+        .info-row:last-child { border-bottom:none; }
+        .info-label { color:#78909c; }
+        .info-value { color:#263238; font-weight:500; }
+        .data-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .data-table th { background:#eceff1; padding:8px 10px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
+        .data-table td { padding:8px 10px; border-bottom:1px solid #f0f0f0; }
+        .severity-high { color:#c62828; font-weight:700; }
+        .severity-medium { color:#e65100; font-weight:600; }
+        .severity-low { color:#2e7d32; }
+        .tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; margin:2px; }
+        .tag-primary { background:#e3f2fd; color:#1565c0; }
+        .empty-note { color:#90a4ae; font-size:13px; }
+        .alert-box { background:#fff3e0; border-radius:6px; padding:10px 14px; font-size:13px; color:#e65100; margin-bottom:16px; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <button class="back-btn" onclick="history.back()">← 목록으로</button>
+    <h2 style="margin-bottom:6px;">환자 의료 정보 (비식별)</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:20px;">ISMS-P 2.9.1 — 조회 시 감사 로그가 기록됩니다.</p>
+
+    <div id="alertBox" class="alert-box" style="display:none;"></div>
+    <div id="content" style="display:none;">
+
+        <div class="info-grid">
+            <div class="card">
+                <h3>기본 정보</h3>
+                <div class="info-row"><span class="info-label">환자 Hash</span><span class="info-value" id="p_hash" style="font-family:monospace;font-size:11px;"></span></div>
+                <div class="info-row"><span class="info-label">출생연도</span><span class="info-value" id="p_birth"></span></div>
+                <div class="info-row"><span class="info-label">성별</span><span class="info-value" id="p_gender"></span></div>
+            </div>
+            <div class="card">
+                <h3>알레르기 정보</h3>
+                <div id="p_allergies"><span class="empty-note">정보 없음</span></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+            <h3>수술 이력</h3>
+            <div id="p_surgeries"><span class="empty-note">수술 이력 없음</span></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+            <h3>과거 진단 이력</h3>
+            <table class="data-table">
+                <thead>
+                    <tr><th>진단일</th><th>진단 코드</th><th>주진단</th></tr>
+                </thead>
+                <tbody id="p_diagnoses"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>내원 이력</h3>
+            <table class="data-table">
+                <thead>
+                    <tr><th>내원일</th><th>유형</th><th>진료과</th><th>상태</th></tr>
+                </thead>
+                <tbody id="p_encounters"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    const params      = new URLSearchParams(window.location.search);
+    const patientHash = params.get('hash');
+
+    async function init() {
+        const me = await requireLogin();
+        if (!me) return;
+
+        if (!patientHash) {
+            showAlert('환자 정보가 지정되지 않았습니다.');
+            return;
+        }
+
+        const res = await apiCall(`/portal/doctor/patients/${patientHash}`);
+        if (!res || !res.ok) {
+            showAlert('환자 정보를 불러올 수 없습니다. 접근 권한을 확인하세요.');
+            return;
+        }
+        const data = await res.json();
+        render(data);
+    }
+
+    function showAlert(msg) {
+        const box = document.getElementById('alertBox');
+        box.textContent = msg;
+        box.style.display = 'block';
+    }
+
+    function render(data) {
+        const p = data.patient;
+        document.getElementById('p_hash').textContent   = p.patient_id_hash;
+        document.getElementById('p_birth').textContent  = p.birth_year ? `${p.birth_year}년생` : '-';
+        document.getElementById('p_gender').textContent = p.gender_code === 'M' ? '남성' : p.gender_code === 'F' ? '여성' : p.gender_code || '-';
+
+        // 알레르기
+        const allergiesEl = document.getElementById('p_allergies');
+        if (data.allergies && data.allergies.length) {
+            const sevClass = s => s === 'HIGH' ? 'severity-high' : s === 'MEDIUM' ? 'severity-medium' : 'severity-low';
+            allergiesEl.innerHTML = data.allergies.map(a =>
+                `<div class="info-row">
+                    <span class="info-label">${a.allergy_name || a.allergy_code}</span>
+                    <span class="${sevClass(a.severity)}">${a.severity || '-'}</span>
+                </div>`
+            ).join('');
+        }
+
+        // 수술 이력
+        const surgeriesEl = document.getElementById('p_surgeries');
+        if (data.surgeries && data.surgeries.length) {
+            surgeriesEl.innerHTML = data.surgeries.map(s =>
+                `<div class="info-row">
+                    <span class="info-label">${s.surgery_name || s.surgery_code}</span>
+                    <span class="info-value">${s.surgery_date || '-'}</span>
+                </div>`
+            ).join('');
+        }
+
+        // 진단 이력
+        const diagTbody = document.getElementById('p_diagnoses');
+        if (data.diagnoses && data.diagnoses.length) {
+            diagTbody.innerHTML = data.diagnoses.map(d =>
+                `<tr>
+                    <td>${d.diagnosed_at ? d.diagnosed_at.split('T')[0] : '-'}</td>
+                    <td>${d.diagnosis_code || '-'} ${d.is_primary ? '<span class="tag tag-primary">주진단</span>' : ''}</td>
+                    <td>${d.is_primary ? 'Y' : 'N'}</td>
+                </tr>`
+            ).join('');
+        } else {
+            diagTbody.innerHTML = `<tr><td colspan="3" class="empty-note" style="padding:12px;">진단 이력 없음</td></tr>`;
+        }
+
+        // 내원 이력
+        const encounterTbody = document.getElementById('p_encounters');
+        if (data.encounters && data.encounters.length) {
+            encounterTbody.innerHTML = data.encounters.map(e =>
+                `<tr>
+                    <td>${e.visit_date || '-'}</td>
+                    <td>${e.encounter_type || '-'}</td>
+                    <td>${e.department_code || '-'}</td>
+                    <td>${e.status_code || '-'}</td>
+                </tr>`
+            ).join('');
+        } else {
+            encounterTbody.innerHTML = `<tr><td colspan="4" class="empty-note" style="padding:12px;">내원 이력 없음</td></tr>`;
+        }
+
+        document.getElementById('content').style.display = 'block';
+    }
+
+    init();
+</script>
+</body>
+</html>

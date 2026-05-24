@@ -111,11 +111,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentDate   = new Date();
     let appointmentsMap = {};
 
-    const STATUS_LABEL = { OPEN: '대기', IN_PROGRESS: '진행 중', CLOSED: '완료' };
-    const DEPT_LABEL = {
-        NEURO: '신경과', CARDIO: '심장내과', ORTHO: '정형외과',
-        INTERNAL: '내과', ANESTHESIA: '마취통증의학과',
+    const STATUS_LABEL = {
+        pending: '대기', confirmed: '확정',
+        cancelled: '취소', completed: '완료', no_show: '미내원',
     };
+    let DEPT_LABEL = {};
+    apiCall('/portal/doctor/staff/departments').then(r => r && r.ok && r.json()).then(list => {
+        if (list) list.forEach(d => { DEPT_LABEL[d.department_code] = d.department_name; });
+    }).catch(() => {});
 
     async function loadAppointments() {
         appointmentsMap = {};
@@ -124,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!res || !res.ok) return;
             const list = await res.json();
             list.forEach(appt => {
-                const date = appt.visit_date;
+                const date = appt.appointment_date;
                 if (!appointmentsMap[date]) appointmentsMap[date] = [];
                 appointmentsMap[date].push(appt);
             });

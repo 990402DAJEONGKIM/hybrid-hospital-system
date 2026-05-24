@@ -11,12 +11,42 @@ async function _refreshTokens() {
     } catch { return false; }
 }
 
+let _sessionWarnShown = false;
+function _showSessionWarning(remaining) {
+    if (_sessionWarnShown) return;
+    _sessionWarnShown = true;
+    const mins = Math.ceil(remaining / 60);
+    // 배너가 없으면 동적 생성
+    let banner = document.getElementById('_sessionWarnBanner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = '_sessionWarnBanner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ff9800;color:#fff;text-align:center;padding:10px;font-weight:bold;';
+        banner.innerHTML = `세션이 약 ${mins}분 후 만료됩니다.
+            <button onclick="extendSession()" style="margin-left:12px;padding:4px 12px;background:#fff;color:#ff9800;border:none;border-radius:4px;font-weight:bold;cursor:pointer;">세션 연장</button>`;
+        document.body.prepend(banner);
+    }
+}
+async function extendSession() {
+    const ok = await _refreshTokens();
+    if (ok) {
+        _sessionWarnShown = false;
+        const b = document.getElementById('_sessionWarnBanner');
+        if (b) b.remove();
+    } else {
+        logout();
+    }
+}
+
 async function apiCall(path, options = {}) {
     const res = await fetch(`${BASE_URL}${path}`, {
         ..._fetchDefaults,
         ...options,
         headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
     });
+    if (res && res.headers.get('X-Session-Expiring-Soon') === 'true') {
+        _showSessionWarning(parseInt(res.headers.get('X-Session-Remaining-Seconds') || '300'));
+    }
     if (res.status === 401) {
         const ok = await _refreshTokens();
         if (!ok) { logout(); return null; }
@@ -135,11 +165,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentDate   = new Date();
     let appointmentsMap = {};
 
-    const STATUS_LABEL = { OPEN: '대기', IN_PROGRESS: '진행 중', CLOSED: '완료' };
-    const DEPT_LABEL = {
-        NEURO: '신경과', CARDIO: '심장내과', ORTHO: '정형외과',
-        INTERNAL: '내과', ANESTHESIA: '마취통증의학과',
+    const STATUS_LABEL = {
+        pending: '대기', confirmed: '확정',
+        cancelled: '취소', completed: '완료', no_show: '미내원',
     };
+    let DEPT_LABEL = {};   // API에서 동적 로드
+    // 진료과 목록 미리 로드
+    apiCall('/portal/departments').then(r => r && r.ok && r.json()).then(list => {
+        if (list) list.forEach(d => { DEPT_LABEL[d.department_code] = d.department_name; });
+        // 신규 예약 모달 옵션 채우기
+        if (newAppDeptSelect && newAppDeptSelect.options.length <= 1) {
+            if (list) list.forEach(d => {
+                const o = document.createElement('option');
+                o.value = d.department_code;
+                o.textContent = d.department_name;
+                newAppDeptSelect.appendChild(o);
+            });
+        }
+    }).catch(() => {});
 
     async function loadAppointments() {
         appointmentsMap = {};
@@ -148,7 +191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!res || !res.ok) return;
             const list = await res.json();
             list.forEach(appt => {
-                const date = appt.visit_date;
+                const date = appt.appointment_date;
                 if (!appointmentsMap[date]) appointmentsMap[date] = [];
                 appointmentsMap[date].push(appt);
             });
@@ -201,7 +244,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             appts.forEach(appt => {
                 const item = document.createElement('div');
                 item.className = 'p-3 bg-blue-50 border-l-4 border-blue-500 text-blue-800 text-sm rounded';
-                item.innerText = `${DEPT_LABEL[appt.department_code] || appt.department_code} · ${STATUS_LABEL[appt.status_code] || appt.status_code}`;
+                item.innerText = `${appt.appointment_time || ''} ${DEPT_LABEL[appt.department_code] || appt.department_code || '-'} · ${STATUS_LABEL[appt.status_code] || appt.status_code}`;
                 modalAppointmentList.appendChild(item);
             });
         } else {
@@ -233,27 +276,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             myAppointmentList.innerHTML = '<p class="text-gray-500 text-center py-10">예약 내역이 없습니다.</p>';
             return;
         }
-        allAppts.sort((a, b) => a.visit_date.localeCompare(b.visit_date)).forEach(appt => {
+        allAppts.sort((a, b) => a.appointment_date.localeCompare(b.appointment_date)).forEach(appt => {
             const item = document.createElement('div');
             item.className = 'flex justify-between items-center p-4 bg-gray-50 border border-gray-100 rounded-lg';
-            const isOpen = appt.status_code === 'OPEN';
+            const isModifiable = appt.status_code === 'pending';
             item.innerHTML = `
                 <div>
-                    <p class="text-xs text-gray-500 font-bold">${appt.visit_date}</p>
-                    <p class="text-gray-800 font-medium">${DEPT_LABEL[appt.department_code] || appt.department_code}</p>
-                    <p class="text-xs text-gray-500">${STATUS_LABEL[appt.status_code] || appt.status_code}</p>
+                    <p class="text-xs text-gray-500 font-bold">${appt.appointment_date} ${appt.appointment_time || ''}</p>
+                    <p class="text-gray-800 font-medium">${DEPT_LABEL[appt.department_code] || appt.department_code || '-'}</p>
+                    <p class="text-xs text-gray-500">${appt.type_name || ''} · ${STATUS_LABEL[appt.status_code] || appt.status_code}</p>
                 </div>
-                ${isOpen ? `
+                ${isModifiable ? `
                 <div class="flex gap-2 ml-4 shrink-0">
-                    <button data-id="${appt.encounter_id}" class="edit-appt-btn px-3 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded text-xs font-bold hover:bg-blue-100">수정</button>
-                    <button data-id="${appt.encounter_id}" class="del-appt-btn px-3 py-1 bg-red-50 text-red-600 border border-red-200 rounded text-xs font-bold hover:bg-red-100">취소</button>
+                    <button data-id="${appt.appointment_id}" class="edit-appt-btn px-3 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded text-xs font-bold hover:bg-blue-100">수정</button>
+                    <button data-id="${appt.appointment_id}" class="del-appt-btn px-3 py-1 bg-red-50 text-red-600 border border-red-200 rounded text-xs font-bold hover:bg-red-100">취소</button>
                 </div>` : ''}
             `;
             myAppointmentList.appendChild(item);
         });
         myAppointmentList.querySelectorAll('.edit-appt-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const appt = allAppts.find(a => a.encounter_id === btn.dataset.id);
+                const appt = allAppts.find(a => a.appointment_id === btn.dataset.id);
                 if (appt) openEditModalFn(appt);
             });
         });
@@ -296,9 +339,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const deptCode  = newAppDeptSelect.value;
             if (!visitDate) { alert('날짜를 선택해주세요.'); return; }
             saveNewAppBtn.disabled = true;
+            const timeVal = document.getElementById('newAppTime')?.value || '09:00';
             const res = await apiCall('/portal/appointments', {
                 method: 'POST',
-                body: JSON.stringify({ department_code: deptCode, visit_date: visitDate }),
+                body: JSON.stringify({
+                    type_code:        'outpatient_new',
+                    department_code:  deptCode,
+                    appointment_date: visitDate,
+                    appointment_time: timeVal,
+                    notes:            newAppNoteInput?.value || null,
+                }),
             });
             saveNewAppBtn.disabled = false;
             if (!res || !res.ok) {
@@ -315,9 +365,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── 예약 수정 ───────────────────────────────────────────
     const openEditModalFn = (appt) => {
-        currentEditEncounterId = appt.encounter_id;
-        editAppDateInput.value = appt.visit_date;
-        if (editAppDeptSelect) editAppDeptSelect.value = appt.department_code || 'ORTHO';
+        currentEditEncounterId = appt.appointment_id;
+        editAppDateInput.value = appt.appointment_date;
+        if (editAppDeptSelect) editAppDeptSelect.value = appt.department_code || '';
         editAppointmentModal.classList.remove('hidden');
         editAppointmentModal.classList.add('flex');
         document.body.style.overflow = 'hidden';
@@ -334,8 +384,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         saveEditBtn.addEventListener('click', async () => {
             if (!currentEditEncounterId) return;
             const body = {};
-            if (editAppDateInput.value)  body.visit_date      = editAppDateInput.value;
-            if (editAppDeptSelect?.value) body.department_code = editAppDeptSelect.value;
+            if (editAppDateInput.value)  body.appointment_date = editAppDateInput.value;
             saveEditBtn.disabled = true;
             const res = await apiCall(`/portal/appointments/${currentEditEncounterId}`, {
                 method: 'PATCH',

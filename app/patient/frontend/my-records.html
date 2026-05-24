@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>내 진료 기록 - MZ Clinic</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav id="navbar"></nav>
+    <div class="container">
+        <h2>진료 및 진단 이력</h2>
+        <p class="text-sm text-gray-500 mb-4">* 민감 의료정보 보호를 위해 상세 진단명 대신 코드로 표기됩니다.</p>
+        <div id="recordList" class="timeline">
+            <!-- 데이터 동적 삽입 -->
+        </div>
+    </div>
+    <script src="/js/config.js"></script>
+    <script src="/js/script.js"></script>
+    <script>
+        async function loadRecords() {
+            const res = await apiCall('/portal/my-records');
+            const data = await res.json();
+            const container = document.getElementById('recordList');
+            container.innerHTML = data.map(record => `
+                <div class="timeline-item">
+                    <div class="date">${record.visit_date}</div>
+                    <div class="content">
+                        <h4>${record.dept_name} 진료</h4>
+                        <p>담당의: ${record.doctor_name}</p>
+                        <div class="badges">
+                            ${record.diagnoses.map(d => `<span class="badge">진단코드: ${d.code}</span>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        window.onload = loadRecords;
+    </script>
+</body>
+</html>

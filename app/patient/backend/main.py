@@ -5,12 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from core.middleware import AuditLogMiddleware
+from core.middleware import AuditLogMiddleware, SessionExpiryMiddleware
 from routers import auth, portal
 
 app = FastAPI(title="김이박 병원 API — 환자 포털")
 
-# 요청 처리 순서: TrustedHost → AuditLog → GZip → CORS → App...
+# 요청 처리 순서: TrustedHost → SessionExpiry → AuditLog → GZip → CORS → App...
+app.add_middleware(SessionExpiryMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:5500").split(","),
