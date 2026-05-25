@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>진료 등록 — MZ Clinic HIS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <h1><i class="fas fa-hospital-alt" style="margin-right:6px;color:#6ee7b7;"></i>MZ Clinic HIS</h1>
+            <p>온프레미스 내부망</p>
+        </div>
+        <nav id="sidebar-nav"></nav>
+        <div class="sidebar-footer">
+            <div id="user-info"></div>
+            <button id="logoutBtn"><i class="fas fa-sign-out-alt" style="margin-right:6px;"></i>로그아웃</button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <a href="/patient-search.html" style="font-size:12px;color:#059669;text-decoration:none;display:inline-flex;align-items:center;gap:4px;margin-bottom:12px;">
+            <i class="fas fa-arrow-left"></i> 환자 검색으로
+        </a>
+        <h1 class="page-title">진료 등록</h1>
+        <p class="page-subtitle">방문 환자의 진료 정보를 등록합니다.</p>
+
+        <div class="card" style="max-width:640px;">
+
+            <!-- 환자 확인 -->
+            <div class="card-title">1. 환자 확인</div>
+            <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;">
+                <div class="form-group" style="flex:1;margin-bottom:0;">
+                    <label>환자 이름</label>
+                    <input type="text" id="searchName" class="form-control" placeholder="이름 검색" oninput="clearPatient()">
+                </div>
+                <div class="form-group" style="flex:1;margin-bottom:0;">
+                    <label>연락처</label>
+                    <input type="text" id="searchPhone" class="form-control" placeholder="연락처 (일부)" oninput="clearPatient()">
+                </div>
+                <button class="btn btn-primary" onclick="lookupPatient()">
+                    <i class="fas fa-search"></i> 조회
+                </button>
+            </div>
+
+            <div id="patientResult" style="display:none;background:#f0fdf4;border-left:3px solid #059669;border-radius:4px;padding:10px 14px;font-size:13px;margin-bottom:16px;"></div>
+            <div id="patientList"  style="display:none;margin-bottom:16px;"></div>
+
+            <!-- 진료 정보 -->
+            <div class="card-title">2. 진료 정보</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>진료 유형 <span style="color:#ef4444;">*</span></label>
+                    <select id="encounterType" class="form-control">
+                        <option value="">선택하세요</option>
+                        <option value="outpatient_new">초진 외래</option>
+                        <option value="outpatient_return">재진 외래</option>
+                        <option value="inpatient">입원</option>
+                        <option value="pre_surgery">수술 전</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>진료과 <span style="color:#ef4444;">*</span></label>
+                    <select id="deptCode" class="form-control" onchange="loadDoctors()">
+                        <option value="">선택하세요</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>담당 의사 (선택)</label>
+                <select id="doctorId" class="form-control">
+                    <option value="">미배정</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>주 증상 (Chief Complaint)</label>
+                <textarea id="chiefComplaint" class="form-control" rows="3" placeholder="주요 증상을 입력하세요 (1등급 — 내부망 전용)"></textarea>
+            </div>
+            <div class="form-group">
+                <label>진료 일시</label>
+                <input type="datetime-local" id="visitDatetime" class="form-control">
+            </div>
+
+            <div id="statusMsg" style="display:none;"></div>
+            <div style="display:flex;gap:8px;margin-top:18px;">
+                <button class="btn btn-secondary" onclick="history.back()">취소</button>
+                <button class="btn btn-primary" id="submitBtn" onclick="submit()">
+                    <i class="fas fa-save" style="margin-right:6px;"></i>진료 등록
+                </button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    let _selectedPatientId = null;
+
+    async function lookupPatient() {
+        const name  = document.getElementById('searchName').value.trim();
+        const phone = document.getElementById('searchPhone').value.trim();
+        if (!name && !phone) { alert('이름 또는 연락처를 입력해주세요.'); return; }
+
+        const params = new URLSearchParams();
+        if (name)  params.set('name', name);
+        if (phone) params.set('phone', phone);
+
+        const res = await apiCall(`/portal/patients?${params}&limit=5`);
+        if (!res || !res.ok) return;
+        const data = await res.json();
+
+        const listEl = document.getElementById('patientList');
+        const resEl  = document.getElementById('patientResult');
+        resEl.style.display = 'none';
+
+        if (!data.total) {
+            listEl.style.display = 'block';
+            listEl.innerHTML = '<div style="color:#dc2626;font-size:13px;padding:8px 10px;background:#fef2f2;border-radius:6px;">검색 결과가 없습니다.</div>';
+            return;
+        }
+
+        const GENDER = { M: '남', F: '여', U: '미상' };
+        listEl.style.display = 'block';
+        listEl.innerHTML = data.items.map(p => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border:1px solid #e5e7eb;border-radius:7px;margin-bottom:6px;font-size:13px;cursor:pointer;transition:background .1s;" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background=''" onclick="selectPatient('${p.patient_id}','${p.patient_name}','${p.birth_date||''}','${p.gender_code}')">
+                <strong>${p.patient_name}</strong>
+                <span style="color:#6b7280;">${formatDate(p.birth_date)} · ${GENDER[p.gender_code]||p.gender_code} · ${p.phone_number||'-'}</span>
+                <i class="fas fa-check-circle" style="color:#059669;"></i>
+            </div>
+        `).join('');
+    }
+
+    function selectPatient(id, name, birth, gender) {
+        _selectedPatientId = id;
+        const GENDER = { M: '남', F: '여', U: '미상' };
+        document.getElementById('patientList').style.display  = 'none';
+        const resEl = document.getElementById('patientResult');
+        resEl.style.display  = 'block';
+        resEl.innerHTML = `<i class="fas fa-check-circle" style="color:#059669;margin-right:6px;"></i>선택된 환자: <strong>${name}</strong> (${formatDate(birth)} · ${GENDER[gender]||gender})`;
+    }
+
+    function clearPatient() {
+        _selectedPatientId = null;
+        document.getElementById('patientResult').style.display = 'none';
+        document.getElementById('patientList').style.display   = 'none';
+    }
+
+    async function loadDoctors() {
+        const dept = document.getElementById('deptCode').value;
+        const sel  = document.getElementById('doctorId');
+        sel.innerHTML = '<option value="">미배정</option>';
+        if (!dept) return;
+        const res = await apiCall(`/portal/doctors?department_code=${dept}`);
+        if (!res || !res.ok) return;
+        const doctors = await res.json();
+        doctors.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.doctor_id;
+            opt.textContent = d.doctor_name;
+            sel.appendChild(opt);
+        });
+    }
+
+    async function submit() {
+        if (!_selectedPatientId) { setStatus('statusMsg', '환자를 먼저 조회하고 선택해주세요.', false); return; }
+        const type = document.getElementById('encounterType').value;
+        const dept = document.getElementById('deptCode').value;
+        if (!type) { setStatus('statusMsg', '진료 유형을 선택해주세요.', false); return; }
+        if (!dept) { setStatus('statusMsg', '진료과를 선택해주세요.', false); return; }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+
+        const body = {
+            patient_id:      _selectedPatientId,
+            encounter_type:  type,
+            department_code: dept,
+            doctor_id:       document.getElementById('doctorId').value || null,
+            chief_complaint: document.getElementById('chiefComplaint').value.trim() || null,
+            visit_datetime:  document.getElementById('visitDatetime').value || null,
+        };
+
+        const res = await apiCall('/portal/encounters', { method: 'POST', body: JSON.stringify(body) });
+        if (res && res.status === 201) {
+            setStatus('statusMsg', '진료가 등록되었습니다.', true);
+            setTimeout(() => { location.href = '/patient-search.html'; }, 1200);
+        } else {
+            const err = await res?.json().catch(() => ({}));
+            setStatus('statusMsg', err.detail || '등록 중 오류가 발생했습니다.', false);
+        }
+        btn.disabled = false;
+    }
+
+    (async () => {
+        const me = await initPage();
+        if (!me) return;
+
+        // 현재 시각 기본값
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('visitDatetime').value = now.toISOString().slice(0, 16);
+
+        // 진료과 로드
+        const res = await apiCall('/portal/departments');
+        if (!res || !res.ok) return;
+        const depts = await res.json();
+        const sel   = document.getElementById('deptCode');
+        depts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.department_code;
+            opt.textContent = d.department_name;
+            sel.appendChild(opt);
+        });
+    })();
+</script>
+</body>
+</html>

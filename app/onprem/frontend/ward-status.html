@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>병동 현황 — MZ Clinic HIS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <h1><i class="fas fa-hospital-alt" style="margin-right:6px;color:#6ee7b7;"></i>MZ Clinic HIS</h1>
+            <p>온프레미스 내부망</p>
+        </div>
+        <nav id="sidebar-nav"></nav>
+        <div class="sidebar-footer">
+            <div id="user-info"></div>
+            <button id="logoutBtn"><i class="fas fa-sign-out-alt" style="margin-right:6px;"></i>로그아웃</button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h1 class="page-title" style="margin:0;">병동 현황</h1>
+            <button class="btn btn-primary btn-sm" onclick="loadWards()">
+                <i class="fas fa-sync-alt" style="margin-right:4px;"></i>새로고침
+            </button>
+        </div>
+        <p class="page-subtitle">병상 배정 · 퇴원 처리를 합니다. 변경 사항은 AWS로 자동 동기화됩니다.</p>
+
+        <div id="wardGrid" class="ward-grid"></div>
+
+        <!-- 입원 등록 모달 -->
+        <div class="modal-backdrop" id="admitModal">
+            <div class="modal" style="max-width:480px;">
+                <button class="modal-close" onclick="closeAdmit()"><i class="fas fa-times"></i></button>
+                <h3 class="modal-title" id="admitWardName">입원 등록</h3>
+
+                <div class="form-group">
+                    <label>환자 이름</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="admitPatientName" class="form-control" placeholder="환자 이름" oninput="clearAdmitPatient()">
+                        <button class="btn btn-primary" style="white-space:nowrap;" onclick="lookupAdmitPatient()">조회</button>
+                    </div>
+                </div>
+                <div id="admitPatientResult" style="display:none;margin-bottom:12px;"></div>
+                <div id="admitPatientList" style="display:none;margin-bottom:12px;"></div>
+
+                <div class="form-group">
+                    <label>메모 (선택)</label>
+                    <textarea id="admitNotes" class="form-control" rows="2" placeholder="특이사항"></textarea>
+                </div>
+                <div id="admitStatus" style="display:none;"></div>
+                <div style="display:flex;gap:8px;margin-top:16px;">
+                    <button class="btn btn-secondary" onclick="closeAdmit()">취소</button>
+                    <button class="btn btn-primary" id="admitBtn" onclick="submitAdmit()">
+                        <i class="fas fa-bed" style="margin-right:6px;"></i>입원 등록
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    let _selectedWardId   = null;
+    let _selectedPatientId = null;
+
+    const ROOM_TYPE_LABEL = { single: '1인실', double: '2인실', shared: '다인실' };
+
+    async function loadWards() {
+        const res = await apiCall('/portal/wards');
+        if (!res || !res.ok) return;
+        const wards = await res.json();
+
+        document.getElementById('wardGrid').innerHTML = wards.map(w => {
+            const pct  = w.total_beds ? Math.round((w.occupied_beds / w.total_beds) * 100) : 0;
+            const full = w.available_beds === 0;
+            return `
+                <div class="ward-card" onclick="openAdmit('${w.ward_id}','${w.ward_name}',${w.available_beds})">
+                    <div class="ward-card-name">${w.ward_name}</div>
+                    <div class="ward-card-type">${ROOM_TYPE_LABEL[w.room_type] || w.room_type}</div>
+                    <div class="bed-bar"><div class="bed-bar-fill ${full ? 'full' : ''}" style="width:${pct}%;"></div></div>
+                    <div class="bed-numbers">
+                        <span class="avail">${w.available_beds}</span> / ${w.total_beds}
+                        <span style="font-size:11px;margin-left:4px;">가용 병상</span>
+                        ${full ? '<span class="badge badge-red" style="float:right;">만실</span>' : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function openAdmit(wardId, wardName, available) {
+        if (available === 0) { alert('해당 병동은 현재 만실입니다.'); return; }
+        _selectedWardId = wardId;
+        _selectedPatientId = null;
+        document.getElementById('admitWardName').textContent = `입원 등록 — ${wardName}`;
+        document.getElementById('admitPatientName').value    = '';
+        document.getElementById('admitNotes').value          = '';
+        document.getElementById('admitPatientResult').style.display = 'none';
+        document.getElementById('admitPatientList').style.display   = 'none';
+        document.getElementById('admitStatus').style.display        = 'none';
+        document.getElementById('admitModal').classList.add('active');
+    }
+
+    function closeAdmit() {
+        document.getElementById('admitModal').classList.remove('active');
+    }
+
+    async function lookupAdmitPatient() {
+        const name = document.getElementById('admitPatientName').value.trim();
+        if (!name) { alert('환자 이름을 입력하세요.'); return; }
+
+        const res  = await apiCall(`/portal/patients?name=${encodeURIComponent(name)}&limit=5`);
+        if (!res || !res.ok) return;
+        const data = await res.json();
+
+        const listEl = document.getElementById('admitPatientList');
+        document.getElementById('admitPatientResult').style.display = 'none';
+
+        if (!data.total) {
+            listEl.style.display = 'block';
+            listEl.innerHTML = '<div style="color:#dc2626;font-size:12px;">검색 결과 없음</div>';
+            return;
+        }
+
+        const GENDER = { M: '남', F: '여', U: '미상' };
+        listEl.style.display = 'block';
+        listEl.innerHTML = data.items.map(p => `
+            <div style="padding:8px 10px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:4px;font-size:12px;cursor:pointer;" onclick="selectAdmitPatient('${p.patient_id}','${p.patient_name}')">
+                <strong>${p.patient_name}</strong> · ${formatDate(p.birth_date)} · ${GENDER[p.gender_code]||p.gender_code}
+            </div>
+        `).join('');
+    }
+
+    function selectAdmitPatient(id, name) {
+        _selectedPatientId = id;
+        document.getElementById('admitPatientList').style.display = 'none';
+        const resEl = document.getElementById('admitPatientResult');
+        resEl.style.display = 'block';
+        resEl.innerHTML = `<div style="background:#f0fdf4;border-left:3px solid #059669;padding:8px 10px;border-radius:4px;font-size:12px;"><i class="fas fa-check-circle" style="color:#059669;margin-right:6px;"></i>선택: <strong>${name}</strong></div>`;
+    }
+
+    function clearAdmitPatient() {
+        _selectedPatientId = null;
+        document.getElementById('admitPatientResult').style.display = 'none';
+        document.getElementById('admitPatientList').style.display   = 'none';
+    }
+
+    async function submitAdmit() {
+        if (!_selectedPatientId) { setStatus('admitStatus', '환자를 선택해주세요.', false); return; }
+        const btn = document.getElementById('admitBtn');
+        btn.disabled = true;
+
+        const res = await apiCall('/portal/ward-assignments', {
+            method: 'POST',
+            body: JSON.stringify({
+                patient_id: _selectedPatientId,
+                ward_id:    _selectedWardId,
+                notes:      document.getElementById('admitNotes').value.trim() || null,
+            }),
+        });
+
+        if (res && res.status === 201) {
+            setStatus('admitStatus', '입원 등록이 완료되었습니다.', true);
+            setTimeout(() => { closeAdmit(); loadWards(); }, 1200);
+        } else {
+            const err = await res?.json().catch(() => ({}));
+            setStatus('admitStatus', err.detail || '등록 중 오류가 발생했습니다.', false);
+        }
+        btn.disabled = false;
+    }
+
+    (async () => {
+        const me = await initPage();
+        if (!me) return;
+        await loadWards();
+    })();
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대시보드 — MZ Clinic HIS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <h1><i class="fas fa-hospital-alt" style="margin-right:6px;color:#6ee7b7;"></i>MZ Clinic HIS</h1>
+            <p>온프레미스 내부망</p>
+        </div>
+        <nav id="sidebar-nav"></nav>
+        <div class="sidebar-footer">
+            <div id="user-info"></div>
+            <button id="logoutBtn"><i class="fas fa-sign-out-alt" style="margin-right:6px;"></i>로그아웃</button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <h1 class="page-title">대시보드</h1>
+        <p class="page-subtitle" id="welcomeMsg">환영합니다.</p>
+
+        <div id="dashCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px;"></div>
+
+        <div class="card">
+            <div class="card-title">시스템 안내</div>
+            <ul style="font-size:13px;color:#374151;line-height:2;padding-left:18px;">
+                <li>모든 진료 기록 조회는 감사 로그에 기록됩니다 <span style="color:#059669;font-weight:700;">(ISMS-P 2.9.1)</span></li>
+                <li>1등급 개인정보(환자명, 연락처, 진단 원문)는 본 시스템 내에서만 열람 가능합니다</li>
+                <li>비밀번호는 90일마다 변경이 필요합니다</li>
+                <li>5회 로그인 실패 시 계정이 잠깁니다</li>
+            </ul>
+        </div>
+    </main>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    const ROLE_DEFAULTS = {
+        doctor: '/my-patients.html',
+        nurse:  '/patient-search.html',
+        admin:  '/admin-users.html',
+    };
+
+    const ROLE_CARDS = {
+        doctor: [
+            { icon: 'user-injured', label: '내 환자', url: '/my-patients.html',   color: '#059669' },
+            { icon: 'search',       label: '환자 검색', url: '/patient-search.html', color: '#0284c7' },
+        ],
+        nurse: [
+            { icon: 'search',       label: '환자 검색/조회', url: '/patient-search.html',  color: '#0284c7' },
+            { icon: 'plus-circle',  label: '진료 등록',      url: '/encounter-new.html',    color: '#059669' },
+            { icon: 'hospital',     label: '병동 현황',       url: '/ward-status.html',      color: '#7c3aed' },
+        ],
+        admin: [
+            { icon: 'users',           label: '사용자 관리',  url: '/admin-users.html',         color: '#0284c7' },
+            { icon: 'clipboard-list',  label: '감사 로그',    url: '/admin-logs.html',           color: '#059669' },
+            { icon: 'history',         label: '로그인 이력',  url: '/admin-login-history.html',  color: '#7c3aed' },
+        ],
+    };
+
+    (async () => {
+        const me = await initPage();
+        if (!me) return;
+
+        document.getElementById('welcomeMsg').textContent =
+            `${me.email} 님, 오늘도 안전한 진료 환경을 위해 감사드립니다.`;
+
+        const cards = ROLE_CARDS[me.role] || [];
+        document.getElementById('dashCards').innerHTML = cards.map(c => `
+            <a href="${c.url}" style="text-decoration:none;">
+                <div class="card" style="cursor:pointer;display:flex;align-items:center;gap:14px;padding:18px 20px;margin-bottom:0;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 16px rgba(5,150,105,.2)'" onmouseout="this.style.boxShadow=''">
+                    <div style="width:40px;height:40px;border-radius:10px;background:${c.color}20;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-${c.icon}" style="color:${c.color};font-size:16px;"></i>
+                    </div>
+                    <span style="font-size:14px;font-weight:700;color:#111827;">${c.label}</span>
+                    <i class="fas fa-chevron-right" style="margin-left:auto;color:#d1d5db;font-size:11px;"></i>
+                </div>
+            </a>
+        `).join('');
+    })();
+</script>
+</body>
+</html>

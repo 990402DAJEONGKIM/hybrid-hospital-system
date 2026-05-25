@@ -113,6 +113,7 @@ resource "aws_ecs_task_definition" "patient" {
         { name = "COOKIE_SECURE",    value = "true"                    },
         { name = "ALLOWED_HOSTS",    value = var.patient_allowed_hosts },
         { name = "ALLOWED_ORIGINS",  value = "https://${var.patient_allowed_hosts}" },
+        { name = "TZ",               value = "Asia/Seoul"              },
       ]
       secrets = local.api_secrets
       logConfiguration = {
@@ -175,6 +176,7 @@ resource "aws_ecs_task_definition" "staff" {
         { name = "COOKIE_SECURE",   value = "true"                   },
         { name = "ALLOWED_HOSTS",   value = var.staff_allowed_hosts  },
         { name = "ALLOWED_ORIGINS", value = "https://${var.staff_allowed_hosts}" },
+        { name = "TZ",              value = "Asia/Seoul"             },
       ]
       secrets = local.api_secrets
       logConfiguration = {

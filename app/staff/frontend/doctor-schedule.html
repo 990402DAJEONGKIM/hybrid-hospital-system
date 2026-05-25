@@ -49,9 +49,7 @@
                 <th>시간</th>
                 <th>유형</th>
                 <th>진료과</th>
-                <th>환자(Hash)</th>
                 <th>상태</th>
-                <th>상세</th>
             </tr>
         </thead>
         <tbody id="scheduleBody"></tbody>
@@ -113,27 +111,20 @@
     function renderTable(list) {
         const tbody = document.getElementById('scheduleBody');
         if (!list.length) {
-            tbody.innerHTML = `<tr><td colspan="7" class="empty-msg">해당 일정이 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="empty-msg">해당 일정이 없습니다.</td></tr>`;
             return;
         }
         tbody.innerHTML = list.map(a => {
             const dept   = deptMap[a.department_code] || a.department_code || '-';
             const type   = TYPE_LBL[a.type_code] || a.type_name || '-';
             const status = STATUS_LBL[a.status_code] || a.status_name || '-';
-            const hash   = a.patient_id_hash ? a.patient_id_hash.slice(0, 12) + '…' : '-';
             return `
             <tr>
                 <td>${a.appointment_date}</td>
                 <td>${a.appointment_time || '-'}</td>
                 <td>${type}</td>
                 <td>${dept}</td>
-                <td style="font-family:monospace;font-size:12px;">${hash}</td>
                 <td><span class="status-badge status-${a.status_code}">${status}</span></td>
-                <td>
-                    ${a.patient_id_hash
-                        ? `<button class="btn-sm" onclick="location.href='patient-detail.html?hash=${a.patient_id_hash}'">상세조회</button>`
-                        : '-'}
-                </td>
             </tr>`;
         }).join('');
     }

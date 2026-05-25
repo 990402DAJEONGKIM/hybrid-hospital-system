@@ -13,7 +13,7 @@ from core.security import get_current_user, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
-    Notification, SyncDepartment, SyncDiagnosis, SyncDoctor, SyncEncounter, SyncPatient, User,
+    Notification, SyncDepartment, SyncDiagnosis, SyncDoctor, SyncEncounter, SyncPatient, SyncWard, User,
 )
 
 logger = logging.getLogger(__name__)
@@ -209,6 +209,56 @@ def list_appointments(
         .all()
     )
     return [_appt_out(a) for a in appts]
+
+
+@router.get("/appointments/available-slots")
+def get_available_slots(
+    date:            str           = Query(..., description="조회 날짜 (YYYY-MM-DD)"),
+    doctor_id:       Optional[str] = Query(default=None),
+    department_code: Optional[str] = Query(default=None),
+    current_user:    dict          = Depends(get_current_user),
+    db:              DbSession     = Depends(get_db),
+):
+    """날짜·의사·진료과 기준 예약 가능 슬롯 조회 (09:00~17:30, 30분 간격)."""
+    try:
+        target_date = date_type.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+
+    if target_date < date_type.today():
+        raise HTTPException(status_code=400, detail="과거 날짜는 조회할 수 없습니다.")
+
+    # 09:00 ~ 17:30, 30분 간격 슬롯 생성
+    all_slots = [
+        time_type(h, m)
+        for h in range(9, 18)
+        for m in (0, 30)
+        if not (h == 17 and m == 30)
+    ]
+
+    # 취소·미내원 제외한 예약된 슬롯 조회
+    q = (
+        db.query(Appointment.appointment_time)
+        .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
+        .filter(
+            Appointment.appointment_date == target_date,
+            ~AppointmentStatus.status_code.in_(["cancelled", "no_show"]),
+        )
+    )
+    if doctor_id:
+        try:
+            q = q.filter(Appointment.doctor_id == uuid_module.UUID(doctor_id))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="유효하지 않은 의사 ID입니다.")
+    if department_code:
+        q = q.filter(Appointment.department_code == department_code)
+
+    booked = {row[0] for row in q.all()}
+
+    return [
+        {"time": t.strftime("%H:%M"), "available": t not in booked}
+        for t in all_slots
+    ]
 
 
 @router.get("/appointments/{appointment_id}")
@@ -512,6 +562,31 @@ def update_my_profile(
 
 
 # ── 진료기록 조회 ─────────────────────────────────────────────────
+
+@router.get("/wards/availability")
+def get_wards_availability(
+    room_type:    Optional[str] = Query(default=None, description="single | double | shared"),
+    current_user: dict          = Depends(get_current_user),
+    db:           DbSession     = Depends(get_db),
+):
+    """가용 병상이 있는 병동 목록 조회 (입원 예약 병동 선택용)."""
+    q = db.query(SyncWard).filter(SyncWard.available_beds > 0)
+    if room_type:
+        if room_type not in ("single", "double", "shared"):
+            raise HTTPException(status_code=422, detail="room_type은 single | double | shared 중 하나여야 합니다.")
+        q = q.filter(SyncWard.room_type == room_type)
+
+    return [
+        {
+            "ward_id":        str(w.ward_id),
+            "ward_name":      w.ward_name,
+            "room_type":      w.room_type,
+            "total_beds":     w.total_beds,
+            "available_beds": w.available_beds,
+        }
+        for w in q.order_by(SyncWard.room_type, SyncWard.ward_name).all()
+    ]
+
 
 @router.get("/my-records")
 def get_my_records(

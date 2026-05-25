@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘 진료 — MZ Clinic HIS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <h1><i class="fas fa-hospital-alt" style="margin-right:6px;color:#6ee7b7;"></i>MZ Clinic HIS</h1>
+            <p>온프레미스 내부망</p>
+        </div>
+        <nav id="sidebar-nav"></nav>
+        <div class="sidebar-footer">
+            <div id="user-info"></div>
+            <button id="logoutBtn"><i class="fas fa-sign-out-alt" style="margin-right:6px;"></i>로그아웃</button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h1 class="page-title" style="margin:0;">오늘의 진료</h1>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="date" id="datePicker" class="form-control" style="width:160px;" onchange="loadEncounters()">
+            </div>
+        </div>
+        <p class="page-subtitle">담당 의사 본인의 진료 목록입니다.</p>
+
+        <div id="statRow" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;"></div>
+
+        <div class="card">
+            <div id="listWrap">
+                <div style="text-align:center;padding:32px;color:#9ca3af;"><i class="fas fa-spinner fa-spin"></i> 불러오는 중...</div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    const STATUS_LABEL = { open: '진료 중', closed: '완료', cancelled: '취소' };
+    const TYPE_LABEL   = { outpatient_new: '초진', outpatient_return: '재진', inpatient: '입원', pre_surgery: '수술 전' };
+
+    async function loadEncounters() {
+        const date  = document.getElementById('datePicker').value;
+        const res   = await apiCall(`/portal/my/encounters?date=${date}`);
+        if (!res || !res.ok) return;
+        const list  = await res.json();
+
+        const total  = list.length;
+        const closed = list.filter(e => e.status_code === 'closed').length;
+        const open   = list.filter(e => e.status_code === 'open').length;
+
+        document.getElementById('statRow').innerHTML = [
+            { label: '전체', val: total,  color: '#0284c7' },
+            { label: '진료 중', val: open, color: '#059669' },
+            { label: '완료',   val: closed, color: '#7c3aed' },
+        ].map(s => `
+            <div class="card" style="margin:0;text-align:center;padding:14px;">
+                <div style="font-size:26px;font-weight:800;color:${s.color};">${s.val}</div>
+                <div style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;">${s.label}</div>
+            </div>
+        `).join('');
+
+        if (!list.length) {
+            document.getElementById('listWrap').innerHTML = `
+                <div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px;">
+                    <i class="fas fa-calendar-day" style="font-size:24px;margin-bottom:8px;display:block;"></i>
+                    해당 날짜에 진료가 없습니다.
+                </div>`;
+            return;
+        }
+
+        document.getElementById('listWrap').innerHTML = list.map(e => `
+            <div style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
+                <div style="background:#d1fae5;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:800;color:#065f46;text-align:center;min-width:52px;">
+                    ${e.visit_datetime ? e.visit_datetime.slice(11,16) : '-'}
+                </div>
+                <div style="flex:1;">
+                    <div style="font-size:14px;font-weight:800;margin-bottom:2px;">${e.patient_name || '(이름 없음)'}</div>
+                    <div style="font-size:12px;color:#6b7280;">
+                        ${TYPE_LABEL[e.encounter_type] || e.encounter_type || '-'}
+                        ${e.chief_complaint ? ' · ' + e.chief_complaint.slice(0, 40) : ''}
+                    </div>
+                </div>
+                <span class="badge ${e.status_code === 'closed' ? 'badge-green' : e.status_code === 'open' ? 'badge-blue' : 'badge-gray'}">
+                    ${STATUS_LABEL[e.status_code] || e.status_code}
+                </span>
+                <a href="/patient-search.html" class="btn btn-sm btn-secondary"
+                   onclick="sessionStorage.setItem('openPatient','${e.patient_id}');"
+                   style="text-decoration:none;">
+                    <i class="fas fa-folder-open"></i> 기록
+                </a>
+            </div>
+        `).join('');
+    }
+
+    (async () => {
+        const me = await initPage();
+        if (!me) return;
+        if (me.role !== 'doctor') { alert('의사 계정만 접근 가능합니다.'); location.href = '/index.html'; return; }
+
+        const today = new Date().toISOString().slice(0, 10);
+        document.getElementById('datePicker').value = today;
+        await loadEncounters();
+    })();
+</script>
+</body>
+</html>

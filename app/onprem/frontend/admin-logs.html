@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>감사 로그 — MZ Clinic HIS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <h1><i class="fas fa-hospital-alt" style="margin-right:6px;color:#6ee7b7;"></i>MZ Clinic HIS</h1>
+            <p>온프레미스 내부망</p>
+        </div>
+        <nav id="sidebar-nav"></nav>
+        <div class="sidebar-footer">
+            <div id="user-info"></div>
+            <button id="logoutBtn"><i class="fas fa-sign-out-alt" style="margin-right:6px;"></i>로그아웃</button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <h1 class="page-title">감사 로그</h1>
+        <p class="page-subtitle">모든 시스템 접근 및 1등급 데이터 조회 이력 (ISMS-P 2.9.1)</p>
+
+        <div class="card">
+            <div class="search-bar">
+                <select id="filterAction" class="form-control" style="max-width:220px;">
+                    <option value="">전체 액션</option>
+                    <option value="VIEW_PATIENT_DETAIL">환자 상세 조회</option>
+                    <option value="VIEW_CLINICAL_NOTES">임상노트 조회</option>
+                    <option value="VIEW_DIAGNOSES">진단 조회</option>
+                    <option value="ADMIT_PATIENT">입원 등록</option>
+                    <option value="DISCHARGE_PATIENT">퇴원 처리</option>
+                    <option value="CREATE_USER">계정 생성</option>
+                    <option value="DELETE_USER">계정 삭제</option>
+                    <option value="LOCK_USER">계정 잠금</option>
+                    <option value="LOGIN">로그인</option>
+                    <option value="ACCOUNT_LOCKED">계정 잠금(실패)</option>
+                </select>
+                <button class="btn btn-primary" onclick="loadLogs()">
+                    <i class="fas fa-filter" style="margin-right:4px;"></i>조회
+                </button>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>일시</th>
+                            <th>액션</th>
+                            <th>사용자</th>
+                            <th>환자</th>
+                            <th>대상 테이블</th>
+                            <th>IP</th>
+                            <th>결과</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody"></tbody>
+                </table>
+            </div>
+            <div id="emptyMsg" style="display:none;text-align:center;padding:24px;color:#9ca3af;font-size:13px;">로그가 없습니다.</div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;" id="pagination"></div>
+        </div>
+    </main>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    let _offset = 0;
+    const LIMIT = 50;
+
+    async function loadLogs(offset = 0) {
+        _offset = offset;
+        const action = document.getElementById('filterAction').value;
+        const params = new URLSearchParams({ limit: LIMIT, offset });
+        if (action) params.set('action_type', action);
+
+        const res = await apiCall(`/admin/audit-logs?${params}`);
+        if (!res || !res.ok) return;
+        const data = await res.json();
+
+        const tbody = document.getElementById('tbody');
+        document.querySelector('table').style.display = data.total ? '' : 'none';
+        document.getElementById('emptyMsg').style.display = data.total ? 'none' : 'block';
+
+        tbody.innerHTML = data.items.map(l => {
+            const sensitive = ['VIEW_PATIENT_DETAIL','VIEW_CLINICAL_NOTES','VIEW_DIAGNOSES','VIEW_SURGERY_HIST'].includes(l.action_type);
+            return `<tr>
+                <td style="white-space:nowrap;font-size:12px;">${formatDateTime(l.event_at)}</td>
+                <td><span class="badge ${sensitive ? 'badge-yellow' : 'badge-gray'}" style="font-size:10px;">${l.action_type}</span></td>
+                <td style="font-size:12px;">${l.user_id ? l.user_id.slice(0,8)+'…' : '-'}</td>
+                <td style="font-size:12px;">${l.patient_id ? l.patient_id.slice(0,8)+'…' : '-'}</td>
+                <td style="font-size:12px;">${l.target_table||'-'}</td>
+                <td style="font-size:12px;">${l.source_ip||'-'}</td>
+                <td><span class="badge ${l.result_code?.startsWith('2') ? 'badge-green' : 'badge-red'}">${l.result_code||'-'}</span></td>
+            </tr>`;
+        }).join('');
+
+        const pagination = document.getElementById('pagination');
+        pagination.innerHTML = '';
+        if (offset > 0) {
+            const prev = document.createElement('button');
+            prev.className = 'btn btn-secondary btn-sm';
+            prev.textContent = '이전';
+            prev.onclick = () => loadLogs(offset - LIMIT);
+            pagination.appendChild(prev);
+        }
+        if (offset + LIMIT < data.total) {
+            const next = document.createElement('button');
+            next.className = 'btn btn-primary btn-sm';
+            next.textContent = '다음';
+            next.onclick = () => loadLogs(offset + LIMIT);
+            pagination.appendChild(next);
+        }
+    }
+
+    (async () => {
+        const me = await initPage();
+        if (!me) return;
+        if (me.role !== 'admin') { alert('관리자만 접근 가능합니다.'); location.href = '/index.html'; return; }
+        loadLogs();
+    })();
+</script>
+</body>
+</html>

@@ -414,11 +414,15 @@ $$;
 -- =============================================================
 -- 9. api_user 권한
 -- =============================================================
--- RBAC 참조
-GRANT SELECT ON roles, permissions, role_permissions, menus, role_menus TO api_user;
+-- RBAC 참조 (관리자 역할/권한/메뉴 CRUD 포함)
+GRANT SELECT, INSERT, UPDATE, DELETE ON roles              TO api_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON permissions        TO api_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON role_permissions   TO api_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON menus              TO api_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON role_menus         TO api_user;
 
 -- 인증
-GRANT SELECT, INSERT, UPDATE ON users          TO api_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON users          TO api_user;
 GRANT SELECT, INSERT, UPDATE ON sessions       TO api_user;
 GRANT SELECT, INSERT, UPDATE ON user_mfa       TO api_user;
 GRANT SELECT, INSERT, UPDATE ON login_history  TO api_user;

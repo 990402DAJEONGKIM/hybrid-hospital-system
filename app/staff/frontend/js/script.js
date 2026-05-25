@@ -167,6 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const renderCalendar = () => {
+        if (!calendarGrid) return;
         calendarGrid.innerHTML = '';
         const year  = currentDate.getFullYear();
         const month = currentDate.getMonth();
@@ -329,7 +330,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (navHospitalIntro)            navHospitalIntro.addEventListener('click', (e) => { e.preventDefault(); showSection('hospital-intro'); closeMenuIfOpen(); });
     if (mobileNavHospitalIntro)      mobileNavHospitalIntro.addEventListener('click', (e) => { e.preventDefault(); showSection('hospital-intro'); closeMenuIfOpen(); });
 
-    // ── 초기 로드 ────────────────────────────────────────────
-    await loadAppointments();
-    renderCalendar();
+    // ── 초기 로드 (calendar-grid가 있는 페이지에서만 실행) ───
+    if (calendarGrid) {
+        await loadAppointments();
+        renderCalendar();
+    }
 });
