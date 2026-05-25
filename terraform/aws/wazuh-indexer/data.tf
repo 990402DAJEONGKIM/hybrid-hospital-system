@@ -29,6 +29,16 @@ data "terraform_remote_state" "wazuh2" {
   }
 }
 
+data "terraform_remote_state" "kms" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = {
+      name = "TC-aws-KMS"
+    }
+  }
+}
+
 output "indexer_instance_id" {
   value = aws_instance.aws-wazuh-indexer.id
 }

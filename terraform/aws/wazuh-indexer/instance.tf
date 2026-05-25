@@ -62,6 +62,15 @@ resource "aws_iam_role_policy" "aws-wazuh-indexer-s3" {
           "arn:aws:s3:::aws-k2p-storage-01",
           "arn:aws:s3:::aws-k2p-storage-01/*"
         ]
+      },
+      {
+      Sid    = "WazuhSnapshotKMS"
+      Effect = "Allow"
+      Action = [
+        "kms:GenerateDataKey",
+        "kms:Decrypt"
+      ]
+      Resource = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
       }
     ]
   })
