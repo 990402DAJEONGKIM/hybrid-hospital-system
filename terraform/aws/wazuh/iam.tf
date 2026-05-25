@@ -1,4 +1,4 @@
-# iam.tf
+# iam.tf(역할)
 # Wazuh 관련 모든 IAM 리소스 모음
 # - EC2 인스턴스 역할 (wazuh-01, wazuh-02 공유)
 # - Lambda 역할 2개 (slack-notify, wodle-failover)
