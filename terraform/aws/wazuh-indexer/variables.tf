@@ -5,4 +5,3 @@ variable "aws_region" {
 variable "wazuh_admin_password" {
   sensitive = true
 }
-

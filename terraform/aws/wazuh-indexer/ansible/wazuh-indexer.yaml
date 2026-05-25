@@ -247,15 +247,6 @@
             }
           }
 
-    - name: CloudWatch Agent 시작
-      shell: |
-        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-        -a fetch-config -m ec2 \
-        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-      args:
-        creates: /var/run/amazon-cloudwatch-agent.pid
-
-
     # ──────────────────────────────────────────
     # 설정 블록 (항상 실행)
     # ──────────────────────────────────────────
@@ -297,7 +288,7 @@
 
     - meta: flush_handlers
 
-    # ──────────────────────────────────────────
+# ──────────────────────────────────────────
     # 서비스 재시작
     # ──────────────────────────────────────────
     - name: Wazuh Indexer 재시작
@@ -337,6 +328,126 @@
       until: kibana_pwd_change.rc == 0
       retries: 5
       delay: 10
+
+    - name: CloudWatch Agent 시작
+      shell: |
+        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+        -a fetch-config -m ec2 \
+        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+      args:
+        creates: /var/run/amazon-cloudwatch-agent.pid
+
+    - name: ISM 90일 보존 정책 설정
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:9200/_plugins/_ism/policies/wazuh-90day-retention"
+        method: PUT
+        user: admin
+        password: "{{ wazuh_admin_password }}"
+        validate_certs: no
+        body_format: json
+        status_code: [200, 201, 409]
+        body:
+          policy:
+            description: "Wazuh 인덱스 90일 보존 후 삭제"
+            default_state: hot
+            states:
+              - name: hot
+                actions: []
+                transitions:
+                  - state_name: delete
+                    conditions:
+                      min_index_age: "90d"
+              - name: delete
+                actions:
+                  - delete: {}
+                transitions: []
+            ism_template:
+              - index_patterns:
+                  - "wazuh-alerts-*"
+                  - "wazuh-archives-*"
+                priority: 100
+      tags: ism
+
+    # ──────────────────────────────────────────
+    # Indexer S3 스냅샷
+    # ──────────────────────────────────────────
+    - name: repository-s3 플러그인 설치
+      shell: |
+        /usr/share/wazuh-indexer/bin/opensearch-plugin install repository-s3 --batch
+      args:
+        creates: /usr/share/wazuh-indexer/plugins/repository-s3
+      tags: snapshot
+
+    - name: repository-s3 플러그인 설치 후 재시작
+      systemd:
+        name: wazuh-indexer
+        state: restarted
+        enabled: yes
+      tags: snapshot
+
+    - name: Indexer API 응답 대기 (플러그인 재시작 후)
+      wait_for:
+        port: 9200
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 15
+        timeout: 300
+      tags: snapshot
+
+    - name: S3 스냅샷 레포지토리 등록
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:9200/_snapshot/aws-wazuh-indexer-snapshot-repo"
+        method: PUT
+        user: admin
+        password: "{{ wazuh_admin_password }}"
+        validate_certs: no
+        body_format: json
+        status_code: [200, 201, 409]
+        body:
+          type: s3
+          settings:
+            bucket: "aws-k2p-storage-01"
+            region: "ap-south-2"
+            base_path: "wazuh/snapshots"
+            compress: true
+      tags: snapshot
+
+    - name: admin 비밀번호 파일 저장
+      copy:
+        dest: /etc/wazuh-indexer/.admin_password
+        content: "{{ wazuh_admin_password }}"
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+      tags: snapshot
+
+    - name: 스냅샷 크론 스크립트 배포
+      copy:
+        dest: /usr/local/bin/wazuh-snapshot.sh
+        mode: '0700'
+        content: |
+          #!/bin/bash
+          DATE=$(date +%Y%m%d-%H%M)
+          INDEXER_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          ADMIN_PW=$(cat /etc/wazuh-indexer/.admin_password)
+          curl -sk -u admin:${ADMIN_PW} \
+            -X PUT "https://${INDEXER_IP}:9200/_snapshot/aws-wazuh-indexer-snapshot-repo/snapshot-${DATE}?wait_for_completion=false" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "indices": "wazuh-alerts-*,wazuh-archives-*",
+              "ignore_unavailable": true,
+              "include_global_state": false
+            }'
+      tags: snapshot
+
+    - name: 스냅샷 크론 등록 (1시간마다)
+      cron:
+        name: "wazuh-snapshot"
+        minute: "0"
+        hour: "*"
+        job: "/usr/local/bin/wazuh-snapshot.sh >> /var/log/wazuh-snapshot.log 2>&1"
+        user: root
+      tags: snapshot
 
     # ──────────────────────────────────────────
     # 결과 확인

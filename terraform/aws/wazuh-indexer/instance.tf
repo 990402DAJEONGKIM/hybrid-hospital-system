@@ -32,23 +32,40 @@ resource "aws_iam_role_policy" "aws-wazuh-indexer-s3" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:ListBucket",
-        "s3:DeleteObject",
-        "s3:GetBucketLocation"
-      ]
-      Resource = [
-        "arn:aws:s3:::wazuh-ansible-ssm",
-        "arn:aws:s3:::wazuh-ansible-ssm/*"
-      ]
-    }]
+    Statement = [
+      {
+        Sid    = "AnsibleSSM"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket",
+          "s3:DeleteObject",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          "arn:aws:s3:::wazuh-ansible-ssm",
+          "arn:aws:s3:::wazuh-ansible-ssm/*"
+        ]
+      },
+      {
+        Sid    = "WazuhSnapshotStorage"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:DeleteObject",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          "arn:aws:s3:::aws-k2p-storage-01",
+          "arn:aws:s3:::aws-k2p-storage-01/*"
+        ]
+      }
+    ]
   })
 }
-
 resource "aws_iam_instance_profile" "aws-wazuh-indexer-profile" {
   name = "aws-wazuh-indexer-profile"
   role = aws_iam_role.aws-wazuh-indexer-role.name
