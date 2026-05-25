@@ -154,14 +154,53 @@ INSERT INTO sync_patients (patient_id_hash, birth_year, gender_code, phone_hash)
 ON CONFLICT (patient_id_hash) DO NOTHING;
 
 
+INSERT INTO sync_encounters (encounter_id, patient_id_hash, encounter_type, department_code, doctor_id, visit_date, status_code) VALUES
+    ('e0000000-0000-0000-0000-000000000001', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'outpatient', 'INTERNAL', 'a1000000-0000-0000-0000-000000000001', '2025-01-15', 'completed'),
+    ('e0000000-0000-0000-0000-000000000002', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'outpatient', 'CARDIO',   'a1000000-0000-0000-0000-000000000002', '2025-03-20', 'completed'),
+    ('e0000000-0000-0000-0000-000000000003', '1de0d88279f76ebcb102a03fa2cf569394d10b61e4f135753d89253bae1f106e', 'outpatient', 'NEURO',    'a1000000-0000-0000-0000-000000000003', '2025-02-10', 'completed'),
+    ('e0000000-0000-0000-0000-000000000004', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'inpatient',  'SURGERY',  'a1000000-0000-0000-0000-000000000005', '2024-11-05', 'completed')
+ON CONFLICT (encounter_id) DO NOTHING;
+
+INSERT INTO sync_diagnoses (diagnosis_id, encounter_id, patient_id_hash, diagnosis_code, is_primary, diagnosed_at) VALUES
+    ('d0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'J06.9',  TRUE,  '2025-01-15 10:30:00+00'),
+    ('d0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000002', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'I10',    TRUE,  '2025-03-20 14:00:00+00'),
+    ('d0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000002', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'E11.9',  FALSE, '2025-03-20 14:00:00+00'),
+    ('d0000000-0000-0000-0000-000000000004', 'e0000000-0000-0000-0000-000000000003', '1de0d88279f76ebcb102a03fa2cf569394d10b61e4f135753d89253bae1f106e', 'G43.9',  TRUE,  '2025-02-10 09:00:00+00'),
+    ('d0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000004', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'K35.80', TRUE,  '2024-11-05 08:00:00+00')
+ON CONFLICT (diagnosis_id) DO NOTHING;
+
+INSERT INTO sync_allergies (allergy_id, patient_id_hash, allergy_code, allergy_name, severity_code, is_active, recorded_at) VALUES
+    ('f0000000-0000-0000-0000-000000000001', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'PENICILLIN', '페니실린', 'high',   TRUE, '2024-06-01 00:00:00+00'),
+    ('f0000000-0000-0000-0000-000000000002', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'ASPIRIN',    '아스피린', 'medium', TRUE, '2024-06-01 00:00:00+00'),
+    ('f0000000-0000-0000-0000-000000000003', '1de0d88279f76ebcb102a03fa2cf569394d10b61e4f135753d89253bae1f106e', 'SULFA',      '설파제',   'low',    TRUE, '2025-01-20 00:00:00+00')
+ON CONFLICT (allergy_id) DO NOTHING;
+
+INSERT INTO sync_surgery_histories (surgery_history_id, patient_id_hash, surgery_code, surgery_name, surgery_date) VALUES
+    ('g0000000-0000-0000-0000-000000000001', '4242a3bcf13673bba791a95451c6edd9463f3d678a6dba4953a59d2d8112feae', 'APPY',  '충수절제술', '2024-11-06'),
+    ('g0000000-0000-0000-0000-000000000002', '9b12a6c1bcd456dd582223a31a27a815b734a848e71b254ff5ef12da1ca62dd8', 'CHOL',  '담낭절제술', '2023-08-15')
+ON CONFLICT (surgery_history_id) DO NOTHING;
+
+INSERT INTO sync_wards (ward_id, ward_name, room_type, total_beds, available_beds) VALUES
+    ('w0000000-0000-0000-0000-000000000001', '1병동 1인실',    'single',  10,  7),
+    ('w0000000-0000-0000-0000-000000000002', '2병동 2인실',    'double',  20, 12),
+    ('w0000000-0000-0000-0000-000000000003', '3병동 다인실',   'shared',  40, 25),
+    ('w0000000-0000-0000-0000-000000000004', '4병동 중환자실', 'single',   8,  3)
+ON CONFLICT (ward_id) DO NOTHING;
+
+
 -- ── 확인 쿼리 ─────────────────────────────────────────────────
-SELECT 'roles'               AS tbl, count(*) FROM roles
-UNION ALL SELECT 'permissions',       count(*) FROM permissions
-UNION ALL SELECT 'menus',             count(*) FROM menus
-UNION ALL SELECT 'appointment_types', count(*) FROM appointment_types
-UNION ALL SELECT 'appointment_statuses', count(*) FROM appointment_statuses
-UNION ALL SELECT 'notification_types',count(*) FROM notification_types
-UNION ALL SELECT 'sync_departments',  count(*) FROM sync_departments
-UNION ALL SELECT 'sync_doctors',      count(*) FROM sync_doctors
-UNION ALL SELECT 'sync_patients',     count(*) FROM sync_patients
+SELECT 'roles'                    AS tbl, count(*) FROM roles
+UNION ALL SELECT 'permissions',           count(*) FROM permissions
+UNION ALL SELECT 'menus',                 count(*) FROM menus
+UNION ALL SELECT 'appointment_types',     count(*) FROM appointment_types
+UNION ALL SELECT 'appointment_statuses',  count(*) FROM appointment_statuses
+UNION ALL SELECT 'notification_types',    count(*) FROM notification_types
+UNION ALL SELECT 'sync_departments',      count(*) FROM sync_departments
+UNION ALL SELECT 'sync_doctors',          count(*) FROM sync_doctors
+UNION ALL SELECT 'sync_patients',         count(*) FROM sync_patients
+UNION ALL SELECT 'sync_encounters',       count(*) FROM sync_encounters
+UNION ALL SELECT 'sync_diagnoses',        count(*) FROM sync_diagnoses
+UNION ALL SELECT 'sync_allergies',        count(*) FROM sync_allergies
+UNION ALL SELECT 'sync_surgery_histories',count(*) FROM sync_surgery_histories
+UNION ALL SELECT 'sync_wards',            count(*) FROM sync_wards
 ORDER BY 1;
