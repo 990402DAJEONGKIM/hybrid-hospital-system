@@ -83,7 +83,7 @@ def lambda_handler(event, context):
 
     logger.info(f"EC2 상태: {ec2_state}, Manager 상태: {mgr_state}")
 
-    wazuh01_healthy = (ec2_state == "OK" and mgr_state == "OK")
+    wazuh01_healthy = (mgr_state == "OK")
     current         = get_current_state()
 
     logger.info(f"현재 active: {current}, wazuh-01 정상: {wazuh01_healthy}")
