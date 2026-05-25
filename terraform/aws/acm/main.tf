@@ -3,7 +3,7 @@
 #
 # 인증서 2개:
 #   - patient : 환자 포털 (Public ALB)
-#   - staff   : 의료진 포털 (Internal ALB, VPN 전용)
+#   - staff   : 의료진 포털 (Internal ALB)
 #
 # 검증 방식: DNS 검증 (Route 53 레코드 자동 생성)
 #   - Email 검증 대비 갱신 자동화 가능 (ISMS-P 2.7.1)
@@ -37,7 +37,7 @@ resource "aws_acm_certificate" "patient" {
     create_before_destroy = true
   }
 
-  tags = { Name = "acm-patient-portal" }
+  tags = { Name = "aws-acm-patient-portal" }
 }
 
 resource "aws_route53_record" "patient_validation" {
@@ -75,7 +75,7 @@ resource "aws_acm_certificate" "staff" {
     create_before_destroy = true
   }
 
-  tags = { Name = "acm-staff-portal" }
+  tags = { Name = "aws-acm-staff-portal" }
 }
 
 resource "aws_route53_record" "staff_validation" {
@@ -113,7 +113,7 @@ resource "aws_acm_certificate" "wazuh" {
     create_before_destroy = true
   }
 
-  tags = { Name = "acm-wazuh-dashboard" }
+  tags = { Name = "aws-acm-wazuh-dashboard" }
 }
 
 resource "aws_route53_record" "wazuh_validation" {
