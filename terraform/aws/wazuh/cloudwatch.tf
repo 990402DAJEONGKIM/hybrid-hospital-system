@@ -36,7 +36,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-disk-01" {
     device     = "nvme0n1p1"
     fstype     = "ext4"
   }
-  period              = 60
+  period              = 30
   evaluation_periods  = 3
   statistic           = "Average"
   comparison_operator = "GreaterThanThreshold"
