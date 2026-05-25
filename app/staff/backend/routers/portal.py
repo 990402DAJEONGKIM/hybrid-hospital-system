@@ -190,7 +190,7 @@ def get_doctor_schedule(
 
     appts = (
         db.query(Appointment)
-        .filter(Appointment.doctor_id == uuid.UUID(doctor_id))
+        .filter(Appointment.doctor_id == str(doctor_id))
         .order_by(Appointment.appointment_date.asc(), Appointment.appointment_time.asc())
         .all()
     )
@@ -212,7 +212,7 @@ def get_managed_patients(
     patients = (
         db.query(SyncPatient)
         .join(SyncEncounter, SyncPatient.patient_id_hash == SyncEncounter.patient_id_hash)
-        .filter(SyncEncounter.doctor_id == uuid.UUID(doctor_id))
+        .filter(SyncEncounter.doctor_id == str(doctor_id))
         .distinct()
         .all()
     )
