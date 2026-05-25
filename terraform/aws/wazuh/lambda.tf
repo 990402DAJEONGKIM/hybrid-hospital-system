@@ -7,46 +7,8 @@ data "archive_file" "aws-wazuh-slack-notify" {
   output_path = "${path.module}/lambda/slack_notify.zip"
 }
 
-# IAM Role
-resource "aws_iam_role" "aws-wazuh-slack-notify-role" {
-  name = "aws-wazuh-slack-notify-role"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
-}
 
-# CloudWatch Logs 권한
-resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-basic" {
-  role       = aws_iam_role.aws-wazuh-slack-notify-role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Lambda 함수
-resource "aws_lambda_function" "aws-wazuh-slack-notify" {
-  function_name    = "aws-wazuh-slack-notify"
-  role             = aws_iam_role.aws-wazuh-slack-notify-role.arn
-  handler          = "slack_notify.lambda_handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.aws-wazuh-slack-notify.output_path
-  source_code_hash = data.archive_file.aws-wazuh-slack-notify.output_base64sha256
-
-  environment {
-    variables = {
-      SLACK_WEBHOOK_URL = var.slack_webhook_url
-    }
-  }
-
-  tags = {
-    Name  = "aws-wazuh-slack-notify"
-    Owner = "st2"
-  }
-}
 
 # SNS → Lambda 권한 (wazuh-01)
 resource "aws_lambda_permission" "aws-wazuh-sns-01" {
@@ -75,61 +37,27 @@ data "archive_file" "aws-wazuh-wodle-failover" {
   output_path = "${path.module}/lambda/wodle_failover.zip"
 }
 
-resource "aws_iam_role" "aws-wazuh-wodle-failover-role" {
-  name = "aws-wazuh-wodle-failover-role"
+resource "aws_lambda_function" "aws-wazuh-slack-notify" {
+  function_name    = "aws-wazuh-slack-notify"
+  role             = aws_iam_role.aws-wazuh-slack-notify-role.arn
+  handler          = "slack_notify.lambda_handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.aws-wazuh-slack-notify.output_path
+  source_code_hash = data.archive_file.aws-wazuh-slack-notify.output_base64sha256
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
+  environment {
+    variables = {
+      SLACK_WEBHOOK_URL = var.slack_webhook_url
+    }
+  }
+
+  tags = {
+    Name  = "aws-wazuh-slack-notify"
+    Owner = "st2"
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "aws-wazuh-wodle-failover-basic" {
-  role       = aws_iam_role.aws-wazuh-wodle-failover-role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
 
-resource "aws_iam_role_policy" "aws-wazuh-wodle-failover-policy" {
-  name = "aws-wazuh-wodle-failover-policy"
-  role = aws_iam_role.aws-wazuh-wodle-failover-role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "CloudWatchRead"
-        Effect = "Allow"
-        Action = ["cloudwatch:DescribeAlarms"]
-        Resource = "*"
-      },
-      {
-        Sid    = "SSMSendCommand"
-        Effect = "Allow"
-        Action = [
-          "ssm:SendCommand",
-          "ssm:GetCommandInvocation"
-        ]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
-          data.terraform_remote_state.wazuh2.outputs.wazuh_instance_arn
-        ]
-      },
-      {
-        Sid    = "SSMParameter"
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter",
-          "ssm:PutParameter"
-        ]
-        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/wazuh/*"
-      }
-    ]
-  })
-}
 
 resource "aws_lambda_function" "aws-wazuh-wodle-failover" {
   function_name    = "aws-wazuh-wodle-failover"

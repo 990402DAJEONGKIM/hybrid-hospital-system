@@ -191,7 +191,7 @@
   </auth>
 
   <!-- ======================================= -->
-  <!-- RDS pgaudit 로그 수집 (CloudWatch)       -->
+  <!-- RDS pgaudit. ECS  로그 수집 (CloudWatch)      -->
   <!-- ======================================= -->
   <wodle name="aws-s3">
     <disabled>no</disabled>
@@ -201,5 +201,15 @@
       <aws_log_groups>/aws/rds/cluster/aws-aurora-01/postgresql</aws_log_groups>
       <regions>ap-south-2</regions>
     </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/ecs/patient</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/ecs/staff</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
   </wodle>
+
+
 </ossec_config>
