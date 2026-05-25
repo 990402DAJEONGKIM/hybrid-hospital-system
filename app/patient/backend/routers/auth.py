@@ -12,7 +12,7 @@ from core.database import get_db
 from core.security import (
     COOKIE_SECURE,
     create_access_token, generate_refresh_token,
-    get_current_user, get_password_policy,
+    get_client_ip, get_current_user, get_password_policy,
     hash_password, sha256_hex,
     verify_api_key, verify_password,
 )
@@ -67,7 +67,7 @@ def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result:
         user_id=user_id,
         patient_id_hash=patient_hash,
         action_type=action,
-        source_ip=request.client.host if request.client else None,
+        source_ip=get_client_ip(request),
         result_code=result
     )
     db.add(log)
@@ -159,7 +159,7 @@ def login(
     _:       str       = Depends(verify_api_key),
 ):
     # 로그인 시도 기록 준비 (ISMS-P 2.9.1)
-    history = LoginHistory(email=body.email, ip_address=request.client.host if request.client else None, user_agent=request.headers.get("user-agent"))
+    history = LoginHistory(email=body.email, ip_address=get_client_ip(request), user_agent=request.headers.get("user-agent"))
 
     user = db.query(User).filter(User.email == body.email).first()
     if not user:
@@ -193,7 +193,7 @@ def login(
             # 관리자 SES 알림 (실패해도 로그인 흐름에 영향 없음)
             send_lockout_alert(
                 target_email = user.email,
-                ip_address   = request.client.host if request.client else None,
+                ip_address   = get_client_ip(request),
                 locked_until = user.locked_until.isoformat(),
             )
         db.add(history)
@@ -216,7 +216,7 @@ def login(
         user_id            = user.user_id,
         refresh_token_hash = sha256_hex(refresh_token),
         user_agent         = request.headers.get("user-agent"),
-        ip_address         = request.client.host if request.client else None,
+        ip_address         = get_client_ip(request),
         expires_at         = now + timedelta(hours=REFRESH_TOKEN_EXPIRE_HOURS),
     ))
     db.commit()

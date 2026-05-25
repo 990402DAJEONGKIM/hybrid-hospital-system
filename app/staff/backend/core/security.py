@@ -6,7 +6,7 @@ from typing import Optional
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Cookie, HTTPException, Security, Depends
+from fastapi import Cookie, HTTPException, Request, Security, Depends
 from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
@@ -26,6 +26,16 @@ COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
 pwd_context    = CryptContext(schemes=["bcrypt"], deprecated="auto")
 api_key_header = APIKeyHeader(name="X-API-Key")
+
+
+def get_client_ip(request: Request) -> Optional[str]:
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else None
 
 
 def verify_api_key(key: str = Security(api_key_header)) -> str:
