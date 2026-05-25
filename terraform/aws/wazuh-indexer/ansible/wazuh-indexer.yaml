@@ -409,6 +409,7 @@
             region: "ap-south-2"
             base_path: "wazuh/snapshots"
             compress: true
+            endpoint: "s3.ap-south-2.amazonaws.com"
       tags: snapshot
 
     - name: admin 비밀번호 파일 저장
