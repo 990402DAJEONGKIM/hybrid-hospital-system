@@ -555,10 +555,31 @@
     - name: 헬스체크 크론 등록
       cron:
         name: "wazuh-manager-health"
-        minute: "* "
+        minute: "*"
         job: "/usr/local/bin/wazuh-manager-health.sh >> /var/log/wazuh-health.log 2>&1"
         user: root
       tags: cloudwatch
+
+    - name: wodle DB 백업 스크립트 배포
+      copy:
+        dest: /usr/local/bin/wazuh-db-backup.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+          aws s3 cp /var/ossec/wodles/aws/aws_services.db \
+            s3://aws-k2p-storage-01/wazuh/db-backup/aws_services.db \
+            --region $REGION
+      tags: cloudwatch
+
+    - name: wodle DB 백업 크론 등록
+      cron:
+        name: "wazuh-db-backup"
+        minute: "*/5"
+        job: "/usr/local/bin/wazuh-db-backup.sh >> /var/log/wazuh-db-backup.log 2>&1"
+        user: root
+      tags: cloudwatch
+
 
     # ──────────────────────────────────────────
     # SSM Agent

@@ -53,11 +53,16 @@ def ssm_command(instance_id, commands):
     logger.info(f"SSM 명령 전송: {cmd_id} → {instance_id}")
     return cmd_id
 
-
 def enable_wodle_wazuh02():
     ssm_command(WAZUH_02_ID, [
-        "sed -i '/<wodle name=\"aws-s3\">/,/<\\/wodle>/ s/<disabled>yes<\\/disabled>/<disabled>no<\\/disabled>/' /var/ossec/etc/ossec.conf",
-        "systemctl restart wazuh-manager",
+        """
+        aws s3 cp s3://aws-k2p-storage-01/wazuh/db-backup/aws_services.db \
+          /var/ossec/wodles/aws/aws_services.db --region {region} && \
+        chown wazuh:wazuh /var/ossec/wodles/aws/aws_services.db && \
+        chmod 644 /var/ossec/wodles/aws/aws_services.db && \
+        sed -i '/<wodle name="aws-s3">/,/<\\/wodle>/ s/<disabled>yes<\\/disabled>/<disabled>no<\\/disabled>/' /var/ossec/etc/ossec.conf && \
+        systemctl restart wazuh-manager
+        """.format(region=REGION)
     ])
     set_current_state("wazuh-02")
     logger.info("wazuh-02 wodle 활성화")

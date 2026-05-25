@@ -83,8 +83,8 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
           "logs:DescribeLogGroups"
         ]
         Resource = [
-          "arn:aws:logs:ap-south-2:*:log-group:/aws/rds/cluster/aws-aurora-01/postgresql",
-          "arn:aws:logs:ap-south-2:*:log-group:/aws/rds/cluster/aws-aurora-01/postgresql:*"
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/cluster/aws-aurora-01/postgresql",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/cluster/aws-aurora-01/postgresql:*"
         ]
       }
     ]
