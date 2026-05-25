@@ -16,6 +16,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-status-01" {
   statistic           = "Maximum"
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
+  treat_missing_data  = "breaching" 
   alarm_actions       = [aws_sns_topic.aws-wazuh-alerts-01.arn]
   ok_actions          = [aws_sns_topic.aws-wazuh-alerts-01.arn]
   tags = {
