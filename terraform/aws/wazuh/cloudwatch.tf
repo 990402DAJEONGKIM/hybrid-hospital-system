@@ -12,7 +12,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-status-01" {
     InstanceId = aws_instance.aws-wazuh-01.id
   }
   period              = 60
-  evaluation_periods  = 2
+  evaluation_periods  = 1
   statistic           = "Maximum"
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
