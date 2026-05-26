@@ -23,6 +23,43 @@ resource "google_project_iam_member" "tfc_secret_admin" {
   role    = "roles/secretmanager.admin"
   member  = "serviceAccount:${var.tfc_service_account_email}"
 }
+
+# TFC 실행 SA — Artifact Registry 생성 권한
+resource "google_project_iam_member" "tfc_artifactregistry_admin" {
+  project = var.project_id
+  role    = "roles/artifactregistry.admin"
+  member  = "serviceAccount:${var.tfc_service_account_email}"
+}
+
+# TFC 실행 SA — VPC Access Connector 생성 권한
+resource "google_project_iam_member" "tfc_vpcaccess_admin" {
+  project = var.project_id
+  role    = "roles/vpcaccess.admin"
+  member  = "serviceAccount:${var.tfc_service_account_email}"
+}
+
+# TFC 실행 SA — Cloud Functions 생성 권한
+resource "google_project_iam_member" "tfc_cloudfunctions_admin" {
+  project = var.project_id
+  role    = "roles/cloudfunctions.admin"
+  member  = "serviceAccount:${var.tfc_service_account_email}"
+}
+
+# Cloud Build SA — Artifact Registry 이미지 push 권한
+resource "google_project_iam_member" "cloudbuild_artifactregistry_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Cloud Functions 런타임 SA — Secret 읽기 권한
+resource "google_project_iam_member" "rotation_secret_reader" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.rotation_fn.email}"
+}
+
+
 # ─────────────────────────────────────────────────────────
 # Secret Manager — AWS 자격증명 (ISMS-P 2.5.4)
 # ─────────────────────────────────────────────────────────
