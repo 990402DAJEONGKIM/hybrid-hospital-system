@@ -24,6 +24,7 @@ def handler(event, context):
 
     env               = os.environ.copy()
     env["PGPASSWORD"] = secret["password"]
+    env["PGSSLMODE"]  = "require"
 
     print(f"[1] pg_dump 시작 → {rds_host}:{rds_port}/{db_name}")
     result = subprocess.run(
