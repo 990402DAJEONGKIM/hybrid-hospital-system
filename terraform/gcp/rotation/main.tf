@@ -16,6 +16,13 @@
 #       → Secret Manager 업데이트
 # =========================================================
 
+
+# TFC 실행 SA — Secret Manager 생성 권한
+resource "google_project_iam_member" "tfc_secret_admin" {
+  project = var.project_id
+  role    = "roles/secretmanager.admin"
+  member  = "serviceAccount:tc-st1-account@gcp-project-496802.iam.gserviceaccount.com"
+}
 # ─────────────────────────────────────────────────────────
 # Secret Manager — AWS 자격증명 (ISMS-P 2.5.4)
 # ─────────────────────────────────────────────────────────

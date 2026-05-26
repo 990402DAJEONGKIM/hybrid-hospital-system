@@ -65,3 +65,7 @@ variable "aws_secret_access_key" {
   type        = string
   sensitive   = true
 }
+variable "tfc_service_account_email" {
+  description = "TFC 실행 SA 이메일 (TFC_GCP_RUN_SERVICE_ACCOUNT_EMAIL)"
+  type        = string
+}
