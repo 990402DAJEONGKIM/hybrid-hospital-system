@@ -21,7 +21,7 @@
 resource "google_project_iam_member" "tfc_secret_admin" {
   project = var.project_id
   role    = "roles/secretmanager.admin"
-  member  = "serviceAccount:tc-st1-account@gcp-project-496802.iam.gserviceaccount.com"
+  member  = "serviceAccount:${var.tfc_service_account_email}"
 }
 # ─────────────────────────────────────────────────────────
 # Secret Manager — AWS 자격증명 (ISMS-P 2.5.4)
@@ -209,7 +209,7 @@ resource "google_storage_bucket" "fn_source" {
 
 data "archive_file" "fn_source" {
   type        = "zip"
-  output_path = "/tmp/rotation_fn_source.zip"
+  output_path = "${path.module}/rotation_fn_source.zip"
   source_dir  = "${path.module}/container"
 }
 
