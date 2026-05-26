@@ -24,7 +24,7 @@ resource "aws_iam_role" "aws-wazuh-ssm-role" {
 }
 
 # CloudWatch Agent가 메트릭/로그를 CloudWatch로 전송하기 위한 AWS 관리형 정책
-resource "aws_iam_role_policy_attachment" "aws-wazuh-cloudwatch" {
+resource "aws_iam_role_policy_attachment" "aws-wazuh-cw" {
   role       = aws_iam_role.aws-wazuh-ssm-role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
@@ -119,8 +119,8 @@ resource "aws_iam_instance_profile" "aws-wazuh-profile" {
 # CloudWatch 알람 → SNS → Lambda → Slack 구조에서
 # Lambda가 CloudWatch Logs에 실행 로그를 남기기 위한 역할
 # ══════════════════════════════════════════
-resource "aws_iam_role" "aws-wazuh-slack-notify-role" {
-  name = "aws-wazuh-slack-notify-role"
+resource "aws_iam_role" "aws-wazuh-lambda-slack-notify-role" {
+  name = "aws-wazuh-lambda-slack-notify-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -134,7 +134,7 @@ resource "aws_iam_role" "aws-wazuh-slack-notify-role" {
 
 # Lambda 기본 실행 권한 (CloudWatch Logs 쓰기)
 resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-basic" {
-  role       = aws_iam_role.aws-wazuh-slack-notify-role.name
+  role       = aws_iam_role.aws-wazuh-lambda-slack-notify-role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
@@ -144,7 +144,7 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-basic" {
 # wazuh-01 장애 시 wazuh-02의 wodle을 자동으로 켜고 끄는 Lambda
 # CloudWatch 알람 확인, SSM 명령 실행, Parameter Store 상태 저장에 사용
 # ══════════════════════════════════════════
-resource "aws_iam_role" "aws-wazuh-wodle-failover-role" {
+resource "aws_iam_role" "aws-wazuh-lambda-wodle-failover-role" {
   name = "aws-wazuh-wodle-failover-role"
 
   assume_role_policy = jsonencode({
@@ -158,13 +158,13 @@ resource "aws_iam_role" "aws-wazuh-wodle-failover-role" {
 }
 
 # Lambda 기본 실행 권한 (CloudWatch Logs 쓰기)
-resource "aws_iam_role_policy_attachment" "aws-wazuh-wodle-failover-basic" {
+resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-wodle-failover-basic" {
   role       = aws_iam_role.aws-wazuh-wodle-failover-role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 # 인라인 정책: CloudWatch 알람 조회 + SSM 명령 실행 + Parameter Store 읽기/쓰기
-resource "aws_iam_role_policy" "aws-wazuh-wodle-failover-policy" {
+resource "aws_iam_role_policy" "aws-wazuh-lambda-wodle-failover-policy" {
   name = "aws-wazuh-wodle-failover-policy"
   role = aws_iam_role.aws-wazuh-wodle-failover-role.id
 

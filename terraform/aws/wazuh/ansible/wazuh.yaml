@@ -549,7 +549,7 @@
             --metric-name "wazuh_manager_running" \
             --value $VALUE \
             --dimensions InstanceId=$INSTANCE_ID \
-            --region $REGION
+            --region $REGION \
             --storage-resolution 1
       tags: cloudwatch
 
@@ -570,7 +570,7 @@
           REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
           aws s3 cp /var/ossec/wodles/aws/aws_services.db \
             s3://aws-k2p-storage-01/wazuh/db-backup/aws_services.db \
-            --region $REGION
+            --region $REGION 
       tags: cloudwatch
 
     - name: wodle DB 백업 크론 등록

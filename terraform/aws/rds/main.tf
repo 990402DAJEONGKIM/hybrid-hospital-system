@@ -180,7 +180,7 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
   # 2026-05-20 김강환 pgaudit 추가(누가 언제 어떤 데이터를 조회/수정/삭제했는지 기록)
   parameter {
     name         = "pgaudit.log"
-    value        = "READ,WRITE,DDL"
+    value        = "WRITE,DDL"
     apply_method = "pending-reboot"
   }
   # 2026-05-20 김강환 pgaudit 추가(누가 언제 어떤 데이터를 조회/수정/삭제했는지 기록)
