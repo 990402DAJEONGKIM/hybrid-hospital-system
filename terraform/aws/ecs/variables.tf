@@ -66,3 +66,9 @@ variable "staff_allowed_hosts" {
   type        = string
   default     = "staff.mzclinic.cloud,localhost"
 }
+
+variable "wazuh_server_ip_secondary" {
+  description = "Wazuh 서버2 IP (failover용)"
+  type        = string
+  default     = ""
+}
