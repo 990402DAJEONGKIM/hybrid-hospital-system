@@ -119,6 +119,11 @@ resource "aws_lambda_function" "aws-wazuh-lambda-agent-cleanup" {
   timeout          = 60
   filename         = data.archive_file.aws-wazuh-lambda-agent-cleanup.output_path
   source_code_hash = data.archive_file.aws-wazuh-lambda-agent-cleanup.output_base64sha256
+  
+  vpc_config {
+    subnet_ids         = [data.aws_subnet.aws-app-sub-2a.id, data.aws_subnet.aws-app-sub-2b.id]
+    security_group_ids = [aws_security_group.aws-wazuh-sg.id]
+  }
 
   environment {
     variables = {

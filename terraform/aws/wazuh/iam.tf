@@ -228,7 +228,7 @@ resource "aws_iam_role" "aws-wazuh-lambda-agent-cleanup-role" {
 # Lambda 기본 실행 권한 (CloudWatch Logs 쓰기 - 증적용)
 resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-agent-cleanup-basic" {
   role       = aws_iam_role.aws-wazuh-lambda-agent-cleanup-role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 # Secrets Manager 읽기 (Wazuh API 비밀번호 조회용)
