@@ -105,6 +105,15 @@ resource "aws_security_group" "rds" {
     description     = "ECS tasks to Aurora"
   }
 
+  # GCP Cloud Functions VPC Connector -> Aurora (rotation) (260526 박경수 추가)
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["10.10.2.0/28"]
+    description = "GCP Cloud Functions VPC Connector (rotation)"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
