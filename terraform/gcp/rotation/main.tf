@@ -22,7 +22,9 @@
 resource "google_secret_manager_secret" "aws_access_key_id" {
   secret_id = "aws-access-key-id"
   project   = var.project_id
-  replication { auto {} }
+  replication { 
+    auto {} 
+    }
   labels = local.common_labels
 }
 
@@ -34,7 +36,9 @@ resource "google_secret_manager_secret_version" "aws_access_key_id" {
 resource "google_secret_manager_secret" "aws_secret_access_key" {
   secret_id = "aws-secret-access-key"
   project   = var.project_id
-  replication { auto {} }
+  replication {
+     auto {} 
+     }
   labels = local.common_labels
 }
 
