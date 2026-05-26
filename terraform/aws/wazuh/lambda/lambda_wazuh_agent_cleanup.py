@@ -91,7 +91,7 @@ def get_disconnected_agents(api_url, token):
         f"{api_url}/agents"
         f"?status=disconnected"
         f"&older_than={OLDER_THAN}"
-        f"&groups_list={TARGET_GROUP}"
+        f"&q=group={TARGET_GROUP}"
         f"&select=id,name,status,lastKeepAlive"
     )
 
