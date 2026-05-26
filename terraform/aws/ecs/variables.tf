@@ -17,6 +17,12 @@ variable "ec2_instance_type" {
   default     = "t3.large"
 }
 
+variable "ec2_ami_id" {
+  description = "ECS-optimized AL2023 AMI (ap-south-2) | al2023-ami-ecs-hvm-2023.0.20260518-kernel-6.1-x86_64"
+  type        = string
+  default     = "ami-0546e40dc8a023937"
+}
+
 variable "ec2_key_name" {
   description = "EC2 키페어 이름 (없으면 SSM Session Manager로만 접속)"
   type        = string

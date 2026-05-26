@@ -3,13 +3,6 @@
 # 아키텍처: 상시 2대, 트래픽 급증 시 최대 3대 (Auto Scaling + Warm Pool)
 # =========================================================
 
-# ─────────────────────────────────────────────────────────
-# ECS-optimized Amazon Linux 2023 AMI (최신 버전 자동 조회)
-# ─────────────────────────────────────────────────────────
-data "aws_ssm_parameter" "ecs_ami" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
-}
-
 
 # ─────────────────────────────────────────────────────────
 # 보안 그룹 — ECS EC2 인스턴스
@@ -46,7 +39,7 @@ resource "aws_security_group" "ecs_ec2" {
 # ─────────────────────────────────────────────────────────
 resource "aws_launch_template" "ecs" {
   name_prefix   = "aws-ecs-lt-"
-  image_id      = data.aws_ssm_parameter.ecs_ami.value
+  image_id      = var.ec2_ami_id
   instance_type = var.ec2_instance_type
 
   key_name = var.ec2_key_name != "" ? var.ec2_key_name : null
