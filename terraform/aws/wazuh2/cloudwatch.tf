@@ -1,6 +1,6 @@
 #cloudwatch.tf
 data "aws_sns_topic" "aws-wazuh-cw-alerts-01" {
-  name = "aws-wazuh-alerts-01"
+  name = "aws-wazuh-cw-alerts-01"
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-status-02" {

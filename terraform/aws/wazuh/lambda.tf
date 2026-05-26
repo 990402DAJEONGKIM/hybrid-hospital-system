@@ -98,3 +98,60 @@ resource "aws_lambda_permission" "aws-wazuh-lambda-wodle-failover-eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.aws-wazuh-lambda-wodle-failover.arn
 }
+
+
+# ──────────────────────────────────────────
+# Agent 정리 Lambda
+# 매일 새벽 3시 (KST) ecs-ec2 그룹
+# disconnected Agent 자동 삭제
+# ──────────────────────────────────────────
+data "archive_file" "aws-wazuh-lambda-agent-cleanup" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/lambda_wazuh_agent_cleanup.py"
+  output_path = "${path.module}/lambda/lambda_wazuh_agent_cleanup.zip"
+}
+
+resource "aws_lambda_function" "aws-wazuh-lambda-agent-cleanup" {
+  function_name    = "aws-wazuh-lambda-agent-cleanup"
+  role             = aws_iam_role.aws-wazuh-lambda-agent-cleanup-role.arn
+  handler          = "lambda_wazuh_agent_cleanup.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 60
+  filename         = data.archive_file.aws-wazuh-lambda-agent-cleanup.output_path
+  source_code_hash = data.archive_file.aws-wazuh-lambda-agent-cleanup.output_base64sha256
+
+  environment {
+    variables = {
+      # wazuh-01 IP: terraform이 EC2 생성 후 자동 주입
+      WAZUH_API_URL           = "https://${aws_instance.aws-wazuh-01.private_ip}:55000"
+      # wazuh-02 IP: wazuh2 workspace output에서 자동 참조
+      WAZUH_API_URL_SECONDARY = "https://${data.terraform_remote_state.wazuh2.outputs.wazuh_private_ip}:55000"
+      WAZUH_USER              = "wazuh"
+      # 비밀번호는 Secrets Manager에서 가져옴 (하드코딩 금지)
+      WAZUH_SECRET_NAME       = "wazuh/api-password"
+      REGION                  = var.aws_region
+    }
+  }
+
+  tags = { Name = "aws-wazuh-lambda-agent-cleanup", Owner = "st2" }
+}
+
+# 매일 새벽 3시 KST (UTC 18:00) 실행
+resource "aws_cloudwatch_event_rule" "aws-wazuh-lambda-agent-cleanup" {
+  name                = "aws-wazuh-lambda-agent-cleanup"
+  schedule_expression = "cron(0 18 * * ? *)"
+  tags = { Name = "aws-wazuh-lambda-agent-cleanup", Owner = "st2" }
+}
+
+resource "aws_cloudwatch_event_target" "aws-wazuh-lambda-agent-cleanup" {
+  rule = aws_cloudwatch_event_rule.aws-wazuh-lambda-agent-cleanup.name
+  arn  = aws_lambda_function.aws-wazuh-lambda-agent-cleanup.arn
+}
+
+resource "aws_lambda_permission" "aws-wazuh-lambda-agent-cleanup-eventbridge" {
+  statement_id  = "AllowEventBridgeAgentCleanup"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.aws-wazuh-lambda-agent-cleanup.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.aws-wazuh-lambda-agent-cleanup.arn
+}

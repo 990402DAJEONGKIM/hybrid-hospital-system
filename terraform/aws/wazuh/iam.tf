@@ -205,3 +205,44 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-wodle-failover-policy" {
     ]
   })
 }
+
+
+# ══════════════════════════════════════════
+# Lambda IAM Role - Agent 정리
+# ecs-ec2 그룹 disconnected Agent 주기적 삭제
+# Secrets Manager 읽기 권한만 부여 (최소 권한 원칙)
+# ══════════════════════════════════════════
+resource "aws_iam_role" "aws-wazuh-lambda-agent-cleanup-role" {
+  name = "aws-wazuh-lambda-agent-cleanup-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+# Lambda 기본 실행 권한 (CloudWatch Logs 쓰기 - 증적용)
+resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-agent-cleanup-basic" {
+  role       = aws_iam_role.aws-wazuh-lambda-agent-cleanup-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Secrets Manager 읽기 (Wazuh API 비밀번호 조회용)
+resource "aws_iam_role_policy" "aws-wazuh-lambda-agent-cleanup-policy" {
+  name = "aws-wazuh-lambda-agent-cleanup-policy"
+  role = aws_iam_role.aws-wazuh-lambda-agent-cleanup-role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "SecretsManagerRead"
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:wazuh/*"
+    }]
+  })
+}
