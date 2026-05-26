@@ -123,21 +123,8 @@
   <!-- ======================================= -->
   <vulnerability-detection>
     <enabled>yes</enabled>
-    <interval>6h</interval>
-    <min_full_scan_interval>6h</min_full_scan_interval>
-    <run_on_start>yes</run_on_start>
-    <provider name="canonical">
-      <enabled>yes</enabled>
-      <os>bionic</os>
-      <os>focal</os>
-      <os>jammy</os>
-      <update_interval>1h</update_interval>
-    </provider>
-    <provider name="nvd">
-      <enabled>yes</enabled>
-      <update_from_year>2010</update_from_year>
-      <update_interval>1h</update_interval>
-    </provider>
+    <index-status>yes</index-status>
+    <feed-update-interval>60m</feed-update-interval>
   </vulnerability-detection>
 
   <!-- ======================================= -->
@@ -191,16 +178,25 @@
   </auth>
 
   <!-- ======================================= -->
-  <!-- RDS pgaudit 로그 수집 (CloudWatch)       -->
+  <!-- RDS pgaudit. ECS  로그 수집 (CloudWatch)       -->
   <!-- ======================================= -->
   <wodle name="aws-s3">
-    <disabled>yes</disabled>
+    <disabled>no</disabled>
     <interval>5m</interval>
     <run_on_start>yes</run_on_start>
     <service type="cloudwatchlogs">
       <aws_log_groups>/aws/rds/cluster/aws-aurora-01/postgresql</aws_log_groups>
       <regions>ap-south-2</regions>
     </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/ecs/patient</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/ecs/staff</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
   </wodle>
+
 
 </ossec_config>
