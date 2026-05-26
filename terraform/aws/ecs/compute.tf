@@ -73,6 +73,7 @@ resource "aws_launch_template" "ecs" {
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
     cluster_name    = aws_ecs_cluster.main.name
     wazuh_server_ip = var.wazuh_server_ip
+    wazuh_server_ip_secondary = var.wazuh_server_ip_secondary
   }))
 
   tag_specifications {
