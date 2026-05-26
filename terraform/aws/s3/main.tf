@@ -7,7 +7,9 @@
 #   2.8.1  접근 통제          → 퍼블릭 접근 차단, IAM 정책으로만 접근
 #   2.9.4  로그 무결성        → 버저닝 + MFA Delete
 # =========================================================
-
+# =========================================================
+# + DB 덤프 prefix
+# =========================================================
 
 # ─────────────────────────────────────────────────────────
 # Wazuh 로그 버킷
@@ -88,6 +90,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     # 이전 버전도 1년 후 삭제
     noncurrent_version_expiration {
       noncurrent_days = var.wazuh_log_retention_days
+    }
+  }
+    # 추가: DB 덤프 30일 보존 - 20260526 st1 추가
+  rule {
+    id     = "db-dump-lifecycle"
+    status = "Enabled"
+    filter {
+      prefix = "db-dumps/"
+    }
+    expiration {
+      days = var.db_dump_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
     }
   }
 }
