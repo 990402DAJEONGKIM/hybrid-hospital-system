@@ -73,3 +73,15 @@ data "aws_instance" "wazuh" {
     values = ["running", "stopped"]
   }
 }
+
+
+data "aws_instance" "wazuh2" {
+  filter {
+    name   = "tag:Name"
+    values = ["aws-wazuh-02"]
+  }
+  filter {
+    name   = "instance-state-name"
+    values = ["running", "stopped"]
+  }
+}
