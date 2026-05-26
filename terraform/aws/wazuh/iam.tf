@@ -145,7 +145,7 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-basic" {
 # CloudWatch 알람 확인, SSM 명령 실행, Parameter Store 상태 저장에 사용
 # ══════════════════════════════════════════
 resource "aws_iam_role" "aws-wazuh-lambda-wodle-failover-role" {
-  name = "aws-wazuh-wodle-failover-role"
+  name = "aws-wazuh-lambda-wodle-failover-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -159,14 +159,14 @@ resource "aws_iam_role" "aws-wazuh-lambda-wodle-failover-role" {
 
 # Lambda 기본 실행 권한 (CloudWatch Logs 쓰기)
 resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-wodle-failover-basic" {
-  role       = aws_iam_role.aws-wazuh-wodle-failover-role.name
+  role       = aws_iam_role.aws-wazuh-lambda-wodle-failover-role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 # 인라인 정책: CloudWatch 알람 조회 + SSM 명령 실행 + Parameter Store 읽기/쓰기
 resource "aws_iam_role_policy" "aws-wazuh-lambda-wodle-failover-policy" {
   name = "aws-wazuh-wodle-failover-policy"
-  role = aws_iam_role.aws-wazuh-wodle-failover-role.id
+  role = aws_iam_role.aws-wazuh-lambda-wodle-failover-role.id
 
   policy = jsonencode({
     Version = "2012-10-17"

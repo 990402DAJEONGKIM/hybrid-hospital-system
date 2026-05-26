@@ -59,8 +59,8 @@ resource "aws_lambda_function" "aws-wazuh-lambda-slack-notify" {
 
 
 resource "aws_lambda_function" "aws-wazuh-lambda-wodle-failover" {
-  function_name    = "aws-wazuh-wodle-failover"
-  role             = aws_iam_role.aws-wazuh-wodle-failover-role.arn
+  function_name    = "aws-wazuh-lambda-wodle-failover"
+  role             = aws_iam_role.aws-wazuh-lambda-wodle-failover-role.arn
   handler          = "wodle_failover.lambda_handler"
   runtime          = "python3.12"
   timeout          = 60
