@@ -186,7 +186,7 @@ resource "google_cloudfunctions2_function" "rotation" {
     }
   }
   labels = local.common_labels
-  
+
   depends_on = [
     google_storage_bucket_object.fn_source,
     google_vpc_access_connector.rotation,
@@ -276,7 +276,11 @@ resource "google_service_account_iam_member" "tfc_act_as_rotation_fn" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${var.tfc_service_account_email}"
 }
-
+resource "google_project_iam_member" "rotation_secret_reader" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.rotation_fn.email}"
+}
 
 # ─────────────────────────────────────────────────────────
 # Outputs
