@@ -94,7 +94,7 @@ def get_disconnected_agents(api_url, token):
         f"&q=group={TARGET_GROUP}"
         f"&select=id,name,status,lastKeepAlive"
     )
-
+    logger.info(f"호출 URL: {url}") 
     req = urllib.request.Request(url)
     req.add_header("Authorization", f"Bearer {token}")
 
