@@ -134,6 +134,15 @@ resource "aws_lambda_function" "rotation" {
     security_group_ids = [aws_security_group.db_dump_lambda.id]
   }
 
+  environment {
+    variables = {
+      RDS_SECRET_ARN = var.rds_secret_arn
+      RDS_HOST       = data.aws_db_instance.aurora.address
+      RDS_PORT       = "5432"
+      DB_NAME        = "hospital"
+    }
+  }
+
   lifecycle {
     ignore_changes = [image_uri, source_code_hash]
   }
