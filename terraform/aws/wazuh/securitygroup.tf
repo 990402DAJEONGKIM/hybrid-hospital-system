@@ -33,6 +33,15 @@
       protocol    = "tcp"
       cidr_blocks = ["10.0.0.0/16"] 
     }
+
+    ingress {
+      from_port   = 55000
+      to_port     = 55000
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
+      description = "Wazuh API (Lambda, Dashboard)"
+    }
+
     
     egress {
       from_port   = 0
