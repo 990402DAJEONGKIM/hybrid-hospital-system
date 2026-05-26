@@ -624,7 +624,7 @@ def get_my_records(
     return [
         {
             "encounter_id":    str(e.encounter_id),
-            "visit_date":      str(e.visit_date) if e.visit_date else None,
+            "visit_date":      str(e.visit_date),
             "encounter_type":  e.encounter_type,
             "department_code": e.department_code,
             "doctor_id":       str(e.doctor_id) if e.doctor_id else None,

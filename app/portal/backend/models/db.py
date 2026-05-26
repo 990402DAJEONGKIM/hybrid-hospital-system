@@ -45,9 +45,11 @@ class Session(Base):
 class SyncPatient(Base):
     __tablename__ = "sync_patients"
 
-    patient_id_hash = Column(String(64), primary_key=True)
+    patient_id_hash = Column(String(64), primary_key=True)  # sha256(SALT:patient_id) — appointments FK
+    patient_hash    = Column(String(64))                     # sha256(patient_id) UNSALTED — sync_* JOIN 브릿지
     birth_year      = Column(SmallInteger)
     gender_code     = Column(String(1))
+    phone_hash      = Column(String(64))
     created_at      = Column(DateTime(timezone=True))
     synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
@@ -58,6 +60,7 @@ class SyncDepartment(Base):
     department_code = Column(String(20),  primary_key=True)
     department_name = Column(String(100))
     is_active       = Column(Boolean)
+    updated_at      = Column(DateTime(timezone=True))
     synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
@@ -68,14 +71,15 @@ class SyncDoctor(Base):
     doctor_name     = Column(String(100))
     department_code = Column(String(20), ForeignKey("sync_departments.department_code"))
     is_active       = Column(Boolean)
+    updated_at      = Column(DateTime(timezone=True))
     synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class SyncEncounter(Base):
     __tablename__ = "sync_encounters"
 
-    encounter_id    = Column(Uuid,       primary_key=True)
-    patient_id_hash = Column(String(64), ForeignKey("sync_patients.patient_id_hash"), nullable=False)
+    encounter_id    = Column(String(36), primary_key=True)
+    patient_id_hash = Column(String(64))
     encounter_type  = Column(String(30))
     department_code = Column(String(20), ForeignKey("sync_departments.department_code"))
     doctor_id       = Column(Uuid,       ForeignKey("sync_doctors.doctor_id"))
@@ -88,9 +92,9 @@ class SyncEncounter(Base):
 class SyncDiagnosis(Base):
     __tablename__ = "sync_diagnoses"
 
-    diagnosis_id    = Column(Uuid,       primary_key=True)
-    encounter_id    = Column(Uuid,       ForeignKey("sync_encounters.encounter_id"))
-    patient_id_hash = Column(String(64), ForeignKey("sync_patients.patient_id_hash"), nullable=False)
+    diagnosis_id    = Column(String(36), primary_key=True)
+    encounter_id    = Column(String(36), ForeignKey("sync_encounters.encounter_id"))
+    patient_id_hash = Column(String(64))
     diagnosis_code  = Column(String(20))
     is_primary      = Column(Boolean)
     diagnosed_at    = Column(DateTime(timezone=True))
@@ -100,23 +104,19 @@ class SyncDiagnosis(Base):
 class SyncAllergy(Base):
     __tablename__ = "sync_allergies"
 
-    allergy_id      = Column(Uuid,        primary_key=True)
-    patient_id_hash = Column(String(64),  ForeignKey("sync_patients.patient_id_hash"), nullable=False)
-    allergy_code    = Column(String(30))
-    allergy_name    = Column(String(100))
-    severity_code   = Column(String(20))
-    is_active       = Column(Boolean)
-    recorded_at     = Column(DateTime(timezone=True))
+    allergy_id      = Column(String(36), primary_key=True)
+    patient_id_hash = Column(String(64))
+    allergy_name    = Column(String)
+    severity_code   = Column(String(10))
     synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class SyncSurgery(Base):
     __tablename__ = "sync_surgery_histories"
 
-    surgery_history_id = Column(Uuid,        primary_key=True)
-    patient_id_hash    = Column(String(64),  ForeignKey("sync_patients.patient_id_hash"), nullable=False)
-    surgery_code       = Column(String(30))
-    surgery_name       = Column(String(200))
+    surgery_history_id = Column(String(36), primary_key=True)
+    patient_id_hash    = Column(String(64))
+    surgery_name       = Column(String)
     surgery_date       = Column(Date)
     synced_at          = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

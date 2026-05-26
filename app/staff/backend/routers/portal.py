@@ -269,7 +269,7 @@ def get_patient_detail(
         "encounters": [
             {
                 "encounter_id":    str(e.encounter_id),
-                "visit_date":      str(e.visit_date) if e.visit_date else None,
+                "visit_date":      str(e.visit_date),
                 "encounter_type":  e.encounter_type,
                 "department_code": e.department_code,
                 "status_code":     e.status_code,
@@ -286,7 +286,6 @@ def get_patient_detail(
         ],
         "allergies": [
             {
-                "allergy_code": a.allergy_code,
                 "allergy_name": a.allergy_name,
                 "severity":     a.severity_code,
             }
@@ -294,9 +293,8 @@ def get_patient_detail(
         ],
         "surgeries": [
             {
-                "surgery_code": s.surgery_code,
                 "surgery_name": s.surgery_name,
-                "surgery_date": str(s.surgery_date) if s.surgery_date else None,
+                "surgery_date": str(s.surgery_date),
             }
             for s in surgeries
         ],
