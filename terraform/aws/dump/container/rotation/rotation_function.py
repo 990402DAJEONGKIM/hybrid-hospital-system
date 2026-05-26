@@ -14,6 +14,7 @@ import os
 import secrets
 import string
 import psycopg2
+from psycopg2 import sql
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -97,8 +98,10 @@ def set_secret(secret_arn: str, token: str):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "ALTER USER %s WITH PASSWORD %s",
-                (pending["username"], pending["password"]),
+                sql.SQL("ALTER USER {} WITH PASSWORD %s").format(
+                    sql.Identifier(pending["username"])
+                ),
+                (pending["password"],),
             )
         conn.commit()
         logger.info("ALTER USER 완료")
