@@ -152,12 +152,13 @@ def rotate_passwords(request):
             new_password = generate_password()
             logger.info(f"[{username}] 로테이션 시작")
 
-            # hospital_app은 자기 자신이 admin이라 현재 비밀번호로 접속
-            # 로테이션 후 admin_password도 갱신
-            change_cloudsql_password(username, new_password, admin_password)
-
             if also_rds:
+                # pglogical_repl: RDS 먼저 → Cloud SQL 나중
+                # (Cloud SQL이 RDS에 접속하는 구조라 RDS 먼저 변경 후 즉시 Cloud SQL 변경)
                 change_rds_password(username, new_password, rds_admin_password)
+                change_cloudsql_password(username, new_password, admin_password)
+            else:
+                change_cloudsql_password(username, new_password, admin_password)
 
             update_secret(secret_name, new_password)
 
