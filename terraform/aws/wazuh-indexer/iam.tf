@@ -30,7 +30,7 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-ssm" {
 }
 
 # CloudWatch Agent가 메트릭을 CloudWatch로 전송하기 위한 AWS 관리형 정책
-resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-cloudwatch" {
+resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-cw" {
   role       = aws_iam_role.aws-wazuh-indexer-role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }

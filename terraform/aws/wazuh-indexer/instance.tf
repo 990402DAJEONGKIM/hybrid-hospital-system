@@ -11,6 +11,7 @@ resource "aws_instance" "aws-wazuh-indexer" {
   root_block_device {
     volume_size = 100
     volume_type = "gp3"
+    encrypted   = true
 
     tags = {
       Name  = "aws-wazuh-indexer-volume"

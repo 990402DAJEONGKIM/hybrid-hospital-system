@@ -1,10 +1,10 @@
 #cloudwatch.tf
-resource "aws_sns_topic" "aws-wazuh-indexer-alerts" {
-  name = "aws-wazuh-indexer-alerts"
+resource "aws_sns_topic" "aws-wazuh-indexer-cw-alerts" {
+  name = "aws-wazuh-cw-indexer-alerts"
 }
 
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-status" {
-  alarm_name          = "aws-wazuh-indexer-status"
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-cw-status" {
+  alarm_name          = "aws-wazuh-indexer-cw-status"
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed"
   dimensions = {
@@ -15,10 +15,10 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-status" {
   statistic           = "Maximum"
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
-  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
+  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-cw-alerts.arn]
 
   tags = {
-    Name  = "aws-wazuh-indexer-status"
+    Name  = "aws-wazuh-indexer-cw-status"
     Owner = "st2"
   }
 }
@@ -29,24 +29,24 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-status" {
 data "aws_caller_identity" "current" {}
 
 # SNS → Lambda 권한 (indexer)
-resource "aws_lambda_permission" "aws-wazuh-sns-indexer" {
+resource "aws_lambda_permission" "aws-wazuh-lambda-sns-indexer" {
   statement_id  = "AllowSNSIndexer"
   action        = "lambda:InvokeFunction"
-  function_name = "aws-wazuh-slack-notify"
+  function_name = "aws-wazuh-lambda-slack-notify"
   principal     = "sns.amazonaws.com"
-  source_arn    = aws_sns_topic.aws-wazuh-indexer-alerts.arn
+  source_arn    = aws_sns_topic.aws-wazuh-indexer-cw-alerts.arn
 }
 
 # SNS 구독 (indexer)
 resource "aws_sns_topic_subscription" "aws-wazuh-indexer-to-lambda" {
-  topic_arn = aws_sns_topic.aws-wazuh-indexer-alerts.arn
+  topic_arn = aws_sns_topic.aws-wazuh-indexer-cw-alerts.arn
   protocol  = "lambda"
-  endpoint  = "arn:aws:lambda:ap-south-2:${data.aws_caller_identity.current.account_id}:function:aws-wazuh-slack-notify"
-  depends_on = [aws_lambda_permission.aws-wazuh-sns-indexer]
+  endpoint  = "arn:aws:lambda:ap-south-2:${data.aws_caller_identity.current.account_id}:function:aws-wazuh-lambda-slack-notify"
+  depends_on = [aws_lambda_permission.aws-wazuh-lambda-sns-indexer]
 }
 
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-disk" {
-  alarm_name          = "aws-wazuh-indexer-disk"
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-cw-disk" {
+  alarm_name          = "aws-wazuh-indexer-cw-disk"
   namespace           = "CWAgent"
   metric_name         = "disk_used_percent"
   dimensions = {
@@ -60,13 +60,13 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-disk" {
   statistic           = "Average"
   comparison_operator = "GreaterThanThreshold"
   threshold           = 80
-  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
-  tags = { Name = "aws-wazuh-indexer-disk", Owner = "st2" }
+  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-cw-alerts.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-indexer-cw-alerts.arn]
+  tags = { Name = "aws-wazuh-indexer-cw-disk", Owner = "st2" }
 }
 
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-mem" {
-  alarm_name          = "aws-wazuh-indexer-mem"
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-cw-mem" {
+  alarm_name          = "aws-wazuh-indexer-cw-mem"
   namespace           = "CWAgent"
   metric_name         = "mem_used_percent"
   dimensions = {
@@ -77,7 +77,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-mem" {
   statistic           = "Average"
   comparison_operator = "GreaterThanThreshold"
   threshold           = 80
-  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-indexer-alerts.arn]
-  tags = { Name = "aws-wazuh-indexer-mem", Owner = "st2" }
+  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-cw-alerts.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-indexer-cw-alerts.arn]
+  tags = { Name = "aws-wazuh-indexer-cw-mem", Owner = "st2" }
 }
