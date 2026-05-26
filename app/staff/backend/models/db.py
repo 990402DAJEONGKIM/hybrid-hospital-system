@@ -293,8 +293,7 @@ class Notification(Base):
 class SyncPatient(Base):
     __tablename__ = "sync_patients"
 
-    patient_id_hash = Column(String(64), primary_key=True)  # sha256(SALT:patient_id) — appointments FK
-    patient_hash    = Column(String(64))                     # sha256(patient_id) UNSALTED — sync_* JOIN 브릿지
+    patient_id_hash = Column(String(64), primary_key=True)
     birth_year      = Column(SmallInteger)
     gender_code     = Column(String(1))
     phone_hash      = Column(String(64))
