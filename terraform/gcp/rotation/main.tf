@@ -184,13 +184,16 @@ resource "google_cloudfunctions2_function" "rotation" {
       secret     = google_secret_manager_secret.aws_secret_access_key.secret_id
       version    = "latest"
     }
-  }                                      # ← 여기서 service_config 닫힘
+  }
   labels = local.common_labels
-
+  
   depends_on = [
     google_storage_bucket_object.fn_source,
-    google_vpc_access_connector.rotation
+    google_vpc_access_connector.rotation,
+    google_project_iam_member.default_compute_cloudbuild_builder,
+    google_service_account_iam_member.tfc_act_as_rotation_fn
   ]
+
 }
 
 
@@ -261,6 +264,17 @@ resource "google_cloud_scheduler_job" "rotation" {
       service_account_email = google_service_account.scheduler.email
     }
   }
+}
+resource "google_project_iam_member" "default_compute_cloudbuild_builder" {
+  project = var.project_id
+  role    = "roles/cloudbuild.builds.builder"
+  member  = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_service_account_iam_member" "tfc_act_as_rotation_fn" {
+  service_account_id = google_service_account.rotation_fn.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.tfc_service_account_email}"
 }
 
 
