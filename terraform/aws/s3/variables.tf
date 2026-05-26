@@ -15,3 +15,10 @@ variable "wazuh_log_glacier_days" {
   type        = number
   default     = 90
 }
+
+#260526 st1 추가
+variable "db_dump_retention_days" {
+  description = "DB 덤프 보존 기간 (일)"
+  type        = number
+  default     = 30
+}
