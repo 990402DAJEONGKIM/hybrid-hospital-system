@@ -142,3 +142,64 @@ resource "aws_secretsmanager_secret" "vault_lambda_approle" {
 
   tags = merge(local.common_tags, { Name = "aws-secret-vault-lambda-approle" })
 }
+
+
+# =========================================================
+# Import 블록 — 기존 리소스 가져오기
+# apply 완료 후 이 블록 전체 삭제
+# =========================================================
+
+import {
+  to = aws_secretsmanager_secret.hospital_user
+  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:aws-secret-rds-hospital-user-mRfEDx"
+}
+
+import {
+  to = aws_secretsmanager_secret.api_user
+  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:aws-secret-rds-api-user-iMV55M"
+}
+
+import {
+  to = aws_secretsmanager_secret.dump_user
+  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:hospital/rds/dump-user-Rii7x3"
+}
+
+import {
+  to = aws_secretsmanager_secret.db_url
+  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:hospital/database-url-20p2Rp"
+}
+
+import {
+  to = aws_secretsmanager_secret.jwt_secret
+  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:hospital/jwt-secret-jmOkOF"
+}
+
+import {
+  to = aws_secretsmanager_secret.api_key
+  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:hospital/api-key-3vJc1u"
+}
+
+import {
+  to = aws_secretsmanager_secret.vault_lambda_approle
+  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:hospital/vault/lambda-approle-NnWr5j"
+}
+
+import {
+  to = aws_ecr_repository.rotation
+  id = "aws-ecr-rotation"
+}
+
+import {
+  to = aws_cloudwatch_log_group.rotation_lambda
+  id = "/aws/lambda/aws-lambda-rotation"
+}
+
+import {
+  to = aws_lambda_function.rotation
+  id = "aws-lambda-rotation"
+}
+
+import {
+  to = aws_iam_role.rotation_lambda
+  id = "aws-lambda-rotation-role"
+}
