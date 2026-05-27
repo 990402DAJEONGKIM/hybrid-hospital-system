@@ -74,7 +74,7 @@ resource "aws_iam_role_policy" "rotation_lambda" {
           "secretsmanager:PutSecretValue",
           "secretsmanager:UpdateSecretVersionStage",
         ]
-        Resource = [var.rds_secret_arn, var.api_user_secret_arn]
+        Resource = [var.rds_secret_arn]
       },
       {
         Sid      = "KMSDecrypt"
@@ -166,17 +166,9 @@ resource "aws_lambda_permission" "secrets_manager_rotation" {
   source_arn    = var.rds_secret_arn
 }
 
-resource "aws_lambda_permission" "secrets_manager_rotation_api_user" {
-  statement_id  = "AllowSecretsManagerRotationApiUser"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.rotation.function_name
-  principal     = "secretsmanager.amazonaws.com"
-  source_arn    = var.api_user_secret_arn
-}
-
 
 # ─────────────────────────────────────────────────────────
-# Secrets Manager 자동 로테이션
+# Secrets Manager 7일 자동 로테이션
 # ─────────────────────────────────────────────────────────
 resource "aws_secretsmanager_secret_rotation" "dump_user" {
   secret_id           = var.rds_secret_arn
@@ -184,15 +176,6 @@ resource "aws_secretsmanager_secret_rotation" "dump_user" {
 
   rotation_rules {
     automatically_after_days = var.dump_user_rotation_days
-  }
-}
-
-resource "aws_secretsmanager_secret_rotation" "api_user" {
-  secret_id           = var.api_user_secret_arn
-  rotation_lambda_arn = aws_lambda_function.rotation.arn
-
-  rotation_rules {
-    automatically_after_days = var.api_user_rotation_days
   }
 }
 

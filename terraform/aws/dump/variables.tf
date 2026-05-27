@@ -60,15 +60,3 @@ variable "dump_user_rotation_days" {
   type        = number
   default     = 7
 }
-
-variable "api_user_secret_arn" {
-  description = "Secrets Manager — api_user 비밀번호 ARN (ECS 앱 전용 계정)"
-  type        = string
-  sensitive   = true
-}
-
-variable "api_user_rotation_days" {
-  description = "api_user 비밀번호 로테이션 주기 (일) — ISMS-P 2.5.4"
-  type        = number
-  default     = 90
-}
