@@ -337,11 +337,7 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
       #          data.tfe_outputs.secrets.values.api_user_secret_arn,
       #        ]
       # ───────────────────────────────────────────────────────────
-      Resource = [
-        "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-hospital-user*",
-        "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-api-user*"
-      ]
-    }]
+      Resource = ["*"]  }]
   })
 }
 
