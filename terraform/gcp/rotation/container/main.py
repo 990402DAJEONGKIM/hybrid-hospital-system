@@ -196,3 +196,4 @@ def rotate_passwords(request):
 
     logger.info("전체 로테이션 완료")
     return {"status": "ok", "rotated": [t[0] for t in ROTATION_TARGETS]}, 200
+# trigger rebuild Wed May 27 16:01:47 KST 2026
