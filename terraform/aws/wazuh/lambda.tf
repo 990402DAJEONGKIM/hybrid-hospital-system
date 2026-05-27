@@ -40,7 +40,7 @@ data "archive_file" "aws-wazuh-lambda-wodle-failover" {
 resource "aws_lambda_function" "aws-wazuh-lambda-slack-notify" {
   function_name    = "aws-wazuh-lambda-slack-notify"
   role             = aws_iam_role.aws-wazuh-lambda-slack-notify-role.arn
-  handler          = "slack_notify.lambda_handler"
+  handler          = "lambda_slack_notify.lambda_handler"
   runtime          = "python3.12"
   filename         = data.archive_file.aws-wazuh-lambda-slack-notify.output_path
   source_code_hash = data.archive_file.aws-wazuh-lambda-slack-notify.output_base64sha256

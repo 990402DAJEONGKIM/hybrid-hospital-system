@@ -78,8 +78,8 @@ def disable_wodle_wazuh02():
 
 
 def lambda_handler(event, context):
-    ec2_state = get_alarm_state("aws-wazuh-status-01")
-    mgr_state = get_alarm_state("aws-wazuh-manager-01")
+    ec2_state = get_alarm_state("aws-wazuh-cw-status-01")
+    mgr_state = get_alarm_state("aws-wazuh-cw-manager-01")
 
     logger.info(f"EC2 상태: {ec2_state}, Manager 상태: {mgr_state}")
 

@@ -218,6 +218,32 @@
         - onprem_rules.xml
       tags: config
 
+    # 1. ecs-ec2 그룹 생성
+    - name: ecs-ec2 Agent 그룹 생성
+      shell: |
+        /var/ossec/bin/agent_groups -a -g ecs-ec2 -q || true
+      tags: config
+
+    # 2. ecs-ec2 그룹 디렉토리 생성
+    - name: ecs-ec2 그룹 디렉토리 생성
+      file:
+        path: /var/ossec/etc/shared/ecs-ec2
+        state: directory
+        owner: wazuh
+        group: wazuh
+        mode: '0770'
+      tags: config
+
+    # 3. 기존 agent.conf를 ecs-ec2 그룹에도 배포
+    - name: ecs-ec2 Agent 설정 배포
+      copy:
+        src: agent_ecs.conf 
+        dest: /var/ossec/etc/shared/ecs-ec2/agent.conf
+        owner: wazuh
+        group: wazuh
+        mode: '0640'
+      tags: config
+
     - name: Agent 중앙 설정 배포
       copy:
         src: agent.conf
@@ -281,6 +307,13 @@
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^server.host:'
         line: 'server.host: 0.0.0.0'
+      tags: config
+
+    - name: Dashboard session TTL 설정
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.session.ttl:'
+        line: 'opensearch_security.session.ttl: 900000'
       tags: config
 
     - name: Filebeat 설정 배포
@@ -367,15 +400,6 @@
         force: yes
       tags: config
 
-    - name: wazuh API admin 비밀번호 추출
-      shell: >
-        tar -axf /tmp/wazuh-install-files.tar
-        wazuh-install-files/wazuh-passwords.txt -O |
-        grep -P "'wazuh'$" -A1 |
-        grep api_password | awk -F"'" '{print $2}'
-      register: wazuh_api_pw
-      no_log: true
-      tags: config
 
     - name: wazuh-wui API 비밀번호 설정
       shell: >
@@ -383,15 +407,15 @@
         -u wazuh-wui
         -p '{{ wazuh_wui_password }}'
         -au wazuh
-        -ap '{{ wazuh_api_pw.stdout }}'
+        -ap '{{ wazuh_api_password }}' 
       no_log: true
       tags: config
 
-    - name: wazuh.yml run_as false 설정
+    - name: wazuh.yml run_as true 설정
       replace:
         path: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
-        regexp: 'run_as: true'
-        replace: 'run_as: false'
+        regexp: 'run_as: false'
+        replace: 'run_as: true'
       tags: config
 
 
@@ -630,6 +654,13 @@
     - name: 2단계 - Manager 포트 대기
       wait_for:
         port: 1514
+        delay: 5
+        timeout: 120
+      tags: service
+
+    - name: 2-1단계 - Manager API 포트 대기
+      wait_for:
+        port: 55000
         delay: 5
         timeout: 120
       tags: service
