@@ -10,17 +10,17 @@
 # =========================================================
 
 # ── 시크릿 ARN ───────────────────────────────────────────
-output "hospital_user_secret_arn" {
-  description = "hospital_user 시크릿 ARN (Vault DB config 연동)"
-  value       = aws_secretsmanager_secret.hospital_user.arn
-  sensitive   = true
-}
+# output "hospital_user_secret_arn" {
+#   description = "hospital_user 시크릿 ARN (Vault DB config 연동)"
+#   value       = aws_secretsmanager_secret.hospital_user.arn
+#   sensitive   = true
+# }
 
-output "api_user_secret_arn" {
-  description = "api_user 시크릿 ARN (레거시 fallback, 90일 로테이션)"
-  value       = aws_secretsmanager_secret.api_user.arn
-  sensitive   = true
-}
+# output "api_user_secret_arn" {
+#   description = "api_user 시크릿 ARN (레거시 fallback, 90일 로테이션)"
+#   value       = aws_secretsmanager_secret.api_user.arn
+#   sensitive   = true
+# }
 
 output "dump_user_secret_arn" {
   description = "dump_user 시크릿 ARN (RDS dump Lambda 전용)"
