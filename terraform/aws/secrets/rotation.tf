@@ -120,7 +120,7 @@ resource "aws_iam_role_policy" "rotation_lambda" {
         Resource = [
           # aws_secretsmanager_secret.hospital_user.arn,
           # aws_secretsmanager_secret.api_user.arn,
-          aws_secretsmanager_secret.dump_user.arn,
+          aws_secretsmanager_secret.dump_user_v2.arn.arn,
         ]
       },
       {
@@ -229,7 +229,7 @@ resource "aws_lambda_permission" "rotation_dump_user" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.rotation.function_name
   principal     = "secretsmanager.amazonaws.com"
-  source_arn    = aws_secretsmanager_secret.dump_user.arn
+  source_arn    = aws_secretsmanager_secret.dump_user_v2.arn
 }
 
 
@@ -259,7 +259,7 @@ resource "aws_lambda_permission" "rotation_dump_user" {
 # }
 
 resource "aws_secretsmanager_secret_rotation" "dump_user" {
-  secret_id           = aws_secretsmanager_secret.dump_user.arn
+  secret_id           = aws_secretsmanager_secret.dump_user_v2.arn
   rotation_lambda_arn = aws_lambda_function.rotation.arn
 
   rotation_rules {
