@@ -90,6 +90,21 @@ locals {
           "kms:DescribeKey",
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "AllowGuardDuty"
+        Effect = "Allow"
+        Principal = {
+          Service = "guardduty.amazonaws.com"
+        }
+        Action   = "kms:GenerateDataKey"
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:detector/*"
+          }
+        }
       }
     ]
   })
