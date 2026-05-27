@@ -118,8 +118,8 @@ resource "aws_iam_role_policy" "rotation_lambda" {
         ]
         # 로테이션 대상 시크릿 전체 — TC-aws-secrets에서 통합 관리
         Resource = [
-          aws_secretsmanager_secret.hospital_user.arn,
-          aws_secretsmanager_secret.api_user.arn,
+          # aws_secretsmanager_secret.hospital_user.arn,
+          # aws_secretsmanager_secret.api_user.arn,
           aws_secretsmanager_secret.dump_user.arn,
         ]
       },
