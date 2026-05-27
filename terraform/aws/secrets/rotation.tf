@@ -241,8 +241,10 @@ resource "aws_secretsmanager_secret_rotation" "hospital_user" {
   rotation_lambda_arn = aws_lambda_function.rotation.arn
 
   rotation_rules {
-    automatically_after_days = var.hospital_user_rotation_days # 기본 7일
+    automatically_after_days = var.hospital_user_rotation_days
   }
+
+  depends_on = [aws_lambda_permission.rotation_hospital_user]
 }
 
 resource "aws_secretsmanager_secret_rotation" "api_user" {
@@ -250,8 +252,10 @@ resource "aws_secretsmanager_secret_rotation" "api_user" {
   rotation_lambda_arn = aws_lambda_function.rotation.arn
 
   rotation_rules {
-    automatically_after_days = var.api_user_rotation_days # 기본 90일
+    automatically_after_days = var.api_user_rotation_days
   }
+
+  depends_on = [aws_lambda_permission.rotation_api_user]
 }
 
 resource "aws_secretsmanager_secret_rotation" "dump_user" {
@@ -259,6 +263,8 @@ resource "aws_secretsmanager_secret_rotation" "dump_user" {
   rotation_lambda_arn = aws_lambda_function.rotation.arn
 
   rotation_rules {
-    automatically_after_days = var.dump_user_rotation_days # 기본 7일
+    automatically_after_days = var.dump_user_rotation_days
   }
+
+  depends_on = [aws_lambda_permission.rotation_dump_user]
 }
