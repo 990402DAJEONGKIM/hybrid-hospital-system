@@ -49,7 +49,7 @@ resource "aws_ecr_lifecycle_policy" "rotation" {
 # ─────────────────────────────────────────────────────────
 resource "aws_security_group" "rotation_lambda" {
   name        = local.rotation_sg_name
-  description = "Rotation Lambda — RDS 접근 전용"
+  description = "Rotation Lambda - RDS access only"
   vpc_id      = data.aws_vpc.main.id
 
   egress {
