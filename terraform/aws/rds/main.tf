@@ -200,6 +200,19 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
     value        = "1"
     apply_method = "pending-reboot"
   }
+  # DB 접속 종료 기록
+  parameter {
+  name         = "log_disconnections"
+  value        = "1"
+  apply_method = "pending-reboot"
+  }
+  # 슬로우 쿼리 기록
+  # 1000ms(1초) 이상 걸리는 쿼리를 자동으로 로그에 기록
+  parameter {
+  name         = "log_min_duration_statement"
+  value        = "1000"  # 1초 이상 쿼리 기록
+  apply_method = "immediate"
+  }
 
   tags = merge(local.common_tags, { Name = "aws-aurora-01-pglogical" })
 }
@@ -384,6 +397,14 @@ resource "aws_security_group" "aws_bastion_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+resource "aws_cloudwatch_log_group" "aws-cwl-rds-postgresql-01" {
+  name              = "/aws/rds/cluster/aws-aurora-01/postgresql"
+  retention_in_days = 731
+  tags = merge(local.common_tags, { Name = "aws-cwl-rds-postgresql-01" })
+}
+
+
 
 resource "aws_instance" "aws_bastion_01" {
   ami                  = "ami-0603dd3984985653f"

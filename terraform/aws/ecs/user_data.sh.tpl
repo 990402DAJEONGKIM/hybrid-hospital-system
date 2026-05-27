@@ -54,6 +54,10 @@ cat > /var/ossec/etc/ossec.conf << 'OSSEC_EOF'
 </ossec_config>
 OSSEC_EOF
 
+AGENT_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4 | tr '.' '-')
+sed -i "s|<client>|<client>\n    <agent_name>ecs-ec2-$AGENT_IP</agent_name>|" \
+  /var/ossec/etc/ossec.conf
+
 systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl start wazuh-agent
