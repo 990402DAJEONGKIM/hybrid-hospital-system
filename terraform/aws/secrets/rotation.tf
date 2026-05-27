@@ -120,7 +120,7 @@ resource "aws_iam_role_policy" "rotation_lambda" {
         Resource = [
           # aws_secretsmanager_secret.hospital_user.arn,
           # aws_secretsmanager_secret.api_user.arn,
-          aws_secretsmanager_secret.dump_user_v2.arn.arn,
+          aws_secretsmanager_secret.dump_user_v2.arn,
         ]
       },
       {
