@@ -22,11 +22,7 @@
 #   3. lambda.tf 의 var.rds_secret_arn → local.dump_user_secret_arn 으로 교체
 # ─────────────────────────────────────────────────────────
 
-# data "tfe_outputs" "secrets" {
-#   organization = "<tfc-org-name>"   # ← 실제 TFC 조직명으로 교체
-#   workspace    = "TC-aws-secrets"
-# }
-#
-# locals {
-#   dump_user_secret_arn = data.tfe_outputs.secrets.values.dump_user_secret_arn
-# }
+data "tfe_outputs" "secrets" {
+  organization = "k2p"
+  workspace    = "TC-aws-secrets"
+}
