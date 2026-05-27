@@ -75,7 +75,7 @@ resource "aws_ecs_task_definition" "patient" {
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
-  cpu                      = "1024"
+  cpu                      = "512"
   memory                   = "1536"
 
   container_definitions = jsonencode([
@@ -138,7 +138,7 @@ resource "aws_ecs_task_definition" "staff" {
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
-  cpu                      = "1024"
+  cpu                      = "512"
   memory                   = "1536"
 
   container_definitions = jsonencode([
@@ -199,7 +199,7 @@ resource "aws_ecs_service" "patient" {
   name            = "patient-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.patient.arn
-  desired_count   = 2
+  desired_count   = 1
 
 
   capacity_provider_strategy {
@@ -241,7 +241,7 @@ resource "aws_ecs_service" "staff" {
   name            = "staff-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.staff.arn
-  desired_count   = 2
+  desired_count   = 1
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.main.name
@@ -275,10 +275,12 @@ resource "aws_ecs_service" "staff" {
 
 # ─────────────────────────────────────────────────────────
 # ECS Service Auto Scaling — 환자 포털 (CPU 70% 기준)
+# EC2 1대 기준: Task 512 CPU × 4개 수용 가능 (2048 CPU)
+# min:1 → max:4, EC2 용량 초과 시 Capacity Provider가 EC2 추가
 # ─────────────────────────────────────────────────────────
 resource "aws_appautoscaling_target" "patient" {
-  max_capacity       = 9
-  min_capacity       = 3
+  max_capacity       = 4
+  min_capacity       = 1
   resource_id        = "service/${aws_ecs_cluster.main.name}/patient-service"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
@@ -292,6 +294,40 @@ resource "aws_appautoscaling_policy" "patient_cpu" {
   resource_id        = aws_appautoscaling_target.patient.resource_id
   scalable_dimension = aws_appautoscaling_target.patient.scalable_dimension
   service_namespace  = aws_appautoscaling_target.patient.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 70.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+  }
+}
+
+
+# ─────────────────────────────────────────────────────────
+# ECS Service Auto Scaling — 의료진 포털 (CPU 70% 기준)
+# EC2 1대 기준: Task 512 CPU × 4개 수용 가능 (2048 CPU)
+# min:1 → max:4, EC2 용량 초과 시 Capacity Provider가 EC2 추가
+# ─────────────────────────────────────────────────────────
+resource "aws_appautoscaling_target" "staff" {
+  max_capacity       = 4
+  min_capacity       = 1
+  resource_id        = "service/${aws_ecs_cluster.main.name}/staff-service"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  depends_on = [aws_ecs_service.staff]
+}
+
+resource "aws_appautoscaling_policy" "staff_cpu" {
+  name               = "staff-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.staff.resource_id
+  scalable_dimension = aws_appautoscaling_target.staff.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.staff.service_namespace
 
   target_tracking_scaling_policy_configuration {
     target_value       = 70.0

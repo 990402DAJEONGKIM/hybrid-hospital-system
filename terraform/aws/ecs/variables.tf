@@ -32,7 +32,7 @@ variable "ec2_key_name" {
 variable "asg_min_size" {
   description = "ASG 최소 EC2 수"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "asg_max_size" {
@@ -44,7 +44,7 @@ variable "asg_max_size" {
 variable "asg_desired_size" {
   description = "ASG 초기 EC2 수"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 # ── Wazuh ───────────────────────────────────────────────
