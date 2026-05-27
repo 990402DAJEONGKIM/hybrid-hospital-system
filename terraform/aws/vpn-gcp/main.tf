@@ -101,12 +101,6 @@ resource "aws_vpn_connection_route" "gcp_cloudfn" {
   destination_cidr_block = var.gcp_cloudfn_cidr
 }
 
-# GCP Cloud Functions VPC Connector 라우팅 테이블 등록
-resource "aws_route" "db_to_gcp_cloudfn" {
-  route_table_id         = data.aws_route_table.db.id
-  destination_cidr_block = var.gcp_cloudfn_cidr
-  gateway_id             = data.aws_vpn_gateway.main.id
-}
 # ── 라우팅 테이블 — DB 서브넷 ─────────────────────────────────
 
 resource "aws_route" "db_to_gcp" {
@@ -122,33 +116,21 @@ resource "aws_route" "db_to_gcp_psa" {
   gateway_id             = data.aws_vpn_gateway.main.id
 }
 
-# GCP VPC Connector 대역 — Cloud Functions → RDS 로테이션용
-resource "aws_vpn_connection_route" "gcp_vpc_connector" {
-  vpn_connection_id      = aws_vpn_connection.gcp.id
-  destination_cidr_block = "10.10.2.0/28"
-}
-
-resource "aws_route" "db_to_gcp_vpc_connector" {
-  route_table_id         = data.aws_route_table.db.id
-  destination_cidr_block = "10.10.2.0/28"
-  gateway_id             = data.aws_vpn_gateway.main.id
-}
-
-# GCP Cloud Functions VPC Connector 대역 VPN 라우트
-# (gcp-fn-cloudsql-rotation → Aurora 비밀번호 로테이션용)
-# 2026-05-27 수동 추가분 IaC화
-resource "aws_vpn_connection_route" "gcp_cloudfn" {
-  vpn_connection_id      = aws_vpn_connection.gcp.id
-  destination_cidr_block = var.gcp_cloudfn_cidr
-}
-
+# GCP Cloud Functions VPC Connector 라우팅 테이블 등록
 resource "aws_route" "db_to_gcp_cloudfn" {
   route_table_id         = data.aws_route_table.db.id
   destination_cidr_block = var.gcp_cloudfn_cidr
   gateway_id             = data.aws_vpn_gateway.main.id
 }
 
+# ── Import — 수동 생성 리소스 ─────────────────────────────────
+
 import {
   to = aws_vpn_connection_route.gcp_cloudfn
   id = "vpn-0658a6b8904dd6320:10.10.2.0/28"
+}
+
+import {
+  to = aws_route.db_to_gcp_cloudfn
+  id = "rtb-08dec2fa3df43ed85_10.10.2.0/28"
 }
