@@ -161,6 +161,21 @@ resource "aws_secretsmanager_secret" "pglogical_repl" {
 
   tags = merge(local.common_tags, { Name = "rds-pglogical-repl-password" })
 }
+# ─────────────────────────────────────────────────────────
+# dump_user (신규 작명) — RDS 덤프 전용 계정 (7일 로테이션)
+# 마이그레이션: hospital/rds/dump-user → aws-rds-dump-user-secret
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "dump_user_v2" {
+  name        = "aws-rds-dump-user-secret"
+  description = "RDS dump 전용 계정 — dump_user (7일 로테이션, ISMS-P 2.5.4)"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-rds-dump-user-secret" })
+}
 
 # # =========================================================
 # # Import 블록 — 기존 리소스 가져오기

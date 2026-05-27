@@ -22,9 +22,17 @@
 #   sensitive   = true
 # }
 
-output "dump_user_secret_arn" {
-  description = "dump_user 시크릿 ARN (RDS dump Lambda 전용)"
+# 구버전 — 마이그레이션 완료 후 삭제
+output "dump_user_secret_arn_legacy" {
+  description = "dump_user 시크릿 ARN — 구버전 (hospital/rds/dump-user), 삭제 예정"
   value       = aws_secretsmanager_secret.dump_user.arn
+  sensitive   = true
+}
+
+# 신규
+output "dump_user_secret_arn" {
+  description = "dump_user 시크릿 ARN (aws-rds-dump-user-secret)"
+  value       = aws_secretsmanager_secret.dump_user_v2.arn
   sensitive   = true
 }
 
