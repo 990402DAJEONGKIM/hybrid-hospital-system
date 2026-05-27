@@ -15,7 +15,33 @@
 #       → (pglogical_repl만) RDS ALTER USER
 #       → Secret Manager 업데이트
 # =========================================================
+# ─────────────────────────────────────────────────────────
+# gcf-v2-sources 버킷 IAM — Cloud Build 빌드 권한
+# (GCP 관리 버킷, Cloud Functions 배포 후 IAM 바인딩)
+# ─────────────────────────────────────────────────────────
+resource "google_storage_bucket_iam_member" "cloudbuild_gcf_sources_admin" {
+  bucket = "gcf-v2-sources-${data.google_project.current.number}-${var.region}"
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
 
+  depends_on = [google_cloudfunctions2_function.rotation]
+}
+
+resource "google_storage_bucket_iam_member" "gcf_robot_sources_admin" {
+  bucket = "gcf-v2-sources-${data.google_project.current.number}-${var.region}"
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:service-${data.google_project.current.number}@gcf-admin-robot.iam.gserviceaccount.com"
+
+  depends_on = [google_cloudfunctions2_function.rotation]
+}
+
+resource "google_storage_bucket_iam_member" "cloudbuild_sa_sources_admin" {
+  bucket = "gcf-v2-sources-${data.google_project.current.number}-${var.region}"
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+
+  depends_on = [google_cloudfunctions2_function.rotation]
+}
 
 # TFC 실행 SA — Secret Manager 생성 권한
 resource "google_project_iam_member" "tfc_secret_admin" {
