@@ -17,3 +17,9 @@ data "aws_db_instance" "aurora" {
 data "aws_s3_bucket" "storage" {
   bucket = var.s3_bucket_name
 }
+data "aws_kms_key" "secretsmanager" {
+  key_id = "alias/aws-kms-secretsmanager-01"
+}
+data "aws_kms_key" "secretsmanager" {
+  key_id = "alias/aws-kms-sm-01"
+}
