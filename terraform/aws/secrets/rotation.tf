@@ -183,7 +183,7 @@ resource "aws_lambda_function" "rotation" {
 
   environment {
     variables = {
-      RDS_HOST = data.aws_db_instance.aurora.address
+      RDS_HOST = data.aws_rds_cluster.aurora.endpoint
       RDS_PORT = "5432"
       DB_NAME  = "hospital"
     }
