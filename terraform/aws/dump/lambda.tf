@@ -107,7 +107,8 @@ resource "aws_iam_role_policy" "db_dump_lambda" {
         Sid      = "SecretsManager"
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [var.rds_secret_arn]
+        Resource = [local.dump_user_secret_arn]
+
       },
       {
         Sid      = "KMSDecrypt"
@@ -178,7 +179,7 @@ resource "aws_lambda_function" "db_dump" {
 
   environment {
     variables = {
-      RDS_SECRET_ARN = var.rds_secret_arn
+      RDS_SECRET_ARN = local.dump_user_secret_arn
       RDS_HOST       = data.aws_db_instance.aurora.address
       RDS_PORT       = "5432"
       DB_NAME        = "hospital"
