@@ -427,3 +427,8 @@ data "aws_security_group" "ecs_ec2" {
   name = "aws-ecs-ec2-sg"
 }
 # =========================================================================================
+
+import {
+  to = aws_cloudwatch_log_group.aws-cwl-rds-postgresql-01
+  id = "/aws/rds/cluster/aws-aurora-01/postgresql"
+}
