@@ -114,7 +114,10 @@ resource "aws_iam_role_policy" "db_dump_lambda" {
         Sid      = "KMSDecrypt"
         Effect   = "Allow"
         Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
-        Resource = [data.aws_kms_key.s3.arn]
+        Resource = [
+          data.aws_kms_key.s3.arn,
+          data.aws_kms_key.secretsmanager.arn,
+         ]
       },
       {
         Sid    = "S3Upload"
