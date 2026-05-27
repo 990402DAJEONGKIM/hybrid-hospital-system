@@ -203,3 +203,16 @@ import {
   to = aws_iam_role.rotation_lambda
   id = "aws-lambda-rotation-role"
 }
+import {
+  to = aws_lambda_permission.rotation_api_user
+  id = "aws-lambda-rotation/AllowSecretsManagerRotationApiUser"
+}
+import {
+  to = aws_lambda_permission.rotation_hospital_user
+  id = "aws-lambda-rotation/AllowSecretsManagerRotationHospitalUser"
+}
+
+import {
+  to = aws_lambda_permission.rotation_dump_user
+  id = "aws-lambda-rotation/AllowSecretsManagerRotationDumpUser"
+}
