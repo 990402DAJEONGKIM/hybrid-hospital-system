@@ -37,8 +37,3 @@ variable "gcp_cloudfn_cidr" {
   type        = string
   default     = "10.10.2.0/28"
 }
-variable "gcp_cloudfn_cidr" {
-  description = "GCP Cloud Functions VPC Connector 대역 (rotation → Aurora 접근용)"
-  type        = string
-  default     = "10.10.2.0/28"
-}
