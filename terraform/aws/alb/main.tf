@@ -146,6 +146,12 @@ resource "aws_lb_target_group" "wazuh" {
   vpc_id      = data.aws_vpc.main.id
   target_type = "instance"
 
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400
+    enabled         = true
+  }
+
   health_check {
     path                = "/"
     protocol              = "HTTPS"
