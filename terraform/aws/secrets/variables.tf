@@ -53,3 +53,12 @@ variable "api_user_rotation_days" {
   type        = number
   default     = 90
 }
+variable "app_subnet_ids" {
+  description = "App 서브넷 ID 목록 (Lambda VPC 배치용)"
+  type        = list(string)
+}
+
+variable "vault_lambda_sg_id" {
+  description = "Lambda to Vault 보안 그룹 ID (aws-lambda-vault-sg)"
+  type        = string
+}
