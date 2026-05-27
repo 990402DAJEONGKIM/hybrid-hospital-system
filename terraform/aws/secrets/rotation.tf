@@ -78,7 +78,7 @@ resource "aws_security_group_rule" "rds_allow_rotation_lambda" {
   protocol                 = "tcp"
   security_group_id        = var.rds_security_group_id
   source_security_group_id = aws_security_group.rotation_lambda.id
-  description              = "Rotation Lambda 비밀번호 로테이션"
+  description              = "Rotation Lambda password rotation"
 }
 
 
