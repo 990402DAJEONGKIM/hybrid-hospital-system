@@ -34,11 +34,11 @@ variable "rds_security_group_id" {
 #   2. rotation.tf 의 tfe_outputs 블록 주석 해제
 #   3. lambda.tf 의 var.rds_secret_arn → local.dump_user_secret_arn 으로 교체
 # ─────────────────────────────────────────────────────────
-variable "rds_secret_arn" {
-  description = "Secrets Manager — dump_user 비밀번호 ARN (TC-aws-secrets 적용 전 임시 변수)"
-  type        = string
-  sensitive   = true
-}
+# variable "rds_secret_arn" {
+#   description = "Secrets Manager — dump_user 비밀번호 ARN (TC-aws-secrets 적용 전 임시 변수)"
+#   type        = string
+#   sensitive   = true
+# }
 
 variable "s3_bucket_name" {
   description = "덤프를 저장할 S3 버킷 이름 (TC-aws-S3에서 관리)"
