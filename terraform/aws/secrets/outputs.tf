@@ -62,3 +62,9 @@ output "rotation_ecr_repository_url" {
   description = "Rotation 이미지 푸시 대상 ECR URL"
   value       = aws_ecr_repository.rotation.repository_url
 }
+
+output "pglogical_repl_secret_arn" {
+  description = "pglogical_repl 시크릿 ARN (GCP Cloud Function 참조용)"
+  value       = aws_secretsmanager_secret.pglogical_repl.arn
+  sensitive   = true
+}
