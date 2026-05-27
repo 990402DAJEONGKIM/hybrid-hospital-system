@@ -25,8 +25,17 @@ variable "rds_security_group_id" {
   type        = string
 }
 
+# ─────────────────────────────────────────────────────────
+# [현재 상태] dump Lambda가 dump_user 시크릿에 접근하기 위한 ARN.
+#   TFC 워크스페이스 변수에 직접 입력해서 사용 중.
+#
+# [마이그레이션 후] TC-aws-secrets apply 완료 시:
+#   1. 이 변수 제거
+#   2. rotation.tf 의 tfe_outputs 블록 주석 해제
+#   3. lambda.tf 의 var.rds_secret_arn → local.dump_user_secret_arn 으로 교체
+# ─────────────────────────────────────────────────────────
 variable "rds_secret_arn" {
-  description = "Secrets Manager — dump_user 비밀번호 ARN"
+  description = "Secrets Manager — dump_user 비밀번호 ARN (TC-aws-secrets 적용 전 임시 변수)"
   type        = string
   sensitive   = true
 }
@@ -56,7 +65,14 @@ variable "db_dump_lambda_timeout" {
 }
 
 variable "dump_user_rotation_days" {
-  description = "dump_user 비밀번호 로테이션 주기 (일) — ISMS-P 2.5.4"
+  description = "dump_user 비밀번호 로테이션 주기 (일) — TC-aws-secrets 적용 후 해당 워크스페이스에서 관리"
   type        = number
   default     = 7
 }
+
+# ─────────────────────────────────────────────────────────
+# [제거됨] api_user 관련 변수
+#   api_user_secret_arn, api_user_rotation_days 는
+#   TC-aws-secrets 워크스페이스에서 통합 관리.
+#   dump 워크스페이스에서는 불필요하므로 제거.
+# ─────────────────────────────────────────────────────────
