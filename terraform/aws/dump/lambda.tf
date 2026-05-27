@@ -183,7 +183,7 @@ resource "aws_lambda_function" "db_dump" {
   environment {
     variables = {
       RDS_SECRET_ARN = local.dump_user_secret_arn
-      RDS_HOST       = data.aws_db_instance.aurora.address
+      RDS_HOST       = data.aws_rds_cluster.aurora.endpoint
       RDS_PORT       = "5432"
       DB_NAME        = "hospital"
       S3_BUCKET      = data.aws_s3_bucket.storage.bucket
