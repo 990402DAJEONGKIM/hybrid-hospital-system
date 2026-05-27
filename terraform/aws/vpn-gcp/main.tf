@@ -122,15 +122,3 @@ resource "aws_route" "db_to_gcp_cloudfn" {
   destination_cidr_block = var.gcp_cloudfn_cidr
   gateway_id             = data.aws_vpn_gateway.main.id
 }
-
-# ── Import — 수동 생성 리소스 ─────────────────────────────────
-
-import {
-  to = aws_vpn_connection_route.gcp_cloudfn
-  id = "vpn-0658a6b8904dd6320:10.10.2.0/28"
-}
-
-import {
-  to = aws_route.db_to_gcp_cloudfn
-  id = "rtb-08dec2fa3df43ed85_10.10.2.0/28"
-}
