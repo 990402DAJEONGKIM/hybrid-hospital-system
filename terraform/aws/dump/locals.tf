@@ -15,4 +15,6 @@ locals {
   rotation_ecr_name  = "aws-ecr-rotation"
   rotation_cwl_name  = "/aws/lambda/aws-lambda-rotation"
 
+  # 시크릿 ARN (TC-aws-secrets tfe_outputs 참조)
+  dump_user_secret_arn = data.tfe_outputs.secrets.values.dump_user_secret_arn
 }
