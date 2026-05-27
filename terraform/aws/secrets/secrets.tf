@@ -29,17 +29,17 @@
 # hospital_user — Vault DB config 연동 계정 (7일 로테이션)
 # EventBridge → aws-lambda-vault-rotator → Vault database/config 업데이트
 # ─────────────────────────────────────────────────────────
-resource "aws_secretsmanager_secret" "hospital_user" {
-  name        = "aws-secret-rds-hospital-user"
-  description = "Vault Dynamic Secrets 발급용 관리자 계정 — hospital_user (7일 로테이션)"
-  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+# resource "aws_secretsmanager_secret" "hospital_user" {
+#   name        = "aws-secret-rds-hospital-user"
+#   description = "Vault Dynamic Secrets 발급용 관리자 계정 — hospital_user (7일 로테이션)"
+#   kms_key_id  = data.aws_kms_key.secretsmanager.arn
 
-  lifecycle {
-    prevent_destroy = true
-  }
+#   lifecycle {
+#     prevent_destroy = true
+#   }
 
-  tags = merge(local.common_tags, { Name = "aws-secret-rds-hospital-user" })
-}
+#   tags = merge(local.common_tags, { Name = "aws-secret-rds-hospital-user" })
+# }
 
 
 # ─────────────────────────────────────────────────────────
@@ -47,17 +47,17 @@ resource "aws_secretsmanager_secret" "hospital_user" {
 # ECS 앱이 Vault 없이 접근하던 정적 계정.
 # 현재는 fallback 용도 (실제 앱은 Vault Dynamic Secrets 사용).
 # ─────────────────────────────────────────────────────────
-resource "aws_secretsmanager_secret" "api_user" {
-  name        = "aws-secret-rds-api-user"
-  description = "레거시 호환 계정 — api_user (90일 로테이션, ISMS-P 2.5.4)"
-  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+# resource "aws_secretsmanager_secret" "api_user" {
+#   name        = "aws-secret-rds-api-user"
+#   description = "레거시 호환 계정 — api_user (90일 로테이션, ISMS-P 2.5.4)"
+#   kms_key_id  = data.aws_kms_key.secretsmanager.arn
 
-  lifecycle {
-    prevent_destroy = true
-  }
+#   lifecycle {
+#     prevent_destroy = true
+#   }
 
-  tags = merge(local.common_tags, { Name = "aws-secret-rds-api-user" })
-}
+#   tags = merge(local.common_tags, { Name = "aws-secret-rds-api-user" })
+# }
 
 
 # ─────────────────────────────────────────────────────────

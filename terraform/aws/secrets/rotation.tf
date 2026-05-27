@@ -118,8 +118,8 @@ resource "aws_iam_role_policy" "rotation_lambda" {
         ]
         # 로테이션 대상 시크릿 전체 — TC-aws-secrets에서 통합 관리
         Resource = [
-          aws_secretsmanager_secret.hospital_user.arn,
-          aws_secretsmanager_secret.api_user.arn,
+          # aws_secretsmanager_secret.hospital_user.arn,
+          # aws_secretsmanager_secret.api_user.arn,
           aws_secretsmanager_secret.dump_user.arn,
         ]
       },
@@ -208,21 +208,21 @@ resource "aws_cloudwatch_log_group" "rotation_lambda" {
 # ─────────────────────────────────────────────────────────
 # Lambda Permission — Secrets Manager 호출 허용
 # ─────────────────────────────────────────────────────────
-resource "aws_lambda_permission" "rotation_hospital_user" {
-  statement_id  = "AllowSecretsManagerRotationHospitalUser"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.rotation.function_name
-  principal     = "secretsmanager.amazonaws.com"
-  source_arn    = aws_secretsmanager_secret.hospital_user.arn
-}
+# resource "aws_lambda_permission" "rotation_hospital_user" {
+#   statement_id  = "AllowSecretsManagerRotationHospitalUser"
+#   action        = "lambda:InvokeFunction"
+#   function_name = aws_lambda_function.rotation.function_name
+#   principal     = "secretsmanager.amazonaws.com"
+#   source_arn    = aws_secretsmanager_secret.hospital_user.arn
+# }
 
-resource "aws_lambda_permission" "rotation_api_user" {
-  statement_id  = "AllowSecretsManagerRotationApiUser"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.rotation.function_name
-  principal     = "secretsmanager.amazonaws.com"
-  source_arn    = aws_secretsmanager_secret.api_user.arn
-}
+# resource "aws_lambda_permission" "rotation_api_user" {
+#   statement_id  = "AllowSecretsManagerRotationApiUser"
+#   action        = "lambda:InvokeFunction"
+#   function_name = aws_lambda_function.rotation.function_name
+#   principal     = "secretsmanager.amazonaws.com"
+#   source_arn    = aws_secretsmanager_secret.api_user.arn
+# }
 
 resource "aws_lambda_permission" "rotation_dump_user" {
   statement_id  = "AllowSecretsManagerRotationDumpUser"
@@ -236,27 +236,27 @@ resource "aws_lambda_permission" "rotation_dump_user" {
 # ─────────────────────────────────────────────────────────
 # Secrets Manager 자동 로테이션 설정
 # ─────────────────────────────────────────────────────────
-resource "aws_secretsmanager_secret_rotation" "hospital_user" {
-  secret_id           = aws_secretsmanager_secret.hospital_user.arn
-  rotation_lambda_arn = aws_lambda_function.rotation.arn
+# resource "aws_secretsmanager_secret_rotation" "hospital_user" {
+#   secret_id           = aws_secretsmanager_secret.hospital_user.arn
+#   rotation_lambda_arn = aws_lambda_function.rotation.arn
 
-  rotation_rules {
-    automatically_after_days = var.hospital_user_rotation_days
-  }
+#   rotation_rules {
+#     automatically_after_days = var.hospital_user_rotation_days
+#   }
 
-  depends_on = [aws_lambda_permission.rotation_hospital_user]
-}
+#   depends_on = [aws_lambda_permission.rotation_hospital_user]
+# }
 
-resource "aws_secretsmanager_secret_rotation" "api_user" {
-  secret_id           = aws_secretsmanager_secret.api_user.arn
-  rotation_lambda_arn = aws_lambda_function.rotation.arn
+# resource "aws_secretsmanager_secret_rotation" "api_user" {
+#   secret_id           = aws_secretsmanager_secret.api_user.arn
+#   rotation_lambda_arn = aws_lambda_function.rotation.arn
 
-  rotation_rules {
-    automatically_after_days = var.api_user_rotation_days
-  }
+#   rotation_rules {
+#     automatically_after_days = var.api_user_rotation_days
+#   }
 
-  depends_on = [aws_lambda_permission.rotation_api_user]
-}
+#   depends_on = [aws_lambda_permission.rotation_api_user]
+# }
 
 resource "aws_secretsmanager_secret_rotation" "dump_user" {
   secret_id           = aws_secretsmanager_secret.dump_user.arn
