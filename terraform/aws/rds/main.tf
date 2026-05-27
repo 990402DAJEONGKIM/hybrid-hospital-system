@@ -151,7 +151,7 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
     value        = "1"
     apply_method = "pending-reboot"
   }
-  
+
   # preload pglogical extension (reboot required)
   parameter {
     name         = "shared_preload_libraries"
@@ -186,12 +186,14 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
     value        = "0"
     apply_method = "immediate"
   }
+
   # 2026-05-20 김강환 pgaudit 추가(누가 언제 어떤 데이터를 조회/수정/삭제했는지 기록)
   parameter {
     name         = "pgaudit.log"
     value        = "write,ddl,role"
     apply_method = "pending-reboot"
   }
+
   # 2026-05-20 김강환 pgaudit 추가(누가 언제 어떤 데이터를 조회/수정/삭제했는지 기록)
   parameter {
     name         = "log_connections"
@@ -318,6 +320,23 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
         "secretsmanager:GetSecretValue",
         "secretsmanager:DescribeSecret"
       ]
+      # ───────────────────────────────────────────────────────────
+      # [현재 상태] 하드코딩 ARN + 와일드카드 사용 중.
+      #   Secrets Manager ARN 뒤에 랜덤 suffix가 붙어서
+      #   TC-aws-secrets 적용 전에는 와일드카드로 처리.
+      #
+      # [TC-aws-secrets 적용 후] 아래 단계로 교체:
+      #   1. 이 파일 상단(또는 data.tf)에 추가:
+      #        data "tfe_outputs" "secrets" {
+      #          organization = "k2p"
+      #          workspace    = "TC-aws-secrets"
+      #        }
+      #   2. 아래 Resource 블록을 교체:
+      #        Resource = [
+      #          data.tfe_outputs.secrets.values.hospital_user_secret_arn,
+      #          data.tfe_outputs.secrets.values.api_user_secret_arn,
+      #        ]
+      # ───────────────────────────────────────────────────────────
       Resource = [
         "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-hospital-user*",
         "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:aws-secret-rds-api-user*"
