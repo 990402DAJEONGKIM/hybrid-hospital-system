@@ -152,8 +152,3 @@ import {
   to = aws_vpn_connection_route.gcp_cloudfn
   id = "vpn-0658a6b8904dd6320:10.10.2.0/28"
 }
-
-import {
-  to = aws_vpn_connection_route.gcp_cloudfn
-  id = "vpn-0658a6b8904dd6320:10.10.2.0/28"
-}
