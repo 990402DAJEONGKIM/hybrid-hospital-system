@@ -1,11 +1,8 @@
 #!/bin/bash
 set -e
 
-# ── rsyslog 설치 (AL2023 기본 미포함) ───────────────────
-dnf install -y rsyslog
-systemctl enable rsyslog --now
-
 # ── ECS 클러스터 등록 ────────────────────────────────────
+mkdir -p /etc/ecs 
 echo "ECS_CLUSTER=${cluster_name}" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true" >> /etc/ecs/ecs.config
