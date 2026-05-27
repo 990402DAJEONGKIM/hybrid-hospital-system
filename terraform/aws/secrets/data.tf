@@ -27,8 +27,7 @@ data "aws_vpc" "main" {
 
 # ─────────────────────────────────────────────────────────
 # Aurora (TC-aws-RDS 워크스페이스에서 생성)
-# Rotation Lambda 환경변수에 RDS_HOST 주입 시 사용
 # ─────────────────────────────────────────────────────────
-data "aws_db_instance" "aurora" {
-  db_instance_identifier = "aws-aurora-01"
+data "aws_rds_cluster" "aurora" {
+  cluster_identifier = "aws-aurora-01"
 }
