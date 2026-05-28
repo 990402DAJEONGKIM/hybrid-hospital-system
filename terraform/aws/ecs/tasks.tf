@@ -71,11 +71,8 @@ locals {
 }
 
 
-<<<<<<< Updated upstream
-=======
 
 
->>>>>>> Stashed changes
 # ─────────────────────────────────────────────────────────
 # CloudWatch Log Groups
 # ─────────────────────────────────────────────────────────
@@ -143,14 +140,7 @@ resource "aws_ecs_task_definition" "patient" {
         { name = "ALLOWED_ORIGINS",  value = "https://${var.patient_allowed_hosts}" },
         { name = "TZ",               value = "Asia/Seoul"              },
       ]
-<<<<<<< Updated upstream
-      secrets = local.api_secrets
-      dockerLabels = {
-      container_name = "api-patient"
-      }
-=======
       secrets = local.patient_secrets
->>>>>>> Stashed changes
       logConfiguration = {
         logDriver = "json-file"
         options = {
@@ -217,14 +207,7 @@ resource "aws_ecs_task_definition" "staff" {
         { name = "ALLOWED_ORIGINS", value = "https://${var.staff_allowed_hosts}" },
         { name = "TZ",              value = "Asia/Seoul"             },
       ]
-<<<<<<< Updated upstream
-      secrets = local.api_secrets
-      dockerLabels = {
-        container_name = "api-staff"
-      }
-=======
       secrets = local.staff_secrets
->>>>>>> Stashed changes
       logConfiguration = {
         logDriver = "json-file"
         options = {
