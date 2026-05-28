@@ -142,7 +142,31 @@ def get_rds_admin_password() -> str:
     )
     return secret["password"]
 
-
+def update_pglogical_node_interface(new_password: str, admin_password: str) -> None:
+    """Cloud SQL pglogical node_interface DSN 업데이트"""
+    conn = psycopg2.connect(
+        host=CLOUD_SQL_IP,
+        port=5432,
+        user="hospital_app",
+        password=admin_password,
+        dbname="hospital",
+        sslmode="require",
+        connect_timeout=10,
+    )
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT pglogical.alter_node_add_interface(
+                    node_name := 'cloud_sql_subscriber',
+                    interface_name := 'cloud_sql_subscriber',
+                    dsn := %s
+                )
+            """, (f"host={CLOUD_SQL_IP} port=5432 dbname=hospital user=pglogical_repl password={new_password} sslmode=require",))
+        logger.info("pglogical node_interface DSN 업데이트 완료")
+    finally:
+        conn.close()
+        
 def rotate_passwords(request):
     """Cloud Functions 엔트리포인트"""
     logger.info("비밀번호 로테이션 시작")
@@ -177,6 +201,7 @@ def rotate_passwords(request):
                 # ISMS-P 2.5.4: Aurora 자격증명 단일 정본 유지
                 # AWS Secrets Manager도 동기화하여 pglogical_setup.sh 등에서 참조 가능하도록 함
                 update_aws_secret(AWS_REPL_SECRET_ID, new_password)
+                update_pglogical_node_interface(new_password, admin_password)  # 추가
             else:
                 change_cloudsql_password(username, new_password, admin_password)
 
@@ -198,3 +223,28 @@ def rotate_passwords(request):
     logger.info("전체 로테이션 완료")
     return {"status": "ok", "rotated": [t[0] for t in ROTATION_TARGETS]}, 200
 # trigger rebuild Wed May 27 16:01:47 KST 2026
+
+def update_pglogical_node_interface(new_password: str, admin_password: str) -> None:
+    """Cloud SQL pglogical node_interface DSN 업데이트"""
+    conn = psycopg2.connect(
+        host=CLOUD_SQL_IP,
+        port=5432,
+        user="hospital_app",
+        password=admin_password,
+        dbname="hospital",
+        sslmode="require",
+        connect_timeout=10,
+    )
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT pglogical.alter_node_add_interface(
+                    node_name := 'cloud_sql_subscriber',
+                    interface_name := 'cloud_sql_subscriber',
+                    dsn := %s
+                )
+            """, (f"host={CLOUD_SQL_IP} port=5432 dbname=hospital user=pglogical_repl password={new_password} sslmode=require",))
+        logger.info("pglogical node_interface DSN 업데이트 완료")
+    finally:
+        conn.close()
