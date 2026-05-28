@@ -33,6 +33,8 @@ cat > /var/ossec/etc/ossec.conf << 'OSSEC_EOF'
       <address>${wazuh_server_ip}</address>
       <port>1514</port>
       <protocol>tcp</protocol>
+      <max_retries>100</max_retries>
+      <retry_interval>15</retry_interval>
     </server>
     <notify_time>10</notify_time>
     <time-reconnect>60</time-reconnect>
