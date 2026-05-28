@@ -170,11 +170,7 @@ resource "aws_lb_target_group_attachment" "wazuh" {
   target_id        = data.aws_instance.wazuh.id
   port             = 443
 }
-resource "aws_lb_target_group_attachment" "wazuh2" {
-  target_group_arn = aws_lb_target_group.wazuh.arn
-  target_id        = data.aws_instance.wazuh2.id
-  port             = 443
-}
+
 
 # ─────────────────────────────────────────────────────────
 # Public ALB — 환자 포털

@@ -34,11 +34,6 @@ cat > /var/ossec/etc/ossec.conf << 'OSSEC_EOF'
       <port>1514</port>
       <protocol>tcp</protocol>
     </server>
-    <server>
-      <address>${wazuh_server_ip_secondary}</address>
-      <port>1514</port>
-      <protocol>tcp</protocol>
-    </server>
     <notify_time>10</notify_time>
     <time-reconnect>60</time-reconnect>
     <auto_restart>yes</auto_restart>
