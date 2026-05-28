@@ -43,6 +43,7 @@ cat > /var/ossec/etc/ossec.conf << 'OSSEC_EOF'
       <enabled>yes</enabled>
       <manager_address>${wazuh_server_ip}</manager_address>
       <port>1515</port>
+      <agent_name>ecs-ec2-AGENT_IP_PLACEHOLDER</agent_name>
       <groups>ecs-ec2</groups>
     </enrollment>
   </client>
@@ -50,12 +51,10 @@ cat > /var/ossec/etc/ossec.conf << 'OSSEC_EOF'
 OSSEC_EOF
 
 AGENT_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4 | tr '.' '-')
-sed -i "s|<client>|<client>\n    <agent_name>ecs-ec2-$AGENT_IP</agent_name>|" \
-  /var/ossec/etc/ossec.conf
-
+sed -i "s|AGENT_IP_PLACEHOLDER|$AGENT_IP|" /var/ossec/etc/ossec.conf
 systemctl daemon-reload
 systemctl enable wazuh-agent
-systemctl start wazuh-agent
+systemctl start wazuh-agent || true
 %{ endif }
 
 # ── CloudWatch Agent 설치 ────────────────────────────────
