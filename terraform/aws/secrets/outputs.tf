@@ -49,13 +49,6 @@ output "api_key_secret_arn" {
   sensitive   = true
 }
 
-# 기존 이름 변경
-output "vault_lambda_approle_secret_arn_legacy" {
-  description = "hospital/vault/lambda-approle 시크릿 ARN — 구버전, 삭제 예정"
-  value       = aws_secretsmanager_secret.vault_lambda_approle.arn
-  sensitive   = true
-}
-
 # 신규 추가
 output "vault_lambda_approle_secret_arn" {
   description = "aws-vault-lambda-approle-secret ARN"
