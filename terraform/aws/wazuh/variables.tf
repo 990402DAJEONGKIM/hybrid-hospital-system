@@ -20,3 +20,9 @@ variable "wazuh_01_private_ip" {
   description = "wazuh-01 고정 Private IP"
   type        = string
 }
+
+variable "golden_ami_id" {
+  description = "Wazuh-01 골든 AMI ID"
+  type        = string
+  default     = "ami-08cb0385d97a16273"  # 오늘 생성한 AMI
+}

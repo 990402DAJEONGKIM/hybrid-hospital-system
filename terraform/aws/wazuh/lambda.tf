@@ -113,3 +113,48 @@ resource "aws_lambda_permission" "aws-wazuh-lambda-agent-cleanup-eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.aws-wazuh-lambda-agent-cleanup.arn
 }
+
+data "archive_file" "aws-wazuh-lambda-recovery" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/wazuh_recovery.py"
+  output_path = "${path.module}/lambda/wazuh_recovery.zip"
+}
+
+resource "aws_lambda_function" "aws-wazuh-lambda-recovery" {
+  function_name    = "aws-wazuh-lambda-recovery"
+  role             = aws_iam_role.aws-wazuh-lambda-recovery-role.arn
+  handler          = "wazuh_recovery.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 900
+  filename         = data.archive_file.aws-wazuh-lambda-recovery.output_path
+  source_code_hash = data.archive_file.aws-wazuh-lambda-recovery.output_base64sha256
+
+  environment {
+    variables = {
+      TARGET_REGION     = var.aws_region
+      GOLDEN_AMI_ID     = var.golden_ami_id
+      SUBNET_ID         = data.aws_subnet.aws-app-sub-2a.id
+      SECURITY_GROUP_ID = aws_security_group.aws-wazuh-sg.id
+      INSTANCE_PROFILE  = aws_iam_instance_profile.aws-wazuh-profile.name
+      FIXED_PRIVATE_IP  = var.wazuh_01_private_ip
+      PLAYBOOK_PATH     = "/etc/ansible/wazuh"
+    }
+  }
+
+  tags = { Name = "aws-wazuh-lambda-recovery", Owner = "st2" }
+}
+
+resource "aws_lambda_permission" "aws-wazuh-lambda-recovery-sns" {
+  statement_id  = "AllowSNSRecovery"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.aws-wazuh-lambda-recovery.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+}
+
+resource "aws_sns_topic_subscription" "aws-wazuh-recovery-to-lambda" {
+  topic_arn = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.aws-wazuh-lambda-recovery.arn
+}
+
