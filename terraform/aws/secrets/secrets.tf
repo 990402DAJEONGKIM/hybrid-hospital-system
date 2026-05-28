@@ -110,7 +110,3 @@ resource "aws_secretsmanager_secret" "api_key_v2" {
   tags = merge(local.common_tags, { Name = "aws-ecs-api-key-secret" })
 }
 
-import {
-  to = aws_secretsmanager_secret.db_url_staff_v2
-  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:aws-ecs-staff-database-url-secret-8WcBaO"
-}
