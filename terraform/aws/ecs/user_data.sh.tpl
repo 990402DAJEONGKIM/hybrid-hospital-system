@@ -50,7 +50,10 @@ cat > /var/ossec/etc/ossec.conf << 'OSSEC_EOF'
 </ossec_config>
 OSSEC_EOF
 
-AGENT_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4 | tr '.' '-')
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+AGENT_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/local-ipv4 | tr '.' '-')
 sed -i "s|AGENT_IP_PLACEHOLDER|$AGENT_IP|" /var/ossec/etc/ossec.conf
 systemctl daemon-reload
 systemctl enable wazuh-agent
