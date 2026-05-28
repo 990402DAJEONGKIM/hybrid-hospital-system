@@ -128,10 +128,9 @@ def update_pglogical_node_interface(new_password: str, admin_password: str) -> N
         logger.info("pglogical node_interface DSN 업데이트 완료")
     except Exception as e:
         if "already has interface" in str(e):
-            # 이미 존재하면 DROP 후 재생성
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT pglogical.drop_node_interface(
+                    SELECT pglogical.alter_node_drop_interface(
                         node_name := 'cloud_sql_subscriber',
                         interface_name := 'cloud_sql_subscriber'
                     )
@@ -148,7 +147,6 @@ def update_pglogical_node_interface(new_password: str, admin_password: str) -> N
             raise
     finally:
         conn.close()
-
 
 def rotate_passwords(request):
     """Cloud Functions 엔트리포인트"""
