@@ -126,14 +126,9 @@
                   - name: wazuh-1
                     ip: "{{ wazuh_manager1_ip }}"
                     node_type: master
-                  - name: wazuh-2
-                    ip: "{{ wazuh_manager2_ip }}"
-                    node_type: worker
                 dashboard:
                   - name: dashboard-1
                     ip: "{{ wazuh_manager1_ip }}"
-                  - name: dashboard-2
-                    ip: "{{ wazuh_manager2_ip }}"
 
         - name: 인증서 생성
           shell: bash /tmp/wazuh-install.sh --generate-config-files
