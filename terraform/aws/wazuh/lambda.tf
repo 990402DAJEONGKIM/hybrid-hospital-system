@@ -116,8 +116,8 @@ resource "aws_lambda_permission" "aws-wazuh-lambda-agent-cleanup-eventbridge" {
 
 data "archive_file" "aws-wazuh-lambda-recovery" {
   type        = "zip"
-  source_file = "${path.module}/lambda/wazuh_recovery.py"
-  output_path = "${path.module}/lambda/wazuh_recovery.zip"
+  source_file = "${path.module}/lambda/lambda_wazuh_recovery.py"
+  output_path = "${path.module}/lambda/lambda_wazuh_recovery.zip"
 }
 
 resource "aws_lambda_function" "aws-wazuh-lambda-recovery" {
