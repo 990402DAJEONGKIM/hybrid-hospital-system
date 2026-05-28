@@ -62,7 +62,7 @@ resource "aws_iam_role_policy" "vault_rotator_secrets" {
       Effect = "Allow"
       Action = ["secretsmanager:GetSecretValue"]
       Resource = [
-        aws_secretsmanager_secret.vault_lambda_approle.arn,
+        aws_secretsmanager_secret.vault_lambda_approle_v2.arn,
         "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:rds!cluster-1073d242*",
       ]
     }]
@@ -97,7 +97,7 @@ resource "aws_lambda_function" "vault_rotator" {
 
   environment {
     variables = {
-      VAULT_APPROLE_SECRET_ID = aws_secretsmanager_secret.vault_lambda_approle.name
+      VAULT_APPROLE_SECRET_ID = aws_secretsmanager_secret.vault_lambda_approle_v2.name
       RDS_SECRET_ID           = "rds!cluster-1073d242-a1f9-49fa-8855-054d05d6af5b"
       VAULT_DB_CONFIG_PATH    = "database/config/rds-hospital"
       RDS_HOST                = "aws-aurora-01.cluster-cjsaws8mcmwn.ap-south-2.rds.amazonaws.com"
