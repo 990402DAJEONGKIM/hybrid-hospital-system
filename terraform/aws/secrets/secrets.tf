@@ -161,6 +161,55 @@ resource "aws_secretsmanager_secret" "vault_lambda_approle_v2" {
 
   tags = merge(local.common_tags, { Name = "aws-vault-lambda-approle-secret" })
 }
+
+
+# ─────────────────────────────────────────────────────────
+# db_url (신규 작명)
+# 마이그레이션: hospital/database-url → aws-ecs-database-url-secret
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "db_url_v2" {
+  name        = "aws-ecs-database-url-secret"
+  description = "ECS 앱 DB 연결 URL"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-ecs-database-url-secret" })
+}
+
+# ─────────────────────────────────────────────────────────
+# jwt_secret (신규 작명)
+# 마이그레이션: hospital/jwt-secret → aws-ecs-jwt-secret
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "jwt_secret_v2" {
+  name        = "aws-ecs-jwt-secret"
+  description = "ECS 앱 JWT 서명 키"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-ecs-jwt-secret" })
+}
+
+# ─────────────────────────────────────────────────────────
+# api_key (신규 작명)
+# 마이그레이션: hospital/api-key → aws-ecs-api-key-secret
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "api_key_v2" {
+  name        = "aws-ecs-api-key-secret"
+  description = "ECS 앱 API 키"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-ecs-api-key-secret" })
+}
 # # =========================================================
 # # Import 블록 — 기존 리소스 가져오기
 # # apply 완료 후 이 블록 전체 삭제
