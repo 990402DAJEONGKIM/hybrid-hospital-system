@@ -160,6 +160,21 @@ resource "aws_secretsmanager_secret" "dump_user_v2" {
 
   tags = merge(local.common_tags, { Name = "aws-rds-dump-user-secret" })
 }
+# ─────────────────────────────────────────────────────────
+# pglogical_repl (신규 작명)
+# 마이그레이션: rds-pglogical-repl-password → aws-rds-pglogical-password-secret
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "pglogical_repl_v2" {
+  name        = "aws-rds-pglogical-password-secret"
+  description = "pglogical_repl 계정 비밀번호 — GCP Cloud Function이 로테이션 관리"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-rds-pglogical-password-secret" })
+}
 
 # # =========================================================
 # # Import 블록 — 기존 리소스 가져오기
