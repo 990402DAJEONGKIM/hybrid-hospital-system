@@ -32,7 +32,8 @@ AWS_REGION           = os.environ["AWS_REGION"]
 
 # AWS Secrets Manager — pglogical_repl 정본 시크릿 ID
 # ISMS-P 2.5.4: Aurora 자격증명은 AWS Secrets Manager가 정본
-AWS_REPL_SECRET_ID = os.environ.get("AWS_REPL_SECRET_ID", "rds-pglogical-repl-password")
+AWS_REPL_SECRET_ID = os.environ.get("AWS_REPL_SECRET_ID", "aws-rds-pglogical-password-secret")
+
 
 # 로테이션 대상: (계정명, GCP Secret 이름, RDS도 변경 여부)
 ROTATION_TARGETS = [
