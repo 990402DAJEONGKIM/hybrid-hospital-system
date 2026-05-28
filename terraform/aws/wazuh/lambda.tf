@@ -123,7 +123,7 @@ data "archive_file" "aws-wazuh-lambda-recovery" {
 resource "aws_lambda_function" "aws-wazuh-lambda-recovery" {
   function_name    = "aws-wazuh-lambda-recovery"
   role             = aws_iam_role.aws-wazuh-lambda-recovery-role.arn
-  handler          = "wazuh_recovery.lambda_handler"
+  handler          = "lambda_wazuh_recovery.lambda_handler"
   runtime          = "python3.12"
   timeout          = 900
   filename         = data.archive_file.aws-wazuh-lambda-recovery.output_path
