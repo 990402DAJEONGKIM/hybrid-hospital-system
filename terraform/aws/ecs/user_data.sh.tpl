@@ -2,7 +2,7 @@
 set -e
 
 # ── ECS 클러스터 등록 ────────────────────────────────────
-mkdir -p /etc/ecs 
+mkdir -p /etc/ecs
 echo "ECS_CLUSTER=${cluster_name}" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true" >> /etc/ecs/ecs.config
@@ -24,10 +24,8 @@ WAZUH_MANAGER="${wazuh_server_ip}" \
 WAZUH_AGENT_GROUP="ecs-ec2" \
   dnf install -y wazuh-agent-4.14.5-1
 
-# 의도치 않은 업그레이드 방지
 sed -i "s/^enabled=1/enabled=0/" /etc/yum.repos.d/wazuh.repo
 
-# ── wazuh-01/02 failover 설정 ────────────────────────────
 cat > /var/ossec/etc/ossec.conf << 'OSSEC_EOF'
 <ossec_config>
   <client>
@@ -62,3 +60,41 @@ systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl start wazuh-agent
 %{ endif }
+
+# ── CloudWatch Agent 설치 ────────────────────────────────
+yum install -y amazon-cloudwatch-agent
+
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CW_EOF'
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "region": "${aws_region}"
+  },
+  "metrics": {
+    "namespace": "ECS/EC2",
+    "metrics_collected": {
+      "cpu": {
+        "measurement": ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"],
+        "metrics_collection_interval": 60
+      },
+      "mem": {
+        "measurement": ["mem_used_percent", "mem_available"],
+        "metrics_collection_interval": 60
+      },
+      "disk": {
+        "measurement": ["used_percent"],
+        "resources": ["/"],
+        "metrics_collection_interval": 60
+      }
+    }
+  }
+}
+CW_EOF
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config \
+  -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+  -s
+
+systemctl enable amazon-cloudwatch-agent
