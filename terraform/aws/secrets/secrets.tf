@@ -158,6 +158,22 @@ resource "aws_secretsmanager_secret" "pglogical_repl_v2" {
   tags = merge(local.common_tags, { Name = "aws-rds-pglogical-password-secret" })
 }
 
+
+# ─────────────────────────────────────────────────────────
+# vault/lambda-approle (신규 작명)
+# 마이그레이션: hospital/vault/lambda-approle → aws-vault-lambda-approle-secret
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "vault_lambda_approle_v2" {
+  name        = "aws-vault-lambda-approle-secret"
+  description = "Vault AppRole 자격증명 (Lambda → Vault 인증용)"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-vault-lambda-approle-secret" })
+}
 # # =========================================================
 # # Import 블록 — 기존 리소스 가져오기
 # # apply 완료 후 이 블록 전체 삭제
