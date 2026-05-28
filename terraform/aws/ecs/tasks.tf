@@ -37,19 +37,30 @@ data "aws_ecr_image" "api_staff" {
   most_recent     = true
 }
 
-
+# 260528 박경수, 시크릿 네이밍 규칙에 맞추면서 주석화 및 수정본 추가
+# locals {
+#   # FastAPI 공통 secrets (Secrets Manager → 컨테이너 환경변수)
+#   api_secrets = [
+#     { name = "DATABASE_URL", valueFrom = data.aws_secretsmanager_secret.db_url.arn     },
+#     { name = "JWT_SECRET",   valueFrom = data.aws_secretsmanager_secret.jwt_secret.arn },
+#     { name = "API_KEY",      valueFrom = data.aws_secretsmanager_secret.api_key.arn    },
+#   ]
+#   # NGINX secrets — envsubst로 nginx.conf에 API_KEY 주입 (프론트엔드 노출 방지)
+#   nginx_secrets = [
+#     { name = "API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn },
+#   ]
+# }
 locals {
-  # FastAPI 공통 secrets (Secrets Manager → 컨테이너 환경변수)
   api_secrets = [
-    { name = "DATABASE_URL", valueFrom = data.aws_secretsmanager_secret.db_url.arn     },
-    { name = "JWT_SECRET",   valueFrom = data.aws_secretsmanager_secret.jwt_secret.arn },
-    { name = "API_KEY",      valueFrom = data.aws_secretsmanager_secret.api_key.arn    },
+    { name = "DATABASE_URL", valueFrom = data.tfe_outputs.secrets.values.db_url_secret_arn     },
+    { name = "JWT_SECRET",   valueFrom = data.tfe_outputs.secrets.values.jwt_secret_arn },
+    { name = "API_KEY",      valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn    },
   ]
-  # NGINX secrets — envsubst로 nginx.conf에 API_KEY 주입 (프론트엔드 노출 방지)
   nginx_secrets = [
-    { name = "API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn },
+    { name = "API_KEY", valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
   ]
 }
+
 
 
 # ─────────────────────────────────────────────────────────

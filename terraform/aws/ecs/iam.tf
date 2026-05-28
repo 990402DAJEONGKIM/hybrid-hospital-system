@@ -39,11 +39,17 @@ resource "aws_iam_role_policy" "task_execution_secrets" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret",
         ]
+        # 260528 박경수, 시크릿 네이밍 규칙에 맞추면서 주석화 및 수정본 추가
+        # Resource = [
+        #   data.aws_secretsmanager_secret.db_url.arn,
+        #   data.aws_secretsmanager_secret.jwt_secret.arn,
+        #   data.aws_secretsmanager_secret.api_key.arn,
+        # ]
         Resource = [
-          data.aws_secretsmanager_secret.db_url.arn,
-          data.aws_secretsmanager_secret.jwt_secret.arn,
-          data.aws_secretsmanager_secret.api_key.arn,
-        ]
+            data.tfe_outputs.secrets.values.db_url_secret_arn,
+            data.tfe_outputs.secrets.values.jwt_secret_arn,
+            data.tfe_outputs.secrets.values.api_key_secret_arn,
+          ]
       },
       {
         Effect = "Allow"
