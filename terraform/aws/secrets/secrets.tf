@@ -51,7 +51,7 @@ resource "aws_secretsmanager_secret" "vault_lambda_approle_v2" {
 # db_url (신규 작명)
 # 마이그레이션: hospital/database-url → aws-ecs-patient-database-url-secret
 # ─────────────────────────────────────────────────────────
-resource "aws_secretsmanager_secret" "db_url_v2" {
+resource "aws_secretsmanager_secret" "db_url_patient_v2" {
   name        = "aws-ecs-patient-database-url-secret"
   description = "ECS 앱 DB 연결 URL"
   kms_key_id  = data.aws_kms_key.secretsmanager.arn
