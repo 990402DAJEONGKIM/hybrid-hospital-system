@@ -64,4 +64,34 @@
     <group>ddl,critical</group>
   </rule>
 
+  <!-- ROLE 권한 변경 탐지 (GRANT/REVOKE/CREATE ROLE) -->
+  <rule id="100108" level="10">
+    <if_sid>100100</if_sid>
+    <match>,ROLE,</match>
+    <description>RDS 권한 변경 탐지 (GRANT/REVOKE/CREATE ROLE)</description>
+    <group>privilege_escalation,role_change</group>
+  </rule>
+
+  <!-- 업무시간 외 ROLE 변경 -->
+  <rule id="100109" level="12">
+    <if_sid>100108</if_sid>
+    <time>18:00 - 09:00</time>
+    <description>업무시간 외 권한 변경 탐지 - 계정 탈취 의심</description>
+    <group>after_hours,privilege_escalation</group>
+  </rule>
+
+  <!-- CREATE ROLE 단독 탐지 (신규 DB 계정 생성) -->
+  <rule id="100110" level="12">
+    <if_sid>100108</if_sid>
+    <match>CREATE ROLE</match>
+    <description>RDS 신규 DB 계정 생성 탐지 - persistence 의심</description>
+    <group>account_management,persistence</group>
+  </rule>
+
+
+
+
+
+
+
 </group>

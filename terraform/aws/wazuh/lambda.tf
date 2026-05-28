@@ -31,11 +31,7 @@ resource "aws_sns_topic_subscription" "aws-wazuh-01-to-lambda" {
 # wodle failover Lambda
 # ──────────────────────────────────────────
 
-data "archive_file" "aws-wazuh-lambda-wodle-failover" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/wodle_failover.py"
-  output_path = "${path.module}/lambda/wodle_failover.zip"
-}
+
 
 resource "aws_lambda_function" "aws-wazuh-lambda-slack-notify" {
   function_name    = "aws-wazuh-lambda-slack-notify"
@@ -57,47 +53,6 @@ resource "aws_lambda_function" "aws-wazuh-lambda-slack-notify" {
   }
 }
 
-
-resource "aws_lambda_function" "aws-wazuh-lambda-wodle-failover" {
-  function_name    = "aws-wazuh-lambda-wodle-failover"
-  role             = aws_iam_role.aws-wazuh-lambda-wodle-failover-role.arn
-  handler          = "wodle_failover.lambda_handler"
-  runtime          = "python3.12"
-  timeout          = 60
-  filename         = data.archive_file.aws-wazuh-lambda-wodle-failover.output_path
-  source_code_hash = data.archive_file.aws-wazuh-lambda-wodle-failover.output_base64sha256
-
-  environment {
-    variables = {
-      REGION               = var.aws_region
-      WAZUH_01_INSTANCE_ID = aws_instance.aws-wazuh-01.id
-      WAZUH_02_INSTANCE_ID = data.terraform_remote_state.wazuh2.outputs.wazuh_instance_id
-      PARAM_KEY            = "/wazuh/wodle-active-server"
-    }
-  }
-
-  tags = { Name = "aws-wazuh-lambda-wodle-failover", Owner = "st2" }
-}
-
-# EventBridge 1분마다 실행
-resource "aws_cloudwatch_event_rule" "aws-wazuh-lambda-wodle-failover" {
-  name                = "aws-wazuh-lambda-wodle-failover"
-  schedule_expression = "rate(1 minute)"
-  tags = { Name = "aws-wazuh-lambda-wodle-failover", Owner = "st2" }
-}
-
-resource "aws_cloudwatch_event_target" "aws-wazuh-lambda-wodle-failover" {
-  rule = aws_cloudwatch_event_rule.aws-wazuh-lambda-wodle-failover.name
-  arn  = aws_lambda_function.aws-wazuh-lambda-wodle-failover.arn
-}
-
-resource "aws_lambda_permission" "aws-wazuh-lambda-wodle-failover-eventbridge" {
-  statement_id  = "AllowEventBridgeWodleFailover"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.aws-wazuh-lambda-wodle-failover.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.aws-wazuh-lambda-wodle-failover.arn
-}
 
 
 # ──────────────────────────────────────────
@@ -129,8 +84,6 @@ resource "aws_lambda_function" "aws-wazuh-lambda-agent-cleanup" {
     variables = {
       # wazuh-01 IP: terraform이 EC2 생성 후 자동 주입
       WAZUH_API_URL           = "https://${aws_instance.aws-wazuh-01.private_ip}:55000"
-      # wazuh-02 IP: wazuh2 workspace output에서 자동 참조
-      WAZUH_API_URL_SECONDARY = "https://${data.terraform_remote_state.wazuh2.outputs.wazuh_private_ip}:55000"
       WAZUH_USER              = "wazuh"
       # 비밀번호는 Secrets Manager에서 가져옴 (하드코딩 금지)
       WAZUH_SECRET_NAME       = "wazuh/api-password"

@@ -11,10 +11,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # ── 환경변수 ─────────────────────────────────────────────
-WAZUH_API_URLS = [
-    os.environ["WAZUH_API_URL"],            # wazuh-01
-    os.environ["WAZUH_API_URL_SECONDARY"],  # wazuh-02 (fallback)
-]
+WAZUH_API_URL = os.environ["WAZUH_API_URL"]
 WAZUH_USER    = os.environ["WAZUH_USER"]
 SECRET_NAME   = os.environ["WAZUH_SECRET_NAME"]
 REGION        = os.environ["REGION"]
@@ -66,20 +63,8 @@ def get_token(api_url, password):
 
 
 def get_token_with_fallback(password):
-    """
-    wazuh-01 장애 시 wazuh-02로 자동 fallback.
-    둘 다 실패하면 예외 발생.
-    """
-    for api_url in WAZUH_API_URLS:
-        try:
-            token = get_token(api_url, password)
-            return api_url, token
-        except Exception as e:
-            logger.warning(f"연결 실패: {api_url} → {str(e)}")
-            continue
-
-    raise Exception("wazuh-01, wazuh-02 모두 연결 실패")
-
+    token = get_token(WAZUH_API_URL, password)
+    return WAZUH_API_URL, token
 
 def get_disconnected_agents(api_url, token):
     """

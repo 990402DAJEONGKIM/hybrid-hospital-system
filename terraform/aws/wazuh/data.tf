@@ -13,16 +13,6 @@ data "aws_subnet" "aws-app-sub-2b" {
   tags = { Name = "aws-app-sub-2b" }
 }
 
-data "terraform_remote_state" "wazuh2" {
-  backend = "remote"
-  config = {
-    organization = "k2p"
-    workspaces = {
-      name = "TC-aws-wazuh2"
-    }
-  }
-}
-
 data "terraform_remote_state" "kms" {
   backend = "remote"
   config = {

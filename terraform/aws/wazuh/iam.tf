@@ -139,72 +139,7 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-basic" {
 }
 
 
-# ══════════════════════════════════════════
-# Lambda IAM Role - wodle HA Failover
-# wazuh-01 장애 시 wazuh-02의 wodle을 자동으로 켜고 끄는 Lambda
-# CloudWatch 알람 확인, SSM 명령 실행, Parameter Store 상태 저장에 사용
-# ══════════════════════════════════════════
-resource "aws_iam_role" "aws-wazuh-lambda-wodle-failover-role" {
-  name = "aws-wazuh-lambda-wodle-failover-role"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
-}
-
-# Lambda 기본 실행 권한 (CloudWatch Logs 쓰기)
-resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-wodle-failover-basic" {
-  role       = aws_iam_role.aws-wazuh-lambda-wodle-failover-role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# 인라인 정책: CloudWatch 알람 조회 + SSM 명령 실행 + Parameter Store 읽기/쓰기
-resource "aws_iam_role_policy" "aws-wazuh-lambda-wodle-failover-policy" {
-  name = "aws-wazuh-wodle-failover-policy"
-  role = aws_iam_role.aws-wazuh-lambda-wodle-failover-role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # wazuh-01 EC2/Manager 상태 알람 확인용
-      {
-        Sid    = "CloudWatchRead"
-        Effect = "Allow"
-        Action = ["cloudwatch:DescribeAlarms"]
-        Resource = "*"
-      },
-      # wazuh-02에 SSM 명령 전송 (wodle disabled 설정 변경 + wazuh-manager 재시작)
-      {
-        Sid    = "SSMSendCommand"
-        Effect = "Allow"
-        Action = [
-          "ssm:SendCommand",
-          "ssm:GetCommandInvocation"
-        ]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
-          data.terraform_remote_state.wazuh2.outputs.wazuh_instance_arn
-        ]
-      },
-      # 현재 active 서버 상태를 Parameter Store에 저장/조회
-      # 키: /wazuh/wodle-active-server (값: wazuh-01 또는 wazuh-02)
-      {
-        Sid    = "SSMParameter"
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter",
-          "ssm:PutParameter"
-        ]
-        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/wazuh/*"
-      }
-    ]
-  })
-}
 
 
 # ══════════════════════════════════════════

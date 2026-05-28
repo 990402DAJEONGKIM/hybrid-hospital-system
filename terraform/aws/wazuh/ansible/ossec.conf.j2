@@ -19,24 +19,6 @@
   </global>
 
   <!-- ======================================= -->
-  <!-- 클러스터 설정 (1516 포트 내부 통신)       -->
-  <!-- wazuh-01: master / wazuh-02: worker     -->
-  <!-- ======================================= -->
-  <cluster>
-    <name>wazuh-cluster</name>
-    <node_name>{{ wazuh_node_name }}</node_name>
-    <node_type>{{ wazuh_node_type }}</node_type>
-    <key>{{ wazuh_cluster_key }}</key>
-    <port>1516</port>
-    <bind_addr>0.0.0.0</bind_addr>
-    <nodes>
-      <node>{{ wazuh_master_ip }}</node>
-    </nodes>
-    <hidden>no</hidden>
-    <disabled>no</disabled>
-  </cluster>
-
-  <!-- ======================================= -->
   <!-- 알림 레벨                               -->
   <!-- ======================================= -->
   <alerts>
