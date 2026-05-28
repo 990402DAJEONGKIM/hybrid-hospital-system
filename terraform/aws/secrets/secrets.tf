@@ -60,22 +60,6 @@
 # }
 
 
-# ─────────────────────────────────────────────────────────
-# dump_user — RDS 덤프 전용 계정 (7일 로테이션)
-# dump Lambda가 pg_dump 시 사용
-# ─────────────────────────────────────────────────────────
-resource "aws_secretsmanager_secret" "dump_user" {
-  name        = "hospital/rds/dump-user"
-  description = "RDS dump 전용 계정 — dump_user (7일 로테이션, ISMS-P 2.5.4)"
-  kms_key_id  = data.aws_kms_key.secretsmanager.arn
-
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = merge(local.common_tags, { Name = "aws-secret-rds-dump-user" })
-}
-
 
 # ─────────────────────────────────────────────────────────
 # ECS 앱 시크릿 — 팀원 워크스페이스(TC-aws-ECS)에서 참조
