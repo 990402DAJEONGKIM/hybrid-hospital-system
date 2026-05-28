@@ -112,20 +112,7 @@ resource "aws_secretsmanager_secret" "api_key" {
 }
 
 
-# ─────────────────────────────────────────────────────────
-# vault/lambda-approle — Vault 연동 Lambda AppRole 자격증명
-# ─────────────────────────────────────────────────────────
-resource "aws_secretsmanager_secret" "vault_lambda_approle" {
-  name        = "hospital/vault/lambda-approle"
-  description = "Vault AppRole 자격증명 (Lambda → Vault 인증용)"
-  kms_key_id  = data.aws_kms_key.secretsmanager.arn
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = merge(local.common_tags, { Name = "aws-secret-vault-lambda-approle" })
-}
 
 # ─────────────────────────────────────────────────────────
 # dump_user (신규 작명) — RDS 덤프 전용 계정 (7일 로테이션)
