@@ -67,12 +67,7 @@ output "rotation_ecr_repository_url" {
 }
 
 
-# 구버전 — 마이그레이션 완료 후 삭제
-output "pglogical_repl_secret_arn_legacy" {
-  description = "pglogical_repl 시크릿 ARN — 구버전, 삭제 예정"
-  value       = aws_secretsmanager_secret.pglogical_repl.arn
-  sensitive   = true
-}
+
 
 # 신규
 output "pglogical_repl_secret_arn" {
