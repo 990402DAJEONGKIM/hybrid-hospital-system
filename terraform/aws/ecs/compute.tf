@@ -74,6 +74,7 @@ resource "aws_launch_template" "ecs" {
     cluster_name    = aws_ecs_cluster.main.name
     wazuh_server_ip = var.wazuh_server_ip
     wazuh_server_ip_secondary = var.wazuh_server_ip_secondary
+    aws_region                = var.aws_region
   }))
 
   tag_specifications {
