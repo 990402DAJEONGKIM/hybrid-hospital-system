@@ -126,25 +126,7 @@ resource "aws_secretsmanager_secret" "vault_lambda_approle" {
 
   tags = merge(local.common_tags, { Name = "aws-secret-vault-lambda-approle" })
 }
-# ─────────────────────────────────────────────────────────
-# pglogical_repl — Aurora ↔ GCP Cloud SQL 복제 계정
-#
-# [로테이션 주의] aws-lambda-rotation으로 돌리면 안 됨.
-# GCP Cloud Function(gcp-fn-cloudsql-rotation)이 Aurora + Cloud SQL
-# 양쪽 동시 변경 후 이 시크릿을 업데이트함.
-# 로테이션 주기: 7일 (Cloud Scheduler → GCP Cloud Function)
-# ─────────────────────────────────────────────────────────
-resource "aws_secretsmanager_secret" "pglogical_repl" {
-  name        = "rds-pglogical-repl-password"
-  description = "pglogical_repl 계정 비밀번호 — GCP Cloud Function이 로테이션 관리"
-  kms_key_id  = data.aws_kms_key.secretsmanager.arn
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = merge(local.common_tags, { Name = "rds-pglogical-repl-password" })
-}
 # ─────────────────────────────────────────────────────────
 # dump_user (신규 작명) — RDS 덤프 전용 계정 (7일 로테이션)
 # 마이그레이션: hospital/rds/dump-user → aws-rds-dump-user-secret
@@ -180,10 +162,7 @@ resource "aws_secretsmanager_secret" "pglogical_repl_v2" {
 # # Import 블록 — 기존 리소스 가져오기
 # # apply 완료 후 이 블록 전체 삭제
 # # =========================================================
-import {
-  to = aws_secretsmanager_secret.pglogical_repl
-  id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:rds-pglogical-repl-password-eGMZTP"
-}
+
 # import {
 #   to = aws_secretsmanager_secret.hospital_user
 #   id = "arn:aws:secretsmanager:ap-south-2:476293896981:secret:aws-secret-rds-hospital-user-mRfEDx"
