@@ -232,7 +232,7 @@ resource "google_cloudfunctions2_function" "rotation" {
       SECRET_POSTGRES_NAME = local.secret_postgres_name
       RDS_ENDPOINT         = var.rds_endpoint
       AWS_REGION           = var.aws_region
-      AWS_REPL_SECRET_ID   = "rds-pglogical-repl-password"  # ISMS-P: Aurora 자격증명 AWS 정본 유지
+      AWS_REPL_SECRET_ID   = "aws-rds-pglogical-password-secret"  # ISMS-P: Aurora 자격증명 AWS 정본 유지
     }
 
     secret_environment_variables {
