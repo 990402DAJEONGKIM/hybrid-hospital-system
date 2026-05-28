@@ -66,11 +66,7 @@ output "rotation_ecr_repository_url" {
   value       = aws_ecr_repository.rotation.repository_url
 }
 
-output "pglogical_repl_secret_arn" {
-  description = "pglogical_repl 시크릿 ARN (GCP Cloud Function 참조용)"
-  value       = aws_secretsmanager_secret.pglogical_repl.arn
-  sensitive   = true
-}
+
 # 구버전 — 마이그레이션 완료 후 삭제
 output "pglogical_repl_secret_arn_legacy" {
   description = "pglogical_repl 시크릿 ARN — 구버전, 삭제 예정"
