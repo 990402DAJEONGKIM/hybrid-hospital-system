@@ -31,23 +31,10 @@ output "dump_user_secret_arn" {
   sensitive   = true
 }
 
-output "db_url_secret_arn" {
-  description = "hospital/database-url 시크릿 ARN (ECS 앱 DB URL)"
-  value       = aws_secretsmanager_secret.db_url.arn
-  sensitive   = true
-}
 
-output "jwt_secret_arn" {
-  description = "hospital/jwt-secret 시크릿 ARN (ECS 앱 JWT 키)"
-  value       = aws_secretsmanager_secret.jwt_secret.arn
-  sensitive   = true
-}
 
-output "api_key_secret_arn" {
-  description = "hospital/api-key 시크릿 ARN (ECS 앱 API 키)"
-  value       = aws_secretsmanager_secret.api_key.arn
-  sensitive   = true
-}
+
+
 
 # 신규 추가
 output "vault_lambda_approle_secret_arn" {
@@ -77,5 +64,40 @@ output "rotation_ecr_repository_url" {
 output "pglogical_repl_secret_arn" {
   description = "pglogical_repl 시크릿 ARN (aws-rds-pglogical-password-secret)"
   value       = aws_secretsmanager_secret.pglogical_repl_v2.arn
+  sensitive   = true
+}
+
+
+# 기존 이름 변경
+output "db_url_secret_arn_legacy" {
+  description = "hospital/database-url 시크릿 ARN — 구버전, 삭제 예정"
+  value       = aws_secretsmanager_secret.db_url.arn
+  sensitive   = true
+}
+output "jwt_secret_arn_legacy" {
+  description = "hospital/jwt-secret 시크릿 ARN — 구버전, 삭제 예정"
+  value       = aws_secretsmanager_secret.jwt_secret.arn
+  sensitive   = true
+}
+output "api_key_secret_arn_legacy" {
+  description = "hospital/api-key 시크릿 ARN — 구버전, 삭제 예정"
+  value       = aws_secretsmanager_secret.api_key.arn
+  sensitive   = true
+}
+
+# 신규
+output "db_url_secret_arn" {
+  description = "aws-ecs-database-url-secret ARN"
+  value       = aws_secretsmanager_secret.db_url_v2.arn
+  sensitive   = true
+}
+output "jwt_secret_arn" {
+  description = "aws-ecs-jwt-secret ARN"
+  value       = aws_secretsmanager_secret.jwt_secret_v2.arn
+  sensitive   = true
+}
+output "api_key_secret_arn" {
+  description = "aws-ecs-api-key-secret ARN"
+  value       = aws_secretsmanager_secret.api_key_v2.arn
   sensitive   = true
 }
