@@ -213,6 +213,11 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
   value        = "1000"  # 1초 이상 쿼리 기록
   apply_method = "immediate"
   }
+  parameter {
+  name         = "log_min_error_statement"
+  value        = "error"
+  apply_method = "immediate"
+}
 
   tags = merge(local.common_tags, { Name = "aws-aurora-01-pglogical" })
 }
