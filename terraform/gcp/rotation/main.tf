@@ -348,3 +348,4 @@ output "rotation_function_uri" {
   value       = google_cloudfunctions2_function.rotation.service_config[0].uri
   description = "Cloud Functions 수동 호출 URI"
 }
+# trigger rebuild 2026-05-28
