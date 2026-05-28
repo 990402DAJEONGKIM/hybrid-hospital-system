@@ -48,7 +48,8 @@ resource "aws_iam_role_policy" "task_execution_secrets" {
         #   data.aws_secretsmanager_secret.api_key.arn,
         # ]
         Resource = [
-            data.tfe_outputs.secrets.values.db_url_secret_arn,
+            data.tfe_outputs.secrets.values.db_url_patient_secret_arn,
+            data.tfe_outputs.secrets.values.db_url_staff_secret_arn,
             data.tfe_outputs.secrets.values.jwt_secret_arn,
             data.tfe_outputs.secrets.values.api_key_secret_arn,
           ]
