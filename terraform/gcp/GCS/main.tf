@@ -70,7 +70,7 @@ data "google_sql_database_instance" "cloud_sql" {
 
 resource "google_storage_bucket_iam_member" "cloud_sql_writer" {
   bucket = google_storage_bucket.db_dumps.name
-  role   = "roles/storage.objectCreator"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${data.google_sql_database_instance.cloud_sql.service_account_email_address}"
 }
 
