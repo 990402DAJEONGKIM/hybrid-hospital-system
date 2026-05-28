@@ -68,22 +68,6 @@ output "pglogical_repl_secret_arn" {
 }
 
 
-# 기존 이름 변경
-output "db_url_secret_arn_legacy" {
-  description = "hospital/database-url 시크릿 ARN — 구버전, 삭제 예정"
-  value       = aws_secretsmanager_secret.db_url.arn
-  sensitive   = true
-}
-output "jwt_secret_arn_legacy" {
-  description = "hospital/jwt-secret 시크릿 ARN — 구버전, 삭제 예정"
-  value       = aws_secretsmanager_secret.jwt_secret.arn
-  sensitive   = true
-}
-output "api_key_secret_arn_legacy" {
-  description = "hospital/api-key 시크릿 ARN — 구버전, 삭제 예정"
-  value       = aws_secretsmanager_secret.api_key.arn
-  sensitive   = true
-}
 
 # 신규
 output "db_url_secret_arn" {

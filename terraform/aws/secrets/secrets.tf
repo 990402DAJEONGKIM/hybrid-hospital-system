@@ -61,56 +61,6 @@
 
 
 
-# ─────────────────────────────────────────────────────────
-# ECS 앱 시크릿 — 팀원 워크스페이스(TC-aws-ECS)에서 참조
-#
-# [현재 상태] TC-aws-ECS/data.tf가 name으로 data source 조회 중:
-#   data "aws_secretsmanager_secret" "db_url" { name = "hospital/database-url" }
-#   → 지금 상태 그대로 동작함. 변경 불필요.
-#
-# [마이그레이션 후] TC-aws-ECS/data.tf를 tfe_outputs로 교체 가능:
-#   data "tfe_outputs" "secrets" {
-#     organization = "<org>"
-#     workspace    = "TC-aws-secrets"
-#   }
-#   → data.tfe_outputs.secrets.values.db_url_secret_arn 으로 참조
-# ─────────────────────────────────────────────────────────
-resource "aws_secretsmanager_secret" "db_url" {
-  name        = "hospital/database-url"
-  description = "ECS 앱 DB 연결 URL (hospital/database-url)"
-  kms_key_id  = data.aws_kms_key.secretsmanager.arn
-
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = merge(local.common_tags, { Name = "aws-secret-ecs-db-url" })
-}
-
-resource "aws_secretsmanager_secret" "jwt_secret" {
-  name        = "hospital/jwt-secret"
-  description = "ECS 앱 JWT 서명 키"
-  kms_key_id  = data.aws_kms_key.secretsmanager.arn
-
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = merge(local.common_tags, { Name = "aws-secret-ecs-jwt" })
-}
-
-resource "aws_secretsmanager_secret" "api_key" {
-  name        = "hospital/api-key"
-  description = "ECS 앱 API 키"
-  kms_key_id  = data.aws_kms_key.secretsmanager.arn
-
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = merge(local.common_tags, { Name = "aws-secret-ecs-api-key" })
-}
-
 
 
 
