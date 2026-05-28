@@ -1,3 +1,5 @@
+# tasks.tf
+
 # =========================================================
 # ECS Task Definitions + Services
 #
@@ -62,7 +64,6 @@ locals {
 }
 
 
-
 # ─────────────────────────────────────────────────────────
 # CloudWatch Log Groups
 # ─────────────────────────────────────────────────────────
@@ -99,14 +100,18 @@ resource "aws_ecs_task_definition" "patient" {
         protocol      = "tcp"
       }]
       secrets = local.nginx_secrets
+      dockerLabels = {
+        container_name = "nginx-patient"
+      }
       logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.patient.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "nginx"
+      logDriver = "json-file"
+      options = {
+        "labels"   = "container_name"
+        "max-size" = "10m"
+        "max-file" = "3"
         }
       }
+
       dependsOn = [{
         containerName = "api-patient"
         condition     = "START"
@@ -127,12 +132,15 @@ resource "aws_ecs_task_definition" "patient" {
         { name = "TZ",               value = "Asia/Seoul"              },
       ]
       secrets = local.api_secrets
+      dockerLabels = {
+      container_name = "api-patient"
+      }
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "json-file"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.patient.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "api"
+          "labels"   = "container_name"
+          "max-size" = "10m"
+          "max-file" = "3"
         }
       }
     }
@@ -162,14 +170,18 @@ resource "aws_ecs_task_definition" "staff" {
         protocol      = "tcp"
       }]
       secrets = local.nginx_secrets
+      dockerLabels = {
+        container_name = "nginx-staff"
+      }
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "json-file"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.staff.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "nginx"
+          "labels"   = "container_name"
+          "max-size" = "10m"
+          "max-file" = "3"
         }
       }
+
       dependsOn = [{
         containerName = "api-staff"
         condition     = "START"
@@ -190,12 +202,15 @@ resource "aws_ecs_task_definition" "staff" {
         { name = "TZ",              value = "Asia/Seoul"             },
       ]
       secrets = local.api_secrets
+      dockerLabels = {
+        container_name = "api-staff"
+      }
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "json-file"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.staff.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "api"
+          "labels"   = "container_name"
+          "max-size" = "10m"
+          "max-file" = "3"
         }
       }
     }

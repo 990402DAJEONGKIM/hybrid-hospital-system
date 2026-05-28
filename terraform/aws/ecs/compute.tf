@@ -1,3 +1,5 @@
+#compute.tf
+
 # =========================================================
 # ECS EC2 컴퓨트: 보안그룹 + Launch Template + ASG
 # 아키텍처: 상시 2대, 트래픽 급증 시 최대 3대 (Auto Scaling + Warm Pool)
@@ -73,8 +75,7 @@ resource "aws_launch_template" "ecs" {
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
     cluster_name    = aws_ecs_cluster.main.name
     wazuh_server_ip = var.wazuh_server_ip
-    wazuh_server_ip_secondary = var.wazuh_server_ip_secondary
-    aws_region                = var.aws_region
+    aws_region      = var.aws_region
   }))
 
   tag_specifications {

@@ -6,7 +6,7 @@ mkdir -p /etc/ecs
 echo "ECS_CLUSTER=${cluster_name}" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true" >> /etc/ecs/ecs.config
-
+echo 'ECS_AVAILABLE_LOGGING_DRIVERS=["json-file","awslogs"]' >> /etc/ecs/ecs.config  # 추가
 %{ if wazuh_server_ip != "" }
 # ── Wazuh 에이전트 설치 ──────────────────────────────────
 rpm --import https://packages.wazuh.com/key/GPG-KEY-WAZUH
@@ -62,7 +62,7 @@ systemctl start wazuh-agent
 %{ endif }
 
 # ── CloudWatch Agent 설치 ────────────────────────────────
-yum install -y amazon-cloudwatch-agent
+dnf install -y amazon-cloudwatch-agent
 
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CW_EOF'
 {

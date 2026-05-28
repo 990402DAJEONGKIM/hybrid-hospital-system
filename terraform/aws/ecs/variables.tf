@@ -1,3 +1,5 @@
+# variables.tf
+
 variable "aws_region" {
   description = "AWS 리전"
   type        = string
@@ -65,10 +67,4 @@ variable "staff_allowed_hosts" {
   description = "의료진 포털 도메인"
   type        = string
   default     = "staff.mzclinic.cloud,localhost"
-}
-
-variable "wazuh_server_ip_secondary" {
-  description = "Wazuh 서버2 IP (failover용)"
-  type        = string
-  default     = ""
 }
