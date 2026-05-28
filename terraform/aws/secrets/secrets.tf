@@ -49,10 +49,10 @@ resource "aws_secretsmanager_secret" "vault_lambda_approle_v2" {
 
 # ─────────────────────────────────────────────────────────
 # db_url (신규 작명)
-# 마이그레이션: hospital/database-url → aws-ecs-database-url-secret
+# 마이그레이션: hospital/database-url → aws-ecs-patient-database-url-secret
 # ─────────────────────────────────────────────────────────
 resource "aws_secretsmanager_secret" "db_url_v2" {
-  name        = "aws-ecs-database-url-secret"
+  name        = "aws-ecs-patient-database-url-secret"
   description = "ECS 앱 DB 연결 URL"
   kms_key_id  = data.aws_kms_key.secretsmanager.arn
 
@@ -60,8 +60,23 @@ resource "aws_secretsmanager_secret" "db_url_v2" {
     prevent_destroy = true
   }
 
-  tags = merge(local.common_tags, { Name = "aws-ecs-database-url-secret" })
+  tags = merge(local.common_tags, { Name = "aws-ecs-patient-database-url-secret" })
 }
+
+# db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
+resource "aws_secretsmanager_secret" "db_url_staff_v2" {
+  name        = "aws-ecs-staff-database-url-secret"
+  description = "ECS 앱 DB 연결 URL"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-ecs-staff-database-url-secret" })
+}
+
+
 
 # ─────────────────────────────────────────────────────────
 # jwt_secret (신규 작명)
