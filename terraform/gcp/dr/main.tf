@@ -307,3 +307,144 @@ resource "google_compute_global_forwarding_rule" "dr_app" {
 }
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# IAM — SA, WIF, 역할 바인딩
+# gcloud로 수동 설정했던 것들을 Terraform으로 관리합니다.
+# DR destroy 시 함께 삭제됩니다.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Terraform Cloud DR 전용 SA ─────────────────────────────────────────────────
+resource "google_service_account" "terraform_dr" {
+  account_id   = "gcp-sa-dr-terraform"
+  display_name = "Terraform Cloud DR SA"
+  description  = "TC-gcp-dr 워크스페이스 전용 Terraform 실행 SA"
+}
+
+locals {
+  terraform_dr_roles = [
+    "roles/compute.admin",
+    "roles/iam.roleAdmin",
+    "roles/iam.serviceAccountAdmin",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/storage.admin",
+    "roles/secretmanager.admin",
+    "roles/serviceusage.serviceUsageAdmin",
+    "roles/dns.admin",
+    "roles/cloudsql.viewer",
+  ]
+}
+
+resource "google_project_iam_member" "terraform_dr_roles" {
+  for_each = toset(local.terraform_dr_roles)
+  project  = var.project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.terraform_dr.email}"
+}
+
+# gcp-dr-app-sa impersonate 허용 (instance template 연결 시 필요)
+resource "google_service_account_iam_member" "terraform_dr_use_app_sa" {
+  service_account_id = google_service_account.app.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.terraform_dr.email}"
+}
+
+# ── GitHub Actions Packer SA ───────────────────────────────────────────────────
+resource "google_service_account" "github_packer" {
+  account_id   = "gcp-sa-github-packer"
+  display_name = "GitHub Actions Packer SA"
+  description  = "DR 앱 Custom Image 빌드 전용 SA"
+}
+
+locals {
+  github_packer_roles = [
+    "roles/compute.instanceAdmin.v1",
+    "roles/iam.serviceAccountUser",
+    "roles/iap.tunnelResourceAccessor",
+    "roles/storage.objectViewer",
+  ]
+}
+
+resource "google_project_iam_member" "github_packer_roles" {
+  for_each = toset(local.github_packer_roles)
+  project  = var.project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.github_packer.email}"
+}
+
+# ── WIF Pool — Terraform Cloud ────────────────────────────────────────────────
+resource "google_iam_workload_identity_pool" "terraform_cloud" {
+  workload_identity_pool_id = "terraform-cloud-pool"
+  display_name              = "terraform-cloud-pool"
+  description               = "Terraform Cloud WIF Pool"
+}
+
+resource "google_iam_workload_identity_pool_provider" "terraform_cloud" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.terraform_cloud.workload_identity_pool_id
+  workload_identity_pool_provider_id = "tfc-provider"
+  display_name                       = "tfc-provider"
+
+  oidc {
+    issuer_uri = "https://app.terraform.io"
+  }
+
+  attribute_mapping = {
+    "google.subject"                  = "assertion.sub"
+    "attribute.aud"                   = "assertion.aud"
+    "attribute.terraform_workspace_id" = "assertion.terraform_workspace_id"
+    "attribute.terraform_organization_name" = "assertion.terraform_organization_name"
+  }
+
+  attribute_condition = "assertion.sub.startsWith(\"organization:k2p\")"
+}
+
+# TC-gcp-dr 워크스페이스 → gcp-sa-dr-terraform impersonate 허용
+resource "google_service_account_iam_member" "tfc_dr_workload_identity" {
+  service_account_id = google_service_account.terraform_dr.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.terraform_cloud.name}/attribute.terraform_workspace_id/ws-3wAP7iDiNKH8UHrR"
+}
+
+resource "google_service_account_iam_member" "tfc_dr_token_creator" {
+  service_account_id = google_service_account.terraform_dr.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.terraform_cloud.name}/attribute.terraform_workspace_id/ws-3wAP7iDiNKH8UHrR"
+}
+
+# ── WIF Pool — GitHub Actions ─────────────────────────────────────────────────
+resource "google_iam_workload_identity_pool" "github" {
+  workload_identity_pool_id = "github-pool"
+  display_name              = "GitHub Actions Pool"
+  description               = "GitHub Actions WIF Pool"
+}
+
+resource "google_iam_workload_identity_pool_provider" "github" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github-provider"
+  display_name                       = "github-provider"
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+
+  attribute_mapping = {
+    "google.subject"        = "assertion.sub"
+    "attribute.repository"  = "assertion.repository"
+  }
+
+  attribute_condition = "assertion.repository=='990402DAJEONGKIM/hybrid-hospital-system'"
+}
+
+# GitHub Actions → gcp-sa-github-packer impersonate 허용
+resource "google_service_account_iam_member" "github_packer_workload_identity" {
+  service_account_id = google_service_account.github_packer.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
+}
+
+resource "google_service_account_iam_member" "github_packer_token_creator" {
+  service_account_id = google_service_account.github_packer.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
+}
