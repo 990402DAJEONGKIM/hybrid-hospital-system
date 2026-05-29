@@ -1,10 +1,10 @@
 #cloudwatch.tf
-resource "aws_sns_topic" "aws-wazuh-alerts-01" {
-  name = "aws-wazuh-alerts-01"
+resource "aws_sns_topic" "aws-wazuh-cw-alerts-01" {
+  name = "aws-wazuh-cw-alerts-01"
 }
 
 
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-status-01" {
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-status-01" {
   alarm_name          = "aws-wazuh-status-01"
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed"
@@ -17,16 +17,16 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-status-01" {
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
   treat_missing_data  = "breaching" 
-  alarm_actions       = [aws_sns_topic.aws-wazuh-alerts-01.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-alerts-01.arn]
+  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
   tags = {
-    Name  = "aws-wazuh-status-01"
+    Name  = "aws-wazuh-cw-status-01"
     Owner = "st2"
   }
 }
 
 
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-disk-01" {
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-disk-01" {
   alarm_name          = "aws-wazuh-disk-01"
   namespace           = "CWAgent"
   metric_name         = "disk_used_percent"
@@ -41,12 +41,12 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-disk-01" {
   statistic           = "Average"
   comparison_operator = "GreaterThanThreshold"
   threshold           = 80
-  alarm_actions       = [aws_sns_topic.aws-wazuh-alerts-01.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-alerts-01.arn]
-  tags = { Name = "aws-wazuh-disk-01", Owner = "st2" }
+  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  tags = { Name = "aws-wazuh-cw-disk-01", Owner = "st2" }
 }
 
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-mem-01" {
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-mem-01" {
   alarm_name          = "aws-wazuh-mem-01"
   namespace           = "CWAgent"
   metric_name         = "mem_used_percent"
@@ -58,14 +58,14 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-mem-01" {
   statistic           = "Average"
   comparison_operator = "GreaterThanThreshold"
   threshold           = 80
-  alarm_actions       = [aws_sns_topic.aws-wazuh-alerts-01.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-alerts-01.arn]
-  tags = { Name = "aws-wazuh-mem-01", Owner = "st2" }
+  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  tags = { Name = "aws-wazuh-cw-mem-01", Owner = "st2" }
 }
 
 # wazuh-manager 프로세스 헬스체크 알람
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-manager-01" {
-  alarm_name          = "aws-wazuh-manager-01"
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-manager-01" {
+  alarm_name          = "aws-wazuh-cw-manager-01"
   namespace           = "Custom/Wazuh"
   metric_name         = "wazuh_manager_running"
   dimensions = {
@@ -77,7 +77,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-manager-01" {
   comparison_operator = "LessThanThreshold"
   threshold           = 1
   treat_missing_data  = "breaching"
-  alarm_actions       = [aws_sns_topic.aws-wazuh-alerts-01.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-alerts-01.arn]
-  tags = { Name = "aws-wazuh-manager-01", Owner = "st2" }
+  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  tags = { Name = "aws-wazuh-cw-manager-01", Owner = "st2" }
 }

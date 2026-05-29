@@ -19,13 +19,6 @@
       cidr_blocks = ["10.0.0.0/16", "172.30.1.0/24"]
     }
 
-    ingress {
-      from_port   = 1516
-      to_port     = 1516
-      protocol    = "tcp"
-      cidr_blocks = ["10.0.0.0/16"]
-    }
-
     # 443 수정
     ingress {
       from_port   = 443
@@ -33,6 +26,15 @@
       protocol    = "tcp"
       cidr_blocks = ["10.0.0.0/16"] 
     }
+
+    ingress {
+      from_port   = 55000
+      to_port     = 55000
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
+      description = "Wazuh API (Lambda, Dashboard)"
+    }
+
     
     egress {
       from_port   = 0

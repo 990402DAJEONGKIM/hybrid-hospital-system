@@ -5,9 +5,7 @@ variable "aws_region" {
 variable "slack_webhook_url" {
   sensitive = true
 }
-variable "wazuh_cluster_key" {
-  sensitive = true
-}
+
 variable "ssh_public_key" {
   sensitive = true
 }
@@ -16,4 +14,15 @@ variable "ssh_public_key" {
 variable "wazuh_indexer_ip" {
   description = "Wazuh Indexer Private IP"  # EIP → Private IP로 수정
   type        = string
+}
+
+variable "wazuh_01_private_ip" {
+  description = "wazuh-01 고정 Private IP"
+  type        = string
+}
+
+variable "golden_ami_id" {
+  description = "Wazuh-01 골든 AMI ID"
+  type        = string
+  default     = "ami-08cb0385d97a16273"  # 오늘 생성한 AMI
 }

@@ -24,7 +24,7 @@ resource "aws_iam_role" "aws-wazuh-ssm-role" {
 }
 
 # CloudWatch Agent가 메트릭/로그를 CloudWatch로 전송하기 위한 AWS 관리형 정책
-resource "aws_iam_role_policy_attachment" "aws-wazuh-cloudwatch" {
+resource "aws_iam_role_policy_attachment" "aws-wazuh-cw" {
   role       = aws_iam_role.aws-wazuh-ssm-role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
@@ -119,8 +119,8 @@ resource "aws_iam_instance_profile" "aws-wazuh-profile" {
 # CloudWatch 알람 → SNS → Lambda → Slack 구조에서
 # Lambda가 CloudWatch Logs에 실행 로그를 남기기 위한 역할
 # ══════════════════════════════════════════
-resource "aws_iam_role" "aws-wazuh-slack-notify-role" {
-  name = "aws-wazuh-slack-notify-role"
+resource "aws_iam_role" "aws-wazuh-lambda-slack-notify-role" {
+  name = "aws-wazuh-lambda-slack-notify-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -134,18 +134,21 @@ resource "aws_iam_role" "aws-wazuh-slack-notify-role" {
 
 # Lambda 기본 실행 권한 (CloudWatch Logs 쓰기)
 resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-basic" {
-  role       = aws_iam_role.aws-wazuh-slack-notify-role.name
+  role       = aws_iam_role.aws-wazuh-lambda-slack-notify-role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 
+
+
+
 # ══════════════════════════════════════════
-# Lambda IAM Role - wodle HA Failover
-# wazuh-01 장애 시 wazuh-02의 wodle을 자동으로 켜고 끄는 Lambda
-# CloudWatch 알람 확인, SSM 명령 실행, Parameter Store 상태 저장에 사용
+# Lambda IAM Role - Agent 정리
+# ecs-ec2 그룹 disconnected Agent 주기적 삭제
+# Secrets Manager 읽기 권한만 부여 (최소 권한 원칙)
 # ══════════════════════════════════════════
-resource "aws_iam_role" "aws-wazuh-wodle-failover-role" {
-  name = "aws-wazuh-wodle-failover-role"
+resource "aws_iam_role" "aws-wazuh-lambda-agent-cleanup-role" {
+  name = "aws-wazuh-lambda-agent-cleanup-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -157,50 +160,80 @@ resource "aws_iam_role" "aws-wazuh-wodle-failover-role" {
   })
 }
 
-# Lambda 기본 실행 권한 (CloudWatch Logs 쓰기)
-resource "aws_iam_role_policy_attachment" "aws-wazuh-wodle-failover-basic" {
-  role       = aws_iam_role.aws-wazuh-wodle-failover-role.name
+# Lambda 기본 실행 권한 (CloudWatch Logs 쓰기 - 증적용)
+resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-agent-cleanup-basic" {
+  role       = aws_iam_role.aws-wazuh-lambda-agent-cleanup-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+# Secrets Manager 읽기 (Wazuh API 비밀번호 조회용)
+resource "aws_iam_role_policy" "aws-wazuh-lambda-agent-cleanup-policy" {
+  name = "aws-wazuh-lambda-agent-cleanup-policy"
+  role = aws_iam_role.aws-wazuh-lambda-agent-cleanup-role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "SecretsManagerRead"
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:wazuh/*"
+    }]
+  })
+}
+
+resource "aws_iam_role" "aws-wazuh-lambda-recovery-role" {
+  name = "aws-wazuh-lambda-recovery-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-recovery-basic" {
+  role       = aws_iam_role.aws-wazuh-lambda-recovery-role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# 인라인 정책: CloudWatch 알람 조회 + SSM 명령 실행 + Parameter Store 읽기/쓰기
-resource "aws_iam_role_policy" "aws-wazuh-wodle-failover-policy" {
-  name = "aws-wazuh-wodle-failover-policy"
-  role = aws_iam_role.aws-wazuh-wodle-failover-role.id
+resource "aws_iam_role_policy" "aws-wazuh-lambda-recovery-policy" {
+  name = "aws-wazuh-lambda-recovery-policy"
+  role = aws_iam_role.aws-wazuh-lambda-recovery-role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # wazuh-01 EC2/Manager 상태 알람 확인용
       {
-        Sid    = "CloudWatchRead"
+        Sid    = "EC2Recovery"
         Effect = "Allow"
-        Action = ["cloudwatch:DescribeAlarms"]
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceStatus",
+          "ec2:TerminateInstances",
+          "ec2:RunInstances",
+          "ec2:CreateTags"
+        ]
         Resource = "*"
       },
-      # wazuh-02에 SSM 명령 전송 (wodle disabled 설정 변경 + wazuh-manager 재시작)
       {
-        Sid    = "SSMSendCommand"
+        Sid    = "SSMRecovery"
         Effect = "Allow"
         Action = [
           "ssm:SendCommand",
-          "ssm:GetCommandInvocation"
+          "ssm:GetCommandInvocation",
+          "ssm:DescribeInstanceInformation"
         ]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
-          data.terraform_remote_state.wazuh2.outputs.wazuh_instance_arn
-        ]
+        Resource = "*"
       },
-      # 현재 active 서버 상태를 Parameter Store에 저장/조회
-      # 키: /wazuh/wodle-active-server (값: wazuh-01 또는 wazuh-02)
       {
-        Sid    = "SSMParameter"
+        Sid    = "IAMPassRole"
         Effect = "Allow"
-        Action = [
-          "ssm:GetParameter",
-          "ssm:PutParameter"
-        ]
-        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/wazuh/*"
+        Action = ["iam:PassRole"]
+        Resource = aws_iam_role.aws-wazuh-ssm-role.arn
       }
     ]
   })

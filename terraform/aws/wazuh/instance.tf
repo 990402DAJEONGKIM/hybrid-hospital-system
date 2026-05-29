@@ -17,10 +17,11 @@ resource "aws_instance" "aws-wazuh-01" {
   vpc_security_group_ids = [aws_security_group.aws-wazuh-sg.id]
   key_name               = aws_key_pair.aws-wazuh-key.key_name
   iam_instance_profile   = aws_iam_instance_profile.aws-wazuh-profile.name
-
+  private_ip             = var.wazuh_01_private_ip
   root_block_device {
     volume_size = 50
     volume_type = "gp3"
+    encrypted   = true 
   }
 
   tags = {
