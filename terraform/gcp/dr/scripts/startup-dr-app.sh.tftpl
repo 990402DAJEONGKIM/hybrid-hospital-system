@@ -1,0 +1,124 @@
+#!/bin/bash
+set -euo pipefail
+
+apt-get update -y
+apt-get install -y nginx python3-venv python3-pip unzip
+
+if [[ "${enable_ops_agent}" == "true" ]]; then
+  curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+  bash add-google-cloud-ops-agent-repo.sh --also-install
+fi
+
+mkdir -p /opt/gcp-dr-reservation
+gsutil cp "gs://${artifact_bucket}/${artifact_object}" /tmp/dr-lite.zip
+rm -rf /opt/gcp-dr-reservation/*
+unzip -q /tmp/dr-lite.zip -d /opt/gcp-dr-reservation
+
+DB_PASSWORD="$(gcloud secrets versions access latest --project="${project_id}" --secret="${db_password_secret_name}")"
+JWT_SECRET_VALUE="$(gcloud secrets versions access latest --project="${project_id}" --secret="${jwt_secret_name}")"
+API_KEY_VALUE="$(gcloud secrets versions access latest --project="${project_id}" --secret="${api_key_secret_name}")"
+
+DATABASE_URL="$(
+  DB_USER="${database_user}" \
+  DB_PASSWORD="$DB_PASSWORD" \
+  DB_HOST="${cloud_sql_ip}" \
+  DB_NAME="${database_name}" \
+  python3 - <<'PY'
+import os
+from urllib.parse import quote
+
+user = quote(os.environ["DB_USER"], safe="")
+password = quote(os.environ["DB_PASSWORD"], safe="")
+host = os.environ["DB_HOST"]
+name = os.environ["DB_NAME"]
+print(f"postgresql+psycopg2://{user}:{password}@{host}:5432/{name}")
+PY
+)"
+
+umask 077
+cat > /opt/gcp-dr-reservation/backend/.env <<ENV
+DATABASE_URL=$DATABASE_URL
+JWT_SECRET=$JWT_SECRET_VALUE
+JWT_ALGORITHM=HS256
+API_KEY=$API_KEY_VALUE
+COOKIE_SECURE=false
+ALLOWED_ORIGINS=${allowed_origins}
+ENV
+chmod 0600 /opt/gcp-dr-reservation/backend/.env
+
+python3 -m venv /opt/gcp-dr-reservation/venv
+/opt/gcp-dr-reservation/venv/bin/pip install --no-cache-dir --upgrade pip
+/opt/gcp-dr-reservation/venv/bin/pip install --no-cache-dir -r /opt/gcp-dr-reservation/backend/requirements.txt
+
+cat > /etc/systemd/system/gcp-dr-reservation.service <<'UNIT'
+[Unit]
+Description=GCP DR reservation FastAPI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/gcp-dr-reservation/backend
+EnvironmentFile=/opt/gcp-dr-reservation/backend/.env
+ExecStart=/opt/gcp-dr-reservation/venv/bin/uvicorn main:app --host 127.0.0.1 --port ${app_port} --proxy-headers
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+API_KEY="$API_KEY_VALUE" APP_PORT="${app_port}" python3 - <<'PY'
+import os
+
+api_key = os.environ["API_KEY"].replace("\\", "\\\\").replace('"', '\\"')
+app_port = os.environ["APP_PORT"]
+config = f'''server {{
+    listen 80 default_server;
+    server_name _;
+
+    root /opt/gcp-dr-reservation/frontend;
+    index index.html;
+
+    location = /health {{
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-API-Key "{api_key}";
+        proxy_pass http://127.0.0.1:{app_port}/health;
+    }}
+
+    location /auth/ {{
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-API-Key "{api_key}";
+        proxy_pass http://127.0.0.1:{app_port};
+    }}
+
+    location /portal/ {{
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-API-Key "{api_key}";
+        proxy_pass http://127.0.0.1:{app_port};
+    }}
+
+    location / {{
+        try_files $uri $uri/ /index.html;
+    }}
+}}
+'''
+with open("/etc/nginx/sites-available/gcp-dr-reservation", "w", encoding="utf-8") as f:
+    f.write(config)
+PY
+
+rm -f /etc/nginx/sites-enabled/default
+ln -sf /etc/nginx/sites-available/gcp-dr-reservation /etc/nginx/sites-enabled/gcp-dr-reservation
+
+systemctl daemon-reload
+systemctl enable --now gcp-dr-reservation
+nginx -t
+systemctl restart nginx
