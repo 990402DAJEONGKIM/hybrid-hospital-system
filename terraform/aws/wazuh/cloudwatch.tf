@@ -26,42 +26,6 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-status-01" {
 }
 
 
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-disk-01" {
-  alarm_name          = "aws-wazuh-disk-01"
-  namespace           = "CWAgent"
-  metric_name         = "disk_used_percent"
-  dimensions = {
-    InstanceId = aws_instance.aws-wazuh-01.id
-    path       = "/"
-    device     = "nvme0n1p1"
-    fstype     = "ext4"
-  }
-  period              = 60
-  evaluation_periods  = 3
-  statistic           = "Average"
-  comparison_operator = "GreaterThanThreshold"
-  threshold           = 80
-  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
-  tags = { Name = "aws-wazuh-cw-disk-01", Owner = "st2" }
-}
-
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-mem-01" {
-  alarm_name          = "aws-wazuh-mem-01"
-  namespace           = "CWAgent"
-  metric_name         = "mem_used_percent"
-  dimensions = {
-    InstanceId = aws_instance.aws-wazuh-01.id
-  }
-  period              = 60
-  evaluation_periods  = 3
-  statistic           = "Average"
-  comparison_operator = "GreaterThanThreshold"
-  threshold           = 80
-  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
-  tags = { Name = "aws-wazuh-cw-mem-01", Owner = "st2" }
-}
 
 # wazuh-manager 프로세스 헬스체크 알람
 resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-manager-01" {

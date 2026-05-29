@@ -151,6 +151,24 @@
           async: 1800
           poll: 30
 
+        - name: wazuh-passwords-tool 다운로드
+          get_url:
+            url: https://packages.wazuh.com/4.14/wazuh-passwords-tool.sh
+            dest: /tmp/wazuh-passwords-tool.sh
+            mode: '0755'
+            force: yes
+
+        - name: wazuh-wui API 비밀번호 설정
+          shell: >
+            bash /tmp/wazuh-passwords-tool.sh --api
+            -u wazuh-wui
+            -p '{{ wazuh_wui_password }}'
+            -au wazuh
+            -ap '{{ wazuh_api_password }}'
+          no_log: true
+
+
+
       rescue:
         - name: 설치 실패 로그 출력
           shell: tail -50 /var/log/wazuh-install.log
@@ -194,6 +212,12 @@
         cp /tmp/wazuh-install-files/{{ wazuh_cert_name }}-key.pem /etc/filebeat/certs/
         cp /tmp/wazuh-install-files/root-ca.pem /etc/filebeat/certs/
         cp /tmp/wazuh-install-files/root-ca.pem /etc/wazuh-dashboard/certs/
+        chmod 644 /etc/filebeat/certs/root-ca.pem
+        chmod 644 /etc/filebeat/certs/{{ wazuh_cert_name }}.pem
+        chmod 600 /etc/filebeat/certs/{{ wazuh_cert_name }}-key.pem
+        chmod 644 /etc/wazuh-dashboard/certs/root-ca.pem
+        chmod 640 /etc/wazuh-dashboard/certs/dashboard-1.pem
+        chmod 640 /etc/wazuh-dashboard/certs/dashboard-1-key.pem
       tags: config
 
     - name: ossec.conf 템플릿 배포
@@ -216,6 +240,32 @@
         - local_rules.xml
         - rds_rules.xml
         - onprem_rules.xml
+      tags: config
+
+    # 1. ecs-ec2 그룹 생성
+    - name: ecs-ec2 Agent 그룹 생성
+      shell: |
+        /var/ossec/bin/agent_groups -a -g ecs-ec2 -q || true
+      tags: config
+
+    # 2. ecs-ec2 그룹 디렉토리 생성
+    - name: ecs-ec2 그룹 디렉토리 생성
+      file:
+        path: /var/ossec/etc/shared/ecs-ec2
+        state: directory
+        owner: wazuh
+        group: wazuh
+        mode: '0770'
+      tags: config
+
+    # 3. 기존 agent.conf를 ecs-ec2 그룹에도 배포
+    - name: ecs-ec2 Agent 설정 배포
+      copy:
+        src: agent_ecs.conf 
+        dest: /var/ossec/etc/shared/ecs-ec2/agent.conf
+        owner: wazuh
+        group: wazuh
+        mode: '0640'
       tags: config
 
     - name: Agent 중앙 설정 배포
@@ -283,6 +333,13 @@
         line: 'server.host: 0.0.0.0'
       tags: config
 
+    - name: Dashboard session TTL 설정
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.session.ttl:'
+        line: 'opensearch_security.session.ttl: 900000'
+      tags: config
+
     - name: Filebeat 설정 배포
       template:
         src: filebeat.yml.j2
@@ -301,10 +358,10 @@
       tags: config
 
     - name: Dashboard opensearch.hosts
-      replace:
+      lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: 'opensearch.hosts:.*'
-        replace: 'opensearch.hosts: ["https://{{ wazuh_indexer_ip }}:9200"]'
+        line: 'opensearch.hosts: ["https://{{ wazuh_indexer_ip }}:9200"]'
       tags: config
 
     - name: systemd override 디렉토리 생성
@@ -359,41 +416,54 @@
       no_log: true
       tags: config
 
-    - name: wazuh-passwords-tool 다운로드
-      get_url:
-        url: https://packages.wazuh.com/4.14/wazuh-passwords-tool.sh
-        dest: /tmp/wazuh-passwords-tool.sh
-        mode: '0755'
-        force: yes
+
+
+    - name: wazuh.yml 디렉토리 생성
+      file:
+        path: /usr/share/wazuh-dashboard/data/wazuh/config
+        state: directory
+        owner: wazuh-dashboard
+        group: wazuh-dashboard
+        mode: '0750'
       tags: config
 
-    - name: wazuh API admin 비밀번호 추출
-      shell: >
-        tar -axf /tmp/wazuh-install-files.tar
-        wazuh-install-files/wazuh-passwords.txt -O |
-        grep -P "'wazuh'$" -A1 |
-        grep api_password | awk -F"'" '{print $2}'
-      register: wazuh_api_pw
+    - name: wazuh.yml 배포
+      copy:
+        dest: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+        owner: wazuh-dashboard
+        group: wazuh-dashboard
+        mode: '0640'
+        content: |
+          hosts:
+            - default:
+                url: https://127.0.0.1
+                port: 55000
+                username: wazuh-wui
+                password: '{{ wazuh_wui_password }}'
+                run_as: true
+      tags: config
+
+    - name: wazuh-wui run_as 활성화
+      shell: |
+        TOKEN=$(curl -s -k -u wazuh:'{{ wazuh_api_password }}' \
+          https://localhost:55000/security/user/authenticate?raw=true)
+        curl -s -k -X PUT \
+          -H "Authorization: Bearer $TOKEN" \
+          "https://localhost:55000/security/users/2/run_as?allow_run_as=true"
+        curl -s -k -X PUT \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          "https://localhost:55000/security/config" \
+          -d '{"auth_token_exp_timeout": 900}'
       no_log: true
       tags: config
 
-    - name: wazuh-wui API 비밀번호 설정
-      shell: >
-        bash /tmp/wazuh-passwords-tool.sh --api
-        -u wazuh-wui
-        -p '{{ wazuh_wui_password }}'
-        -au wazuh
-        -ap '{{ wazuh_api_pw.stdout }}'
-      no_log: true
-      tags: config
 
-    - name: wazuh.yml run_as false 설정
-      replace:
-        path: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
-        regexp: 'run_as: true'
-        replace: 'run_as: false'
+    - name: wazuh-passwords-tool 후 Dashboard 재시작
+      systemd:
+        name: wazuh-dashboard
+        state: restarted
       tags: config
-
 
     # ──────────────────────────────────────────
     # Vector
@@ -483,47 +553,47 @@
         var: vector_status.stdout
       tags: vector
 
-    # ──────────────────────────────────────────
-    # CloudWatch Agent
-    # ──────────────────────────────────────────
-    - name: CloudWatch Agent 설치
-      shell: |
-        wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
-        dpkg -i /tmp/amazon-cloudwatch-agent.deb
-      args:
-        creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
-      tags: cloudwatch
+    # # ──────────────────────────────────────────
+    # # CloudWatch Agent
+    # # ──────────────────────────────────────────
+    # - name: CloudWatch Agent 설치
+    #   shell: |
+    #     wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
+    #     dpkg -i /tmp/amazon-cloudwatch-agent.deb
+    #   args:
+    #     creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
+    #   tags: cloudwatch
 
-    - name: CloudWatch Agent 설정 배포
-      copy:
-        dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-        content: |
-          {
-            "metrics": {
-              "metrics_collected": {
-                "mem": {
-                  "measurement": ["mem_used_percent"]
-                },
-                "disk": {
-                  "measurement": ["disk_used_percent"],
-                  "resources": ["/"]
-                }
-              },
-              "append_dimensions": {
-                "InstanceId": "${aws:InstanceId}"
-              }
-            }
-          }
-      tags: cloudwatch
+    # - name: CloudWatch Agent 설정 배포
+    #   copy:
+    #     dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    #     content: |
+    #       {
+    #         "metrics": {
+    #           "metrics_collected": {
+    #             "mem": {
+    #               "measurement": ["mem_used_percent"]
+    #             },
+    #             "disk": {
+    #               "measurement": ["disk_used_percent"],
+    #               "resources": ["/"]
+    #             }
+    #           },
+    #           "append_dimensions": {
+    #             "InstanceId": "${aws:InstanceId}"
+    #           }
+    #         }
+    #       }
+    #   tags: cloudwatch
 
-    - name: CloudWatch Agent 시작
-      shell: |
-        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-        -a fetch-config -m ec2 \
-        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-      args:
-        creates: /var/run/amazon-cloudwatch-agent.pid
-      tags: cloudwatch
+    # - name: CloudWatch Agent 시작
+    #   shell: |
+    #     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    #     -a fetch-config -m ec2 \
+    #     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+    #   args:
+    #     creates: /var/run/amazon-cloudwatch-agent.pid
+    #   tags: cloudwatch
 
 
     # ──────────────────────────────────────────
@@ -549,8 +619,8 @@
             --metric-name "wazuh_manager_running" \
             --value $VALUE \
             --dimensions InstanceId=$INSTANCE_ID \
-            --region $REGION
-            --storage-resolution 1
+            --region $REGION \
+            --storage-resolution 60
       tags: cloudwatch
 
     - name: 헬스체크 크론 등록
@@ -570,7 +640,7 @@
           REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
           aws s3 cp /var/ossec/wodles/aws/aws_services.db \
             s3://aws-k2p-storage-01/wazuh/db-backup/aws_services.db \
-            --region $REGION
+            --region $REGION 
       tags: cloudwatch
 
     - name: wodle DB 백업 크론 등록
@@ -632,6 +702,21 @@
         port: 1514
         delay: 5
         timeout: 120
+      tags: service
+
+    - name: 2-1단계 - Manager API 포트 대기
+      wait_for:
+        port: 55000
+        delay: 5
+        timeout: 120
+      tags: service
+
+    - name: filebeat template 파일 확인 및 복구
+      shell: |
+        if [ ! -f /etc/filebeat/wazuh-template.json ]; then
+          curl -so /etc/filebeat/wazuh-template.json \
+            https://raw.githubusercontent.com/wazuh/wazuh/v4.14.5/extensions/elasticsearch/7.x/wazuh-template.json
+        fi
       tags: service
 
     - name: 3단계 - Filebeat, Dashboard 기동
