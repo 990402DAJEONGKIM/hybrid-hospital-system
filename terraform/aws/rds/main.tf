@@ -6,6 +6,11 @@ data "aws_vpc" "main" {
   id = var.vpc_id
 }
 
+# ecs -> db 연결에 필요한 시크릿 메니저 90일 rotation Lambda용 보안 그룹 추가 (by 김다정 2026.05.29)
+data "aws_security_group" "ecs_db_rotator" {
+  name = "aws-ecs-db-rotator-sg"
+}
+
 
 # ─────────────────────────────────────────────
 # 보안 그룹 1: Proxy용 (aws-sg-proxy-01)
@@ -112,6 +117,15 @@ resource "aws_security_group" "rds" {
     protocol    = "tcp"
     cidr_blocks = ["10.10.2.0/28"]
     description = "GCP Cloud Functions VPC Connector (rotation)"
+  }
+
+  # ECS DB Rotator Lambda -> Aurora (rotation) (by 김다정 2026.05.29)
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [data.aws_security_group.ecs_db_rotator.id]
+    description     = "ECS DB Rotator Lambda to Aurora"
   }
 
   egress {
