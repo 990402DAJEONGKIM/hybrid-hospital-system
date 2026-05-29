@@ -97,6 +97,15 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
           "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/staff",
           "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/staff:*"
         ]
+      },
+      # aws-wazuh-s3 인라인 정책에 추가
+      {
+        Sid    = "CloudWatchMetrics"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
       }
     ]
   })
