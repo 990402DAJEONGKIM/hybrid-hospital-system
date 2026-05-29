@@ -73,7 +73,11 @@ build {
     ]
   }
 
-  # ── 2. 앱 코드 업로드 ─────────────────────────────────────────────────────────
+  # ── 2. 앱 코드 업로드 전 디렉토리 생성 ──────────────────────────────────────────
+  provisioner "shell" {
+    inline = ["mkdir -p /tmp/dr-backend /tmp/dr-frontend"]
+  }
+
   provisioner "file" {
     source      = "../app/dr-lite/backend/"
     destination = "/tmp/dr-backend"
