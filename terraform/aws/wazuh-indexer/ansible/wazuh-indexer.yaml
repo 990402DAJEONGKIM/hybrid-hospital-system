@@ -211,36 +211,36 @@
       poll: 30
       ignore_errors: yes
 
-    # ──────────────────────────────────────────
-    # CloudWatch Agent
-    # ──────────────────────────────────────────
-    - name: CloudWatch Agent 설치
-      shell: |
-        wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
-        dpkg -i /tmp/amazon-cloudwatch-agent.deb
-      args:
-        creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
+    # # ──────────────────────────────────────────
+    # # CloudWatch Agent
+    # # ──────────────────────────────────────────
+    # - name: CloudWatch Agent 설치
+    #   shell: |
+    #     wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
+    #     dpkg -i /tmp/amazon-cloudwatch-agent.deb
+    #   args:
+    #     creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
 
-    - name: CloudWatch Agent 설정 배포
-      copy:
-        dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-        content: |
-          {
-            "metrics": {
-              "metrics_collected": {
-                "mem": {
-                  "measurement": ["mem_used_percent"]
-                },
-                "disk": {
-                  "measurement": ["disk_used_percent"],
-                  "resources": ["/"]
-                }
-              },
-              "append_dimensions": {
-                "InstanceId": "${aws:InstanceId}"
-              }
-            }
-          }
+    # - name: CloudWatch Agent 설정 배포
+    #   copy:
+    #     dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    #     content: |
+    #       {
+    #         "metrics": {
+    #           "metrics_collected": {
+    #             "mem": {
+    #               "measurement": ["mem_used_percent"]
+    #             },
+    #             "disk": {
+    #               "measurement": ["disk_used_percent"],
+    #               "resources": ["/"]
+    #             }
+    #           },
+    #           "append_dimensions": {
+    #             "InstanceId": "${aws:InstanceId}"
+    #           }
+    #         }
+    #       }
 
     # ──────────────────────────────────────────
     # 설정 블록 (항상 실행)
@@ -324,13 +324,13 @@
       retries: 5
       delay: 10
 
-    - name: CloudWatch Agent 시작
-      shell: |
-        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-        -a fetch-config -m ec2 \
-        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-      args:
-        creates: /var/run/amazon-cloudwatch-agent.pid
+    # - name: CloudWatch Agent 시작
+    #   shell: |
+    #     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    #     -a fetch-config -m ec2 \
+    #     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+    #   args:
+    #     creates: /var/run/amazon-cloudwatch-agent.pid
 
     - name: ISM 90일 보존 정책 설정
       uri:
