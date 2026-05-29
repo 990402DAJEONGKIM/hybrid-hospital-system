@@ -620,7 +620,7 @@
             --value $VALUE \
             --dimensions InstanceId=$INSTANCE_ID \
             --region $REGION \
-            --storage-resolution 1
+            --storage-resolution 60
       tags: cloudwatch
 
     - name: 헬스체크 크론 등록
