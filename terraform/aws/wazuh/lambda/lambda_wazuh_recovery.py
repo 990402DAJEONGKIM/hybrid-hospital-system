@@ -140,8 +140,10 @@ def _scenario1_rebuild(target_id):
 
     # AMI에 모든 게 구워져 있으니 서비스 재시작만
     _run_ssm(new_id, [
-        f"cd {PLAYBOOK_PATH} && ansible-playbook -i localhost, wazuh.yaml "
-        f"--connection=local --tags 'service'"
+        "systemctl restart wazuh-manager",
+        "sleep 30",
+        "systemctl restart filebeat",
+        "systemctl restart wazuh-dashboard"
     ])
     print("[SUCCESS] 시나리오 1 복구 완료")
 
@@ -149,8 +151,10 @@ def _scenario1_rebuild(target_id):
 def _scenario2_restart_service(target_id):
     # SSM으로 서비스 태그만 실행
     _run_ssm(target_id, [
-        f"cd {PLAYBOOK_PATH} && ansible-playbook -i localhost, wazuh.yaml "
-        f"--connection=local --tags 'service'"
+       "systemctl restart wazuh-manager",
+        "sleep 30",
+        "systemctl restart filebeat",
+        "systemctl restart wazuh-dashboard"
     ])
     print("[SUCCESS] 시나리오 2 복구 완료")
 
