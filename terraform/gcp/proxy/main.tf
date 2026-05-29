@@ -26,6 +26,36 @@ data "google_service_account" "proxy" {
   account_id = "tc-st1-account"
 }
 
+# ── Cloud SQL 감사 로그 → Cloud Logging 활성화 ───────────────
+# Cloud SQL 접근 로그(접속/쿼리)를 Cloud Logging으로 내보내기
+# audit collector가 이 로그를 polling하여 cloudsql_audit_logs에 저장
+
+resource "google_project_iam_audit_config" "cloud_sql_audit" {
+  project = var.project_id
+  service = "cloudsql.googleapis.com"
+
+  audit_log_config {
+    log_type = "DATA_READ"
+  }
+
+  audit_log_config {
+    log_type = "DATA_WRITE"
+  }
+
+  audit_log_config {
+    log_type = "ADMIN_READ"
+  }
+}
+
+# ── 서비스 계정 IAM 권한 ─────────────────────────────────────
+# audit collector가 Cloud Logging을 읽기 위한 권한
+
+resource "google_project_iam_member" "proxy_logging_viewer" {
+  project = var.project_id
+  role    = "roles/logging.viewer"
+  member  = "serviceAccount:${data.google_service_account.proxy.email}"
+}
+
 # ── audit collector 스크립트 → GCS 업로드 ────────────────────
 # startup script에서 gsutil cp로 다운로드하여 설치
 # 버킷은 TC-gcp-dr에서 이미 생성된 gcp-project-496802-dr-app-artifacts 사용
