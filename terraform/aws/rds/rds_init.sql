@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS sync_departments (
     department_code VARCHAR(20)  PRIMARY KEY,
     department_name VARCHAR(100),
     is_active       BOOLEAN,
+    updated_at      TIMESTAMPTZ,
     synced_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE sync_departments IS '진료과 정보 (3등급)';
@@ -45,74 +46,101 @@ CREATE TABLE IF NOT EXISTS sync_doctors (
     doctor_name     VARCHAR(100),
     department_code VARCHAR(20) REFERENCES sync_departments(department_code),
     is_active       BOOLEAN,
+    updated_at      TIMESTAMPTZ,
     synced_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE sync_doctors IS '의사 정보 (3등급)';
 CREATE INDEX IF NOT EXISTS idx_sync_doctors_dept ON sync_doctors(department_code);
 
 -- 2-3. sync_patients
+-- patient_id_hash = sha256('<PATIENT_HASH_SALT>:' || patient_id::text)
+--   온프레미스 patients.patient_id_hash 트리거와 동일한 SALTED SHA-256.
+--   SALT 값은 AWS Secrets Manager에서 주입 — 코드·SQL·로그 하드코딩 금지.
+--   ※ v_cloud_* 뷰의 UNSALTED sha256(patient_id)와 값이 다름.
+--      appointments.patient_id_hash(SALTED) ↔ sync_encounters.patient_hash(UNSALTED) 직접 조인 불가.
 CREATE TABLE IF NOT EXISTS sync_patients (
-    patient_id_hash VARCHAR(64) PRIMARY KEY,  -- SHA-256(patient_id)
+    patient_id_hash VARCHAR(64) PRIMARY KEY,  -- sha256('<SALT>:' || patient_id) — 온프레미스 patients.patient_id_hash 동일 방식
     birth_year      SMALLINT,                 -- 출생연도 (YYYY) — 비식별
     gender_code     CHAR(1) CHECK (gender_code IN ('M','F','U')),
-    phone_hash      VARCHAR(64),              -- SHA-256(phone_number) — 포털 본인확인용, 원본 미저장
+    phone_hash      VARCHAR(64),              -- sha256(phone_number) — 포털 본인확인용, 원본 미저장
     created_at      TIMESTAMPTZ,
     synced_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE sync_patients IS 'EMR 동기화 환자 기본정보 — 1등급 PII(성명·주민번호·전화번호) 제외, 해시/비식별만 보관';
+COMMENT ON TABLE sync_patients IS 'EMR 동기화 환자 기본정보 — 1등급 PII(성명·주민번호·전화번호) 제외, SALTED 해시/비식별만 보관';
 CREATE INDEX IF NOT EXISTS idx_sync_pat_verify ON sync_patients(birth_year, gender_code, phone_hash);
 
 -- 2-4. sync_encounters
+-- 온프레미스 v_cloud_encounters 뷰 출력 구조를 그대로 수용.
+-- patient_hash: encode(sha256(patient_id::text), 'hex') — UNSALTED.
+--   sync_patients.patient_id_hash(SALTED)와 값이 다르므로 FK 미설정.
+--   appointments.patient_id_hash(SALTED)와 직접 조인 불가 — 앱 레이어에서 처리.
+-- encounter_type: 온프레미스 CHECK → 'OPD' | 'ADMISSION' | 'SURGERY_PRECHECK'
+-- status_code:    온프레미스 CHECK → 'OPEN' | 'CLOSED' | 'CANCELLED'
+-- visit_hour:     date_trunc('hour', visit_datetime)
 CREATE TABLE IF NOT EXISTS sync_encounters (
-    encounter_id    UUID        PRIMARY KEY,
-    patient_id_hash VARCHAR(64) NOT NULL REFERENCES sync_patients(patient_id_hash),
-    encounter_type  VARCHAR(30),
+    encounter_id    VARCHAR(36) PRIMARY KEY,
+    patient_hash    VARCHAR(64) NOT NULL,
+    encounter_type  VARCHAR(30) CHECK (encounter_type IN ('OPD','ADMISSION','SURGERY_PRECHECK')),
     department_code VARCHAR(20) REFERENCES sync_departments(department_code),
     doctor_id       UUID        REFERENCES sync_doctors(doctor_id),
-    visit_date      DATE,
-    status_code     VARCHAR(20),
+    visit_hour      TIMESTAMPTZ,
+    status_code     VARCHAR(20) CHECK (status_code IN ('OPEN','CLOSED','CANCELLED')),
     created_at      TIMESTAMPTZ,
     synced_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_sync_enc_patient ON sync_encounters(patient_id_hash);
+COMMENT ON COLUMN sync_encounters.patient_hash IS 'sha256(patient_id) UNSALTED — v_cloud_encounters 출력. sync_patients.patient_id_hash(SALTED)와 값 다름.';
+CREATE INDEX IF NOT EXISTS idx_sync_enc_patient ON sync_encounters(patient_hash);
 CREATE INDEX IF NOT EXISTS idx_sync_enc_doctor  ON sync_encounters(doctor_id);
-CREATE INDEX IF NOT EXISTS idx_sync_enc_date    ON sync_encounters(visit_date);
+CREATE INDEX IF NOT EXISTS idx_sync_enc_date    ON sync_encounters(visit_hour);
 
 -- 2-5. sync_diagnoses
+-- 온프레미스 v_cloud_diagnoses 뷰 출력 구조를 그대로 수용.
+-- patient_hash: UNSALTED — FK 미설정 (sync_patients는 SALTED 사용)
 CREATE TABLE IF NOT EXISTS sync_diagnoses (
-    diagnosis_id    UUID        PRIMARY KEY,
-    encounter_id    UUID        REFERENCES sync_encounters(encounter_id),
-    patient_id_hash VARCHAR(64) NOT NULL REFERENCES sync_patients(patient_id_hash),
+    diagnosis_id    VARCHAR(36) PRIMARY KEY,
+    encounter_id    VARCHAR(36) REFERENCES sync_encounters(encounter_id),
+    patient_hash    VARCHAR(64) NOT NULL,
     diagnosis_code  VARCHAR(20),
     is_primary      BOOLEAN,
     diagnosed_at    TIMESTAMPTZ,
     synced_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_sync_diag_patient ON sync_diagnoses(patient_id_hash);
+COMMENT ON COLUMN sync_diagnoses.patient_hash IS 'sha256(patient_id) UNSALTED — v_cloud_diagnoses 출력. FK 없음.';
+CREATE INDEX IF NOT EXISTS idx_sync_diag_patient ON sync_diagnoses(patient_hash);
 
 -- 2-6. sync_allergies
+-- 온프레미스 v_cloud_allergies 뷰 출력 구조를 그대로 수용.
+-- allergy_name(원문)은 1등급 — v_cloud_allergies도 전달하지 않음. allergy_code(표준코드)만 수신.
+-- severity_code: 온프레미스 CHECK → 'LOW' | 'MEDIUM' | 'HIGH' (대문자)
+-- patient_hash: UNSALTED — FK 미설정
 CREATE TABLE IF NOT EXISTS sync_allergies (
-    allergy_id      UUID        PRIMARY KEY,
-    patient_id_hash VARCHAR(64) NOT NULL REFERENCES sync_patients(patient_id_hash),
-    allergy_code    VARCHAR(30),
-    allergy_name    VARCHAR(100),
-    severity_code   VARCHAR(20),
+    allergy_id      VARCHAR(36) PRIMARY KEY,
+    patient_hash    VARCHAR(64) NOT NULL,
+    allergy_code    VARCHAR(50),
+    severity_code   VARCHAR(10) CHECK (severity_code IN ('LOW','MEDIUM','HIGH')),
     is_active       BOOLEAN,
     recorded_at     TIMESTAMPTZ,
     synced_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_sync_allergy_patient ON sync_allergies(patient_id_hash);
+COMMENT ON TABLE  sync_allergies              IS '알레르기 정보 — allergy_name(1등급 원문) 저장 금지, allergy_code(표준코드)만 보관';
+COMMENT ON COLUMN sync_allergies.patient_hash IS 'sha256(patient_id) UNSALTED — v_cloud_allergies 출력. FK 없음.';
+CREATE INDEX IF NOT EXISTS idx_sync_allergy_patient ON sync_allergies(patient_hash);
 
 -- 2-7. sync_surgery_histories
+-- 온프레미스 v_cloud_surgery 뷰 출력 구조를 그대로 수용.
+-- surgery_name/note(원문)은 1등급 — v_cloud_surgery도 전달하지 않음.
+-- surgery_yearmonth: to_char(surgery_date, 'YYYY-MM') 비식별화
+-- patient_hash: UNSALTED — FK 미설정
 CREATE TABLE IF NOT EXISTS sync_surgery_histories (
-    surgery_history_id UUID        PRIMARY KEY,
-    patient_id_hash    VARCHAR(64) NOT NULL REFERENCES sync_patients(patient_id_hash),
-    surgery_code       VARCHAR(30),
-    surgery_name       VARCHAR(200),
-    surgery_date       DATE,
+    surgery_history_id VARCHAR(36) PRIMARY KEY,
+    patient_hash       VARCHAR(64) NOT NULL,
+    surgery_code       VARCHAR(50),
+    surgery_yearmonth  VARCHAR(7),
     synced_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_sync_surgery_patient ON sync_surgery_histories(patient_id_hash);
+COMMENT ON TABLE  sync_surgery_histories              IS '수술 이력 — surgery_name·note(1등급 원문) 저장 금지, surgery_code + YYYY-MM만 보관';
+COMMENT ON COLUMN sync_surgery_histories.patient_hash IS 'sha256(patient_id) UNSALTED — v_cloud_surgery 출력. FK 없음.';
+CREATE INDEX IF NOT EXISTS idx_sync_surgery_patient ON sync_surgery_histories(patient_hash);
 
 -- 2-8. sync_wards
 CREATE TABLE IF NOT EXISTS sync_wards (

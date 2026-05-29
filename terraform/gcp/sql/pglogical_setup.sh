@@ -79,7 +79,7 @@ resolve_config() {
 
     # RDS pglogical_repl 비밀번호 (Secrets Manager)
     RDS_REPL_PASS=$(aws secretsmanager get-secret-value \
-        --secret-id rds-pglogical-repl-password \
+        --secret-id aws-rds-pglogical-password-secret \
         --region "$REGION" \
         --query 'SecretString' \
         --output text | python3 -c "import sys,json; print(json.load(sys.stdin)['password'])")

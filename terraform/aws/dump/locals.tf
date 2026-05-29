@@ -5,13 +5,16 @@ locals {
   dump_sg_name     = "aws-sg-dump"
   dump_ecr_name    = "aws-ecr-dump"
   dump_sch_name    = "aws-sch-dump"
-  dump_cwl_name    = "/aws/lambda/aws-cwl-dump"
+  dump_cwl_name    = "/aws/lambda/aws-lambda-dump"
   dump_s3_prefix   = "db-dumps/rds"
   dump_schedule    = var.db_dump_schedule_cron
 
   # rotation Lambda
-  rotation_name     = "aws-lambda-rotation"
+  rotation_name      = "aws-lambda-rotation"
   rotation_role_name = "aws-role-rotation"
   rotation_ecr_name  = "aws-ecr-rotation"
-  rotation_cwl_name  = "/aws/lambda/aws-cwl-rotation"
+  rotation_cwl_name  = "/aws/lambda/aws-lambda-rotation"
+
+  # 시크릿 ARN (TC-aws-secrets tfe_outputs 참조)
+  dump_user_secret_arn = data.tfe_outputs.secrets.values.dump_user_secret_arn
 }

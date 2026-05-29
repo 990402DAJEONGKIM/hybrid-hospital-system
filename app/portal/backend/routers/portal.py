@@ -19,12 +19,12 @@ router = APIRouter(prefix="/portal", tags=["portal"])
 
 class AppointmentCreate(BaseModel):
     department_code: str
-    visit_date: str  # YYYY-MM-DD
+    visit_hour: str  # ISO 8601 (e.g. "2025-03-15T10:00:00+09:00")
 
 
 class AppointmentUpdate(BaseModel):
     department_code: Optional[str] = None
-    visit_date: Optional[str] = None  # YYYY-MM-DD
+    visit_hour: Optional[str] = None  # ISO 8601
 
 
 # ── 환자 포털 ────────────────────────────────────────────────
@@ -37,13 +37,17 @@ def get_appointments(
     if current_user.get("role") != "patient":
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
-    patient_id_hash = current_user.get("pid")
-    if not patient_id_hash:
+    pid = current_user.get("pid")
+    if not pid:
         raise HTTPException(status_code=400, detail="이직 환자는 예약 이력이 없습니다.")
+
+    patient = db.query(SyncPatient).filter(SyncPatient.patient_id_hash == pid).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="연결된 환자 정보가 없습니다.")
 
     encounters = (
         db.query(SyncEncounter)
-        .filter(SyncEncounter.patient_id_hash == patient_id_hash)
+        .filter(SyncEncounter.patient_id_hash == pid)
         .order_by(SyncEncounter.visit_date.desc())
         .all()
     )
@@ -51,7 +55,7 @@ def get_appointments(
     return [
         {
             "encounter_id":    str(e.encounter_id),
-            "visit_date":      str(e.visit_date) if e.visit_date else None,
+            "visit_date":      str(e.visit_date),
             "status_code":     e.status_code,
             "department_code": e.department_code,
             "synced_at":       str(e.synced_at),
@@ -69,9 +73,11 @@ def get_appointment_detail(
     if current_user.get("role") != "patient":
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
+    pid = current_user.get("pid")
+
     encounter = db.query(SyncEncounter).filter(
         SyncEncounter.encounter_id    == encounter_id,
-        SyncEncounter.patient_id_hash == current_user.get("pid"),
+        SyncEncounter.patient_id_hash == pid,
     ).first()
 
     if not encounter:
@@ -79,7 +85,7 @@ def get_appointment_detail(
 
     return {
         "encounter_id":    str(encounter.encounter_id),
-        "visit_date":      str(encounter.visit_date) if encounter.visit_date else None,
+        "visit_date":      str(encounter.visit_date),
         "status_code":     encounter.status_code,
         "department_code": encounter.department_code,
         "synced_at":       str(encounter.synced_at),
@@ -95,9 +101,13 @@ def create_appointment(
     if current_user.get("role") != "patient":
         raise HTTPException(status_code=403, detail="환자만 예약할 수 있습니다.")
 
-    patient_id_hash = current_user.get("pid")
-    if not patient_id_hash:
+    pid = current_user.get("pid")
+    if not pid:
         raise HTTPException(status_code=400, detail="연결된 환자 정보가 없습니다.")
+
+    patient = db.query(SyncPatient).filter(SyncPatient.patient_id_hash == pid).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="환자 정보가 동기화되지 않았습니다. 잠시 후 다시 시도해주세요.")
 
     dept = db.query(SyncDepartment).filter(
         SyncDepartment.department_code == body.department_code,
@@ -107,14 +117,14 @@ def create_appointment(
         raise HTTPException(status_code=400, detail="존재하지 않는 진료과입니다.")
 
     try:
-        visit_date = date_type.fromisoformat(body.visit_date)
+        visit_date = datetime.fromisoformat(body.visit_hour).date()
     except ValueError:
-        raise HTTPException(status_code=422, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+        raise HTTPException(status_code=422, detail="날짜 형식이 올바르지 않습니다. (ISO 8601)")
 
     now = datetime.now(timezone.utc)
     encounter = SyncEncounter(
-        encounter_id    = uuid.uuid4(),
-        patient_id_hash = patient_id_hash,
+        encounter_id    = str(uuid.uuid4()),
+        patient_id_hash = pid,
         department_code = body.department_code,
         visit_date      = visit_date,
         status_code     = "OPEN",
@@ -144,9 +154,11 @@ def update_appointment(
     if current_user.get("role") != "patient":
         raise HTTPException(status_code=403, detail="환자만 예약을 수정할 수 있습니다.")
 
+    pid = current_user.get("pid")
+
     encounter = db.query(SyncEncounter).filter(
         SyncEncounter.encounter_id    == encounter_id,
-        SyncEncounter.patient_id_hash == current_user.get("pid"),
+        SyncEncounter.patient_id_hash == pid,
     ).first()
     if not encounter:
         raise HTTPException(status_code=404, detail="예약 정보를 찾을 수 없습니다.")
@@ -162,11 +174,11 @@ def update_appointment(
             raise HTTPException(status_code=400, detail="존재하지 않는 진료과입니다.")
         encounter.department_code = body.department_code
 
-    if body.visit_date is not None:
+    if body.visit_hour is not None:
         try:
-            encounter.visit_date = date_type.fromisoformat(body.visit_date)
+            encounter.visit_date = datetime.fromisoformat(body.visit_hour).date()
         except ValueError:
-            raise HTTPException(status_code=422, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+            raise HTTPException(status_code=422, detail="날짜 형식이 올바르지 않습니다. (ISO 8601)")
 
     encounter.synced_at = datetime.now(timezone.utc)
     db.commit()
@@ -190,9 +202,11 @@ def delete_appointment(
     if current_user.get("role") != "patient":
         raise HTTPException(status_code=403, detail="환자만 예약을 취소할 수 있습니다.")
 
+    pid = current_user.get("pid")
+
     encounter = db.query(SyncEncounter).filter(
         SyncEncounter.encounter_id    == encounter_id,
-        SyncEncounter.patient_id_hash == current_user.get("pid"),
+        SyncEncounter.patient_id_hash == pid,
     ).first()
     if not encounter:
         raise HTTPException(status_code=404, detail="예약 정보를 찾을 수 없습니다.")
@@ -227,7 +241,7 @@ def get_doctor_schedule(
         {
             "encounter_id":    str(e.encounter_id),
             "patient_id_hash": e.patient_id_hash,
-            "visit_date":      str(e.visit_date) if e.visit_date else None,
+            "visit_date":      str(e.visit_date),
             "status_code":     e.status_code,
             "department_code": e.department_code,
             "synced_at":       str(e.synced_at),
@@ -311,14 +325,15 @@ def get_doctor_patient_detail(
         "encounters": [
             {
                 "encounter_id":    str(e.encounter_id),
-                "visit_date":      str(e.visit_date) if e.visit_date else None,
+                "visit_date":      str(e.visit_date),
+                "encounter_type":  e.encounter_type,
                 "status_code":     e.status_code,
                 "department_code": e.department_code,
             }
             for e in encounters
         ],
         "diagnoses": [
-            {"diagnosis_code": d.diagnosis_code, "synced_at": str(d.synced_at)}
+            {"diagnosis_code": d.diagnosis_code, "is_primary": d.is_primary, "synced_at": str(d.synced_at)}
             for d in diagnoses
         ],
         "allergies": [
@@ -326,7 +341,7 @@ def get_doctor_patient_detail(
             for a in allergies
         ],
         "surgeries": [
-            {"surgery_name": s.surgery_name, "surgery_date": str(s.surgery_date) if s.surgery_date else None}
+            {"surgery_name": s.surgery_name, "surgery_date": str(s.surgery_date)}
             for s in surgeries
         ],
     }

@@ -1,3 +1,5 @@
+# tasks.tf
+
 # =========================================================
 # ECS Task Definitions + Services
 #
@@ -37,19 +39,38 @@ data "aws_ecr_image" "api_staff" {
   most_recent     = true
 }
 
-
+# 260528 박경수, 시크릿 네이밍 규칙에 맞추면서 주석화 및 수정본 추가
+# locals {
+#   # FastAPI 공통 secrets (Secrets Manager → 컨테이너 환경변수)
+#   api_secrets = [
+#     { name = "DATABASE_URL", valueFrom = data.aws_secretsmanager_secret.db_url.arn     },
+#     { name = "JWT_SECRET",   valueFrom = data.aws_secretsmanager_secret.jwt_secret.arn },
+#     { name = "API_KEY",      valueFrom = data.aws_secretsmanager_secret.api_key.arn    },
+#   ]
+#   # NGINX secrets — envsubst로 nginx.conf에 API_KEY 주입 (프론트엔드 노출 방지)
+#   nginx_secrets = [
+#     { name = "API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn },
+#   ]
+# }
 locals {
-  # FastAPI 공통 secrets (Secrets Manager → 컨테이너 환경변수)
-  api_secrets = [
-    { name = "DATABASE_URL", valueFrom = data.aws_secretsmanager_secret.db_url.arn     },
-    { name = "JWT_SECRET",   valueFrom = data.aws_secretsmanager_secret.jwt_secret.arn },
-    { name = "API_KEY",      valueFrom = data.aws_secretsmanager_secret.api_key.arn    },
+  # db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
+  patient_secrets = [
+    { name = "DATABASE_URL", valueFrom = data.tfe_outputs.secrets.values.db_url_patient_secret_arn },
+    { name = "JWT_SECRET",   valueFrom = data.tfe_outputs.secrets.values.jwt_secret_arn },
+    { name = "API_KEY",      valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
   ]
-  # NGINX secrets — envsubst로 nginx.conf에 API_KEY 주입 (프론트엔드 노출 방지)
-  nginx_secrets = [
-    { name = "API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn },
+  # db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
+  staff_secrets = [
+    { name = "DATABASE_URL", valueFrom = data.tfe_outputs.secrets.values.db_url_staff_secret_arn },
+    { name = "JWT_SECRET",   valueFrom = data.tfe_outputs.secrets.values.jwt_secret_arn },
+    { name = "API_KEY",      valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
+  ]
+    nginx_secrets = [
+    { name = "API_KEY", valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
   ]
 }
+
+
 
 
 # ─────────────────────────────────────────────────────────
@@ -75,7 +96,7 @@ resource "aws_ecs_task_definition" "patient" {
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
-  cpu                      = "1024"
+  cpu                      = "512"
   memory                   = "1536"
 
   container_definitions = jsonencode([
@@ -88,14 +109,18 @@ resource "aws_ecs_task_definition" "patient" {
         protocol      = "tcp"
       }]
       secrets = local.nginx_secrets
+      dockerLabels = {
+        container_name = "nginx-patient"
+      }
       logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.patient.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "nginx"
+      logDriver = "json-file"
+      options = {
+        "labels"   = "container_name"
+        "max-size" = "10m"
+        "max-file" = "3"
         }
       }
+
       dependsOn = [{
         containerName = "api-patient"
         condition     = "START"
@@ -115,13 +140,13 @@ resource "aws_ecs_task_definition" "patient" {
         { name = "ALLOWED_ORIGINS",  value = "https://${var.patient_allowed_hosts}" },
         { name = "TZ",               value = "Asia/Seoul"              },
       ]
-      secrets = local.api_secrets
+      secrets = local.patient_secrets
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "json-file"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.patient.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "api"
+          "labels"   = "container_name"
+          "max-size" = "10m"
+          "max-file" = "3"
         }
       }
     }
@@ -138,7 +163,7 @@ resource "aws_ecs_task_definition" "staff" {
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
-  cpu                      = "1024"
+  cpu                      = "512"
   memory                   = "1536"
 
   container_definitions = jsonencode([
@@ -151,14 +176,18 @@ resource "aws_ecs_task_definition" "staff" {
         protocol      = "tcp"
       }]
       secrets = local.nginx_secrets
+      dockerLabels = {
+        container_name = "nginx-staff"
+      }
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "json-file"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.staff.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "nginx"
+          "labels"   = "container_name"
+          "max-size" = "10m"
+          "max-file" = "3"
         }
       }
+
       dependsOn = [{
         containerName = "api-staff"
         condition     = "START"
@@ -178,13 +207,13 @@ resource "aws_ecs_task_definition" "staff" {
         { name = "ALLOWED_ORIGINS", value = "https://${var.staff_allowed_hosts}" },
         { name = "TZ",              value = "Asia/Seoul"             },
       ]
-      secrets = local.api_secrets
+      secrets = local.staff_secrets
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "json-file"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.staff.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "api"
+          "labels"   = "container_name"
+          "max-size" = "10m"
+          "max-file" = "3"
         }
       }
     }
@@ -199,7 +228,7 @@ resource "aws_ecs_service" "patient" {
   name            = "patient-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.patient.arn
-  desired_count   = 2
+  desired_count   = 1
 
 
   capacity_provider_strategy {
@@ -241,7 +270,7 @@ resource "aws_ecs_service" "staff" {
   name            = "staff-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.staff.arn
-  desired_count   = 2
+  desired_count   = 1
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.main.name
@@ -275,10 +304,12 @@ resource "aws_ecs_service" "staff" {
 
 # ─────────────────────────────────────────────────────────
 # ECS Service Auto Scaling — 환자 포털 (CPU 70% 기준)
+# EC2 1대 기준: Task 512 CPU × 4개 수용 가능 (2048 CPU)
+# min:1 → max:4, EC2 용량 초과 시 Capacity Provider가 EC2 추가
 # ─────────────────────────────────────────────────────────
 resource "aws_appautoscaling_target" "patient" {
-  max_capacity       = 9
-  min_capacity       = 3
+  max_capacity       = 4
+  min_capacity       = 1
   resource_id        = "service/${aws_ecs_cluster.main.name}/patient-service"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
@@ -292,6 +323,40 @@ resource "aws_appautoscaling_policy" "patient_cpu" {
   resource_id        = aws_appautoscaling_target.patient.resource_id
   scalable_dimension = aws_appautoscaling_target.patient.scalable_dimension
   service_namespace  = aws_appautoscaling_target.patient.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 70.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+  }
+}
+
+
+# ─────────────────────────────────────────────────────────
+# ECS Service Auto Scaling — 의료진 포털 (CPU 70% 기준)
+# EC2 1대 기준: Task 512 CPU × 4개 수용 가능 (2048 CPU)
+# min:1 → max:4, EC2 용량 초과 시 Capacity Provider가 EC2 추가
+# ─────────────────────────────────────────────────────────
+resource "aws_appautoscaling_target" "staff" {
+  max_capacity       = 4
+  min_capacity       = 1
+  resource_id        = "service/${aws_ecs_cluster.main.name}/staff-service"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  depends_on = [aws_ecs_service.staff]
+}
+
+resource "aws_appautoscaling_policy" "staff_cpu" {
+  name               = "staff-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.staff.resource_id
+  scalable_dimension = aws_appautoscaling_target.staff.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.staff.service_namespace
 
   target_tracking_scaling_policy_configuration {
     target_value       = 70.0

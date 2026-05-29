@@ -1,3 +1,5 @@
+#out.tf
+
 output "cluster_name" {
   description = "ECS 클러스터 이름 (TC-ALB에서 참조)"
   value       = aws_ecs_cluster.main.name

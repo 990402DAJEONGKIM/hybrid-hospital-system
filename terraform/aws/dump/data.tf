@@ -10,10 +10,13 @@ data "aws_vpc" "main" {
   id = var.vpc_id
 }
 
-data "aws_db_instance" "aurora" {
-  db_instance_identifier = var.rds_instance_id
+data "aws_rds_cluster" "aurora" {
+  cluster_identifier = "aws-aurora-01"
 }
 
 data "aws_s3_bucket" "storage" {
   bucket = var.s3_bucket_name
+}
+data "aws_kms_key" "secretsmanager" {
+  key_id = "alias/aws-kms-sm-01"
 }

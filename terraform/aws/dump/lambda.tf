@@ -107,13 +107,17 @@ resource "aws_iam_role_policy" "db_dump_lambda" {
         Sid      = "SecretsManager"
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [var.rds_secret_arn]
+        Resource = [local.dump_user_secret_arn]
+
       },
       {
         Sid      = "KMSDecrypt"
         Effect   = "Allow"
         Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
-        Resource = [data.aws_kms_key.s3.arn]
+        Resource = [
+          data.aws_kms_key.s3.arn,
+          data.aws_kms_key.secretsmanager.arn,
+         ]
       },
       {
         Sid    = "S3Upload"
@@ -178,8 +182,8 @@ resource "aws_lambda_function" "db_dump" {
 
   environment {
     variables = {
-      RDS_SECRET_ARN = var.rds_secret_arn
-      RDS_HOST       = data.aws_db_instance.aurora.address
+      RDS_SECRET_ARN = local.dump_user_secret_arn
+      RDS_HOST       = data.aws_rds_cluster.aurora.endpoint
       RDS_PORT       = "5432"
       DB_NAME        = "hospital"
       S3_BUCKET      = data.aws_s3_bucket.storage.bucket

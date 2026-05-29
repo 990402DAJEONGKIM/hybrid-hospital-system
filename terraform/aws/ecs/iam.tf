@@ -1,3 +1,5 @@
+# iam.tf
+
 # =========================================================
 # IAM — ECS 태스크 실행 역할 + 태스크 역할
 # =========================================================
@@ -40,9 +42,10 @@ resource "aws_iam_role_policy" "task_execution_secrets" {
           "secretsmanager:DescribeSecret",
         ]
         Resource = [
-          data.aws_secretsmanager_secret.db_url.arn,
-          data.aws_secretsmanager_secret.jwt_secret.arn,
-          data.aws_secretsmanager_secret.api_key.arn,
+          data.tfe_outputs.secrets.values.db_url_patient_secret_arn,
+          data.tfe_outputs.secrets.values.db_url_staff_secret_arn,
+          data.tfe_outputs.secrets.values.jwt_secret_arn,
+          data.tfe_outputs.secrets.values.api_key_secret_arn,
         ]
       },
       {
@@ -96,6 +99,7 @@ resource "aws_iam_role" "ec2_instance" {
 resource "aws_iam_role_policy_attachment" "ec2_ecs" {
   role       = aws_iam_role.ec2_instance.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+  
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
@@ -107,3 +111,4 @@ resource "aws_iam_instance_profile" "ec2_instance" {
   name = "aws-ecs-ec2-instance-profile"
   role = aws_iam_role.ec2_instance.name
 }
+

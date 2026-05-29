@@ -1,3 +1,5 @@
+# variables.tf
+
 variable "aws_region" {
   description = "AWS 리전"
   type        = string
@@ -32,7 +34,7 @@ variable "ec2_key_name" {
 variable "asg_min_size" {
   description = "ASG 최소 EC2 수"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "asg_max_size" {
@@ -44,7 +46,7 @@ variable "asg_max_size" {
 variable "asg_desired_size" {
   description = "ASG 초기 EC2 수"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 # ── Wazuh ───────────────────────────────────────────────
@@ -65,4 +67,10 @@ variable "staff_allowed_hosts" {
   description = "의료진 포털 도메인"
   type        = string
   default     = "staff.mzclinic.cloud,localhost"
+}
+
+# ── 알람 수신 이메일 ──────────────────────────────────────
+variable "alert_email" {
+  description = "CloudWatch 알람 수신 이메일 (rotation 실패 시 알림)"
+  type        = string
 }
