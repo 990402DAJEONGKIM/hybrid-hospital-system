@@ -29,11 +29,6 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# CloudWatch Agent가 메트릭을 CloudWatch로 전송하기 위한 AWS 관리형 정책
-resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-cloudwatch" {
-  role       = aws_iam_role.aws-wazuh-indexer-role.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-}
 
 # 인라인 정책: S3 + KMS
 resource "aws_iam_role_policy" "aws-wazuh-indexer-s3" {

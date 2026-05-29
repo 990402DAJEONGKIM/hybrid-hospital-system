@@ -19,15 +19,6 @@ data "terraform_remote_state" "wazuh" {
   }
 }
 
-data "terraform_remote_state" "wazuh2" {
-  backend = "remote"
-  config = {
-    organization = "k2p"
-    workspaces = {
-      name = "TC-aws-wazuh2"
-    }
-  }
-}
 
 data "terraform_remote_state" "kms" {
   backend = "remote"
