@@ -123,6 +123,21 @@ HAPROXY
 
     systemctl restart haproxy
     systemctl enable haproxy
+
+    # ── DR Failover 모니터 설치 ──────────────────────────────────
+    # DR terraform apply 시 GCS에 업로드된 스크립트를 다운로드해서 설치합니다.
+    # DR 변수 변경 후: terraform apply (TC-gcp-dr) → VM reset으로 반영
+    DR_BUCKET="${var.project_id}-dr-app-artifacts"
+    DR_SCRIPT_URI="gs://$DR_BUCKET/dr-monitor-install.sh"
+
+    # GCS에 스크립트가 존재할 때만 설치 (DR terraform이 먼저 apply되지 않은 경우 skip)
+    if gsutil -q stat "$DR_SCRIPT_URI" 2>/dev/null; then
+      gsutil cp "$DR_SCRIPT_URI" /tmp/dr-monitor-install.sh
+      chmod +x /tmp/dr-monitor-install.sh
+      bash /tmp/dr-monitor-install.sh
+    else
+      echo "DR monitor script not found in GCS, skipping. Run TC-gcp-dr apply first." | logger -t dr-monitor-setup
+    fi
   SCRIPT
 
   metadata = {
