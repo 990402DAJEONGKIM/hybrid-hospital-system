@@ -86,11 +86,6 @@ resource "google_service_account" "app" {
   display_name = "GCP DR reservation app"
 }
 
-resource "google_service_account" "monitor" {
-  account_id   = "gcp-dr-monitor-sa"
-  display_name = "GCP DR failover monitor"
-}
-
 resource "google_secret_manager_secret_iam_member" "app_db_password_access" {
   secret_id = var.db_password_secret_name
   role      = "roles/secretmanager.secretAccessor"
@@ -133,16 +128,18 @@ resource "google_project_iam_custom_role" "dr_monitor" {
   ]
 }
 
-resource "google_project_iam_member" "monitor_failover_role" {
+# 모니터 역할을 프록시 VM(gcp-rds-proxy-01) 서비스 계정에 부여합니다.
+# 별도의 모니터 VM 없이 프록시 VM에서 DR failover 스크립트를 실행합니다.
+resource "google_project_iam_member" "proxy_failover_role" {
   project = var.project_id
   role    = google_project_iam_custom_role.dr_monitor.name
-  member  = "serviceAccount:${google_service_account.monitor.email}"
+  member  = "serviceAccount:${var.proxy_service_account_email}"
 }
 
-resource "google_service_account_iam_member" "monitor_can_use_app_sa" {
+resource "google_service_account_iam_member" "proxy_can_use_app_sa" {
   service_account_id = google_service_account.app.name
   role               = "roles/iam.serviceAccountUser"
-  member             = "serviceAccount:${google_service_account.monitor.email}"
+  member             = "serviceAccount:${var.proxy_service_account_email}"
 }
 
 resource "google_project_iam_member" "app_log_writer" {
@@ -151,10 +148,10 @@ resource "google_project_iam_member" "app_log_writer" {
   member  = "serviceAccount:${google_service_account.app.email}"
 }
 
-resource "google_project_iam_member" "monitor_log_writer" {
+resource "google_project_iam_member" "proxy_log_writer" {
   project = var.project_id
   role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${google_service_account.monitor.email}"
+  member  = "serviceAccount:${var.proxy_service_account_email}"
 }
 
 resource "google_compute_firewall" "allow_lb_to_dr_app" {
@@ -180,7 +177,7 @@ resource "google_compute_firewall" "allow_iap_ssh_dr" {
   }
 
   source_ranges = ["35.235.240.0/20"]
-  target_tags   = ["dr-app", "dr-monitor"]
+  target_tags   = ["dr-app"]
 }
 
 resource "google_compute_instance_template" "dr_app" {
@@ -295,54 +292,4 @@ resource "google_compute_global_forwarding_rule" "dr_app" {
   load_balancing_scheme = "EXTERNAL_MANAGED"
 }
 
-resource "google_compute_instance" "monitor" {
-  name         = "gcp-dr-monitor-01"
-  machine_type = var.monitor_machine_type
-  zone         = var.zone
-  tags         = ["dr-monitor"]
 
-  boot_disk {
-    initialize_params {
-      image = var.dr_source_image
-      size  = 10
-      type  = "pd-standard"
-    }
-  }
-
-  network_interface {
-    network    = data.google_compute_network.main.id
-    subnetwork = data.google_compute_subnetwork.main.id
-  }
-
-  service_account {
-    email  = google_service_account.monitor.email
-    scopes = ["cloud-platform"]
-  }
-
-  metadata = {
-    enable-oslogin = "TRUE"
-    startup-script = templatefile("${path.module}/scripts/startup-monitor.sh.tftpl", {
-      project_id          = var.project_id
-      zone                = var.zone
-      mig_name            = google_compute_instance_group_manager.dr_app.name
-      aws_healthcheck_url = var.aws_healthcheck_url
-      interval_seconds    = var.healthcheck_interval_seconds
-      failure_threshold   = var.failure_threshold
-      recovery_threshold  = var.recovery_threshold
-      dns_managed_zone    = var.dns_managed_zone
-      dns_record_name     = var.dns_record_name
-      dns_record_type     = var.dns_record_type
-      dns_ttl             = var.dns_ttl
-      aws_dns_rrdatas     = local.aws_dns_rrdatas
-      gcp_dns_rrdatas     = local.gcp_dns_rrdatas_s
-      failover_mode       = var.failover_mode
-      enable_ops_agent    = var.enable_ops_agent
-    })
-  }
-
-  shielded_instance_config {
-    enable_secure_boot          = true
-    enable_vtpm                 = true
-    enable_integrity_monitoring = true
-  }
-}
