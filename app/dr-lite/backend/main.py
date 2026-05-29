@@ -121,6 +121,40 @@ class AppointmentStatus(Base):
     is_terminal = Column(Boolean, nullable=False, default=False)
 
 
+class SyncDepartment(Base):
+    __tablename__ = "sync_departments"
+
+    department_code = Column(String(20), primary_key=True)
+    department_name = Column(String(100))
+    is_active = Column(Boolean)
+
+
+class SyncDoctor(Base):
+    __tablename__ = "sync_doctors"
+
+    doctor_id = Column(Uuid, primary_key=True)
+    doctor_name = Column(String(100))
+    department_code = Column(String(20), ForeignKey("sync_departments.department_code"))
+    is_active = Column(Boolean)
+
+
+class SyncPatient(Base):
+    __tablename__ = "sync_patients"
+
+    patient_id_hash = Column(String(64), primary_key=True)
+    patient_name = Column(String(100))
+    birth_date = Column(Date)
+    is_active = Column(Boolean, default=True)
+
+
+class SyncEncounter(Base):
+    __tablename__ = "sync_encounters"
+
+    encounter_id = Column(String(36), primary_key=True)
+    patient_id_hash = Column(String(64))
+    department_code = Column(String(20), ForeignKey("sync_departments.department_code"))
+
+
 class Appointment(Base):
     __tablename__ = "appointments"
 
@@ -147,6 +181,8 @@ class Appointment(Base):
 
     appt_type = relationship("AppointmentType")
     appt_status = relationship("AppointmentStatus")
+    # [FIX] doctor_name을 _appointment_out에서 쓸 수 있도록 relationship 추가
+    doctor_ref = relationship("SyncDoctor", foreign_keys=[doctor_id])
 
 
 class AppointmentHistory(Base):
@@ -165,31 +201,6 @@ class AppointmentHistory(Base):
     changed_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
-class SyncDepartment(Base):
-    __tablename__ = "sync_departments"
-
-    department_code = Column(String(20), primary_key=True)
-    department_name = Column(String(100))
-    is_active = Column(Boolean)
-
-
-class SyncDoctor(Base):
-    __tablename__ = "sync_doctors"
-
-    doctor_id = Column(Uuid, primary_key=True)
-    doctor_name = Column(String(100))
-    department_code = Column(String(20), ForeignKey("sync_departments.department_code"))
-    is_active = Column(Boolean)
-
-
-class SyncEncounter(Base):
-    __tablename__ = "sync_encounters"
-
-    encounter_id = Column(String(36), primary_key=True)
-    patient_id_hash = Column(String(64))
-    department_code = Column(String(20), ForeignKey("sync_departments.department_code"))
-
-
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -203,6 +214,8 @@ class AuditLog(Base):
     result_code = Column(String(20))
     event_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
+
+# ── Pydantic 요청 모델 ─────────────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -222,6 +235,8 @@ class AppointmentCreateRequest(BaseModel):
     notes: Optional[str] = None
 
 
+# ── FastAPI 앱 ─────────────────────────────────────────────────────────────────
+
 app = FastAPI(title="김이박 병원 DR 예약 API")
 app.add_middleware(
     CORSMiddleware,
@@ -231,6 +246,8 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Key"],
 )
 
+
+# ── 공통 유틸 ──────────────────────────────────────────────────────────────────
 
 def get_db():
     db = SessionLocal()
@@ -354,6 +371,8 @@ def _appointment_out(appt: Appointment) -> dict:
         "status_name": appt.appt_status.status_name if appt.appt_status else None,
         "department_code": appt.department_code,
         "doctor_id": str(appt.doctor_id) if appt.doctor_id else None,
+        # [FIX] doctor_ref relationship으로 의사 이름 포함
+        "doctor_name": appt.doctor_ref.doctor_name if appt.doctor_ref else None,
         "appointment_date": str(appt.appointment_date),
         "appointment_time": appt.appointment_time.strftime("%H:%M") if appt.appointment_time else None,
         "notes": appt.notes,
@@ -362,6 +381,8 @@ def _appointment_out(appt: Appointment) -> dict:
         "cancel_reason": appt.cancel_reason,
     }
 
+
+# ── 엔드포인트 ─────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)):

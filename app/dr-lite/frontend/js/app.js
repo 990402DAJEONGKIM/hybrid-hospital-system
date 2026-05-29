@@ -2,8 +2,43 @@ const headers = { 'Content-Type': 'application/json' };
 
 const qs = (id) => document.getElementById(id);
 
+// [FIX] 401 응답 시 토큰 자동 갱신을 한 번 시도하는 래퍼
+// refresh도 실패하면 로그인 화면으로 전환
+let _refreshing = null;
+
 async function request(path, options = {}) {
   const response = await fetch(path, { credentials: 'include', headers, ...options });
+
+  if (response.status === 401) {
+    // refresh 자체를 호출 중에 또 401이 오면 무한 루프 방지
+    if (path === '/auth/refresh') {
+      throw new Error('SESSION_EXPIRED');
+    }
+
+    // 동시에 여러 요청이 갱신을 시도하지 않도록 단일 Promise로 직렬화
+    if (!_refreshing) {
+      _refreshing = fetch('/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+      }).finally(() => { _refreshing = null; });
+    }
+
+    const refreshRes = await _refreshing;
+    if (!refreshRes.ok) {
+      throw new Error('SESSION_EXPIRED');
+    }
+
+    // 갱신 성공 → 원래 요청 재시도
+    const retryRes = await fetch(path, { credentials: 'include', headers, ...options });
+    if (!retryRes.ok) {
+      const body = await retryRes.json().catch(() => ({}));
+      throw new Error(body.detail || '요청을 처리하지 못했습니다.');
+    }
+    if (retryRes.status === 204) return null;
+    return retryRes.json();
+  }
+
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail || '요청을 처리하지 못했습니다.');
@@ -23,6 +58,14 @@ function option(value, label) {
   el.value = value;
   el.textContent = label;
   return el;
+}
+
+// 세션 만료 처리: 로그인 화면으로 전환
+function handleSessionExpired() {
+  qs('appPanel').classList.add('hidden');
+  qs('logoutBtn').classList.add('hidden');
+  qs('loginPanel').classList.remove('hidden');
+  setMessage('loginMessage', '세션이 만료되었습니다. 다시 로그인해 주세요.', true);
 }
 
 async function bootstrap() {
@@ -80,10 +123,14 @@ async function loadAppointments() {
     const cancelButton = canCancel
       ? `<button class="danger-button" data-cancel="${row.appointment_id}" type="button">취소</button>`
       : '';
+
+    // [FIX] doctor_name이 있으면 표시, 없으면 department_code만 표시
+    const doctorLabel = row.doctor_name ? ` · ${row.doctor_name}` : '';
+
     item.innerHTML = `
       <div class="appointment-main">
         <strong>${row.appointment_date} ${row.appointment_time}</strong>
-        <span>${row.type_name || row.type_code} / ${row.department_code}</span>
+        <span>${row.type_name || row.type_code} / ${row.department_code}${doctorLabel}</span>
         <small class="status status-${row.status_code}">${row.status_name || row.status_code}</small>
       </div>
       ${cancelButton}
@@ -103,9 +150,12 @@ async function cancelAppointment(id) {
     setMessage('appointmentMessage', '예약이 취소되었습니다.');
     await Promise.all([loadSlots(), loadAppointments()]);
   } catch (error) {
+    if (error.message === 'SESSION_EXPIRED') { handleSessionExpired(); return; }
     setMessage('appointmentMessage', error.message, true);
   }
 }
+
+// ── 이벤트 리스너 ──────────────────────────────────────────────────────────────
 
 qs('loginForm').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -138,6 +188,7 @@ qs('appointmentForm').addEventListener('submit', async (event) => {
     setMessage('appointmentMessage', '예약이 접수되었습니다.');
     await Promise.all([loadSlots(), loadAppointments()]);
   } catch (error) {
+    if (error.message === 'SESSION_EXPIRED') { handleSessionExpired(); return; }
     setMessage('appointmentMessage', error.message, true);
   }
 });
@@ -149,18 +200,27 @@ qs('departmentCode').addEventListener('change', async () => {
 qs('doctorId').addEventListener('change', loadSlots);
 qs('appointmentDate').addEventListener('change', loadSlots);
 qs('refreshBtn').addEventListener('click', loadAppointments);
+
 qs('appointments').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-cancel]');
   if (!button) return;
   await cancelAppointment(button.dataset.cancel);
 });
+
 qs('logoutBtn').addEventListener('click', async () => {
   await request('/auth/logout', { method: 'POST' }).catch(() => {});
   window.location.reload();
 });
 
+// ── 초기화 ─────────────────────────────────────────────────────────────────────
+
 const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 qs('appointmentDate').value = tomorrow;
-bootstrap().catch(() => {
-  qs('loginPanel').classList.remove('hidden');
+
+bootstrap().catch((error) => {
+  if (error.message === 'SESSION_EXPIRED') {
+    handleSessionExpired();
+  } else {
+    qs('loginPanel').classList.remove('hidden');
+  }
 });
