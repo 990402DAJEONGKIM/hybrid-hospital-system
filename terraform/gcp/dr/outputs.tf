@@ -14,15 +14,8 @@ output "artifact_bucket" {
 }
 
 output "monitor_install_script" {
-  description = <<-EOT
-    프록시 VM(gcp-rds-proxy-01)에서 실행할 DR failover 모니터 설치 스크립트.
-    apply 완료 후 아래 명령으로 SSH 접속하여 붙여넣기:
-
-      gcloud compute ssh gcp-rds-proxy-01 \
-        --zone ${var.zone} \
-        --tunnel-through-iap
-  EOT
-  sensitive = false
+  description = "프록시 VM(gcp-rds-proxy-01)에서 실행할 DR failover 모니터 설치 스크립트. apply 후 terraform output monitor_install_script 로 확인하여 프록시 VM에 붙여넣기."
+  sensitive   = false
   value     = templatefile("${path.module}/scripts/startup-monitor.sh.tftpl", {
     project_id          = var.project_id
     zone                = var.zone
