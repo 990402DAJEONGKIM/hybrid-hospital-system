@@ -91,6 +91,39 @@ resource "google_storage_bucket_iam_member" "app_artifact_reader" {
   member = "serviceAccount:${google_service_account.app.email}"
 }
 
+# 렌더링된 모니터 설치 스크립트를 GCS에 업로드
+# DR 변수 변경 후 apply하면 자동으로 최신 스크립트로 교체됩니다.
+# 반영하려면 프록시 VM을 재시작하세요:
+#   gcloud compute instances reset gcp-rds-proxy-01 --zone asia-northeast3-a
+resource "google_storage_bucket_object" "monitor_script" {
+  name   = "dr-monitor-install.sh"
+  bucket = google_storage_bucket.artifact.name
+  content = templatefile("${path.module}/scripts/startup-monitor.sh.tftpl", {
+    project_id          = var.project_id
+    zone                = var.zone
+    mig_name            = google_compute_instance_group_manager.dr_app.name
+    aws_healthcheck_url = var.aws_healthcheck_url
+    interval_seconds    = var.healthcheck_interval_seconds
+    failure_threshold   = var.failure_threshold
+    recovery_threshold  = var.recovery_threshold
+    dns_managed_zone    = var.dns_managed_zone
+    dns_record_name     = var.dns_record_name
+    dns_record_type     = var.dns_record_type
+    dns_ttl             = var.dns_ttl
+    aws_dns_rrdatas     = join(",", var.aws_dns_rrdatas)
+    gcp_dns_rrdatas     = join(",", [google_compute_global_address.dr_lb.address])
+    failover_mode       = var.failover_mode
+    enable_ops_agent    = var.enable_ops_agent
+  })
+}
+
+# 프록시 VM SA에 아티팩트 버킷 읽기 권한 부여
+resource "google_storage_bucket_iam_member" "proxy_artifact_reader" {
+  bucket = google_storage_bucket.artifact.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${var.proxy_service_account_email}"
+}
+
 resource "google_project_iam_custom_role" "dr_monitor" {
   role_id     = "gcpDrFailoverMonitor"
   title       = "GCP DR Failover Monitor"
