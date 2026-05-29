@@ -10,6 +10,7 @@
 #   - 공인 IP 없음 (IAP로만 관리 접근)
 #   - Cloud SQL → proxy 5433만 허용
 #   - proxy → RDS 5432만 허용
+#   - 비밀번호 디스크 저장 금지 (실행 시 Secret Manager에서 동적 조회)
 ##############################################################
 
 data "google_compute_network" "main" {
@@ -25,6 +26,16 @@ data "google_service_account" "proxy" {
   account_id = "tc-st1-account"
 }
 
+# ── audit collector 스크립트 → GCS 업로드 ────────────────────
+# startup script에서 gsutil cp로 다운로드하여 설치
+# 버킷은 TC-gcp-dr에서 이미 생성된 gcp-project-496802-dr-app-artifacts 사용
+
+resource "google_storage_bucket_object" "audit_collector" {
+  name   = "cloudsql_audit_collector.py"
+  bucket = "${var.project_id}-dr-app-artifacts"
+  source = "${path.module}/scripts/cloudsql_audit_collector.py"
+}
+
 # ── 방화벽 — Cloud SQL PSA 대역 → proxy 5433 허용 ────────────
 
 resource "google_compute_firewall" "allow_cloud_sql_to_proxy" {
@@ -36,7 +47,6 @@ resource "google_compute_firewall" "allow_cloud_sql_to_proxy" {
     ports    = ["5433"]
   }
 
-  # Cloud SQL PSA 대역
   source_ranges = ["172.29.0.0/24"]
   target_tags   = ["rds-proxy"]
 
@@ -89,18 +99,18 @@ resource "google_compute_instance" "proxy" {
     scopes = ["cloud-platform"]
   }
 
-  # HAProxy + PostgreSQL 클라이언트 자동 설치 및 설정
   metadata_startup_script = <<-SCRIPT
     #!/bin/bash
     apt-get update -y
-    apt-get install -y haproxy wget
+    apt-get install -y haproxy wget python3-pip
 
-    # PostgreSQL 17 클라이언트 설치 (pglogical_setup.sh에서 psql 사용)
+    # PostgreSQL 17 클라이언트 설치
     sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
     wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | tee /etc/apt/trusted.gpg.d/pgdg.asc
     apt-get update -y
     apt-get install -y postgresql-client-17
 
+    # ── HAProxy 설정 ─────────────────────────────────────────
     cat > /etc/haproxy/haproxy.cfg << 'HAPROXY'
 global
     log /dev/log local0
@@ -124,19 +134,71 @@ HAPROXY
     systemctl restart haproxy
     systemctl enable haproxy
 
-    # ── DR Failover 모니터 설치 ──────────────────────────────────
-    # DR terraform apply 시 GCS에 업로드된 스크립트를 다운로드해서 설치합니다.
-    # DR 변수 변경 후: terraform apply (TC-gcp-dr) → VM reset으로 반영
+    # ── Cloud SQL Audit Collector 설치 ───────────────────────
+    # ISMS-P 2.9.1: 비밀번호를 디스크에 저장하지 않고
+    # 실행 시마다 Secret Manager에서 동적으로 조회
+    pip3 install --quiet google-cloud-logging psycopg2-binary
+
+    mkdir -p /opt/audit-collector
+
+    # Cloud SQL IP만 환경변수 파일에 저장 (비밀번호 제외)
+    CLOUD_SQL_IP=$(gcloud sql instances describe ${var.cloud_sql_instance} \
+        --project=${var.project_id} \
+        --format="value(ipAddresses[0].ipAddress)" 2>/dev/null || echo "")
+
+    cat > /opt/audit-collector/.env << ENV
+CLOUD_SQL_IP=$CLOUD_SQL_IP
+CLOUD_SQL_APP_USER=hospital_app
+GCP_PROJECT=${var.project_id}
+ENV
+    chmod 600 /opt/audit-collector/.env
+
+    # GCS에서 collector 스크립트 다운로드
+    gsutil cp gs://${var.project_id}-dr-app-artifacts/cloudsql_audit_collector.py \
+        /opt/audit-collector/cloudsql_audit_collector.py
+    chmod +x /opt/audit-collector/cloudsql_audit_collector.py
+
+    # wrapper: 실행 시마다 Secret Manager에서 비밀번호 동적 조회 (디스크 저장 금지)
+    cat > /opt/audit-collector/run.sh << 'RUNEOF'
+#!/bin/bash
+set -a
+source /opt/audit-collector/.env
+set +a
+
+# 비밀번호는 실행 시마다 Secret Manager에서 동적 조회 (ISMS-P 2.9.1)
+CLOUD_SQL_APP_PASS=$(gcloud secrets versions access latest \
+    --secret=gcp-cloud-sql-app-password \
+    --project="$GCP_PROJECT" 2>/dev/null)
+
+if [ -z "$CLOUD_SQL_APP_PASS" ]; then
+    echo "[ERROR] Secret Manager에서 비밀번호 조회 실패" >&2
+    exit 1
+fi
+
+export CLOUD_SQL_APP_PASS
+exec /usr/bin/python3 /opt/audit-collector/cloudsql_audit_collector.py
+RUNEOF
+    chmod 700 /opt/audit-collector/run.sh
+
+    # 로그 파일
+    touch /var/log/audit-collector.log
+    chmod 666 /var/log/audit-collector.log
+
+    # cron 등록 (1분 주기)
+    (crontab -l 2>/dev/null | grep -v audit-collector; \
+     echo "* * * * * /opt/audit-collector/run.sh >> /var/log/audit-collector.log 2>&1") \
+    | crontab -
+
+    # ── DR Failover 모니터 설치 ──────────────────────────────
     DR_BUCKET="${var.project_id}-dr-app-artifacts"
     DR_SCRIPT_URI="gs://$DR_BUCKET/dr-monitor-install.sh"
 
-    # GCS에 스크립트가 존재할 때만 설치 (DR terraform이 먼저 apply되지 않은 경우 skip)
     if gsutil -q stat "$DR_SCRIPT_URI" 2>/dev/null; then
       gsutil cp "$DR_SCRIPT_URI" /tmp/dr-monitor-install.sh
       chmod +x /tmp/dr-monitor-install.sh
       bash /tmp/dr-monitor-install.sh
     else
-      echo "DR monitor script not found in GCS, skipping. Run TC-gcp-dr apply first." | logger -t dr-monitor-setup
+      echo "DR monitor script not found in GCS, skipping." | logger -t dr-monitor-setup
     fi
   SCRIPT
 
@@ -156,4 +218,7 @@ HAPROXY
     team        = "k2p"
     role        = "rds-proxy"
   }
+
+  # audit_collector 스크립트가 GCS에 올라간 뒤 VM이 생성되도록
+  depends_on = [google_storage_bucket_object.audit_collector]
 }
