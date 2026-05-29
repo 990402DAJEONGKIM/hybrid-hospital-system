@@ -49,8 +49,9 @@ source "googlecompute" "dr_app" {
   image_description = "DR reservation app — built by GitHub Actions"
 
   # ISMS-P: 공인 IP 없음, IAP 터널로 SSH
-  omit_external_ip = true
-  use_iap          = true
+  omit_external_ip  = true
+  use_internal_ip   = true
+  use_iap           = true
   network          = var.network
   subnetwork       = var.subnet
 
