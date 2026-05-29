@@ -233,6 +233,8 @@ resource "google_cloudfunctions2_function" "rotation" {
       RDS_ENDPOINT         = var.rds_endpoint
       AWS_REGION           = var.aws_region
       AWS_REPL_SECRET_ID   = "aws-rds-pglogical-password-secret"  # ISMS-P: Aurora 자격증명 AWS 정본 유지
+      SECRET_DR_JWT_NAME   = "gcp-dr-jwt-secret"
+      SECRET_DR_API_KEY_NAME = "gcp-dr-api-key"
     }
 
     secret_environment_variables {

@@ -7,6 +7,8 @@ ISMS-P 2.5.4 — 주기적 비밀번호 변경
                      + AWS Secrets Manager 업데이트 (단일 정본 유지)
   - hospital_app   : Cloud SQL만
   - postgres       : Cloud SQL만
+  - gcp-dr-jwt-secret  : GCP Secret Manager만 (DR 앱 JWT 키)
+  - gcp-dr-api-key     : GCP Secret Manager만 (DR 앱 내부 API Key)
 """
 
 import os
@@ -32,15 +34,31 @@ AWS_REGION           = os.environ["AWS_REGION"]
 
 AWS_REPL_SECRET_ID = os.environ.get("AWS_REPL_SECRET_ID", "aws-rds-pglogical-password-secret")
 
+# DR 앱 전용 시크릿 (DB 변경 없이 GCP Secret Manager만 갱신)
+SECRET_DR_JWT_NAME    = os.environ.get("SECRET_DR_JWT_NAME",    "gcp-dr-jwt-secret")
+SECRET_DR_API_KEY_NAME = os.environ.get("SECRET_DR_API_KEY_NAME", "gcp-dr-api-key")
+
 ROTATION_TARGETS = [
     ("pglogical_repl", SECRET_REPL_NAME,     True),
     ("hospital_app",   SECRET_APP_NAME,      False),
     ("postgres",       SECRET_POSTGRES_NAME, False),
 ]
 
+# DB 변경 없이 GCP Secret Manager 값만 갱신하는 타겟
+SECRET_ONLY_TARGETS = [
+    ("gcp-dr-jwt-secret",  SECRET_DR_JWT_NAME,     64),
+    ("gcp-dr-api-key",     SECRET_DR_API_KEY_NAME, 64),
+]
+
 
 def generate_password(length: int = 32) -> str:
     alphabet = string.ascii_letters + string.digits + "!#$%&*+-=?@^_"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def generate_token(length: int = 64) -> str:
+    """JWT/API Key용 — URL-safe 문자만 사용"""
+    alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
@@ -51,11 +69,11 @@ def get_gcp_secret(secret_name: str) -> str:
     return resp.payload.data.decode("utf-8")
 
 
-def update_gcp_secret(secret_name: str, new_password: str) -> None:
+def update_gcp_secret(secret_name: str, new_value: str) -> None:
     client = secretmanager.SecretManagerServiceClient()
     parent = f"projects/{PROJECT_ID}/secrets/{secret_name}"
     client.add_secret_version(
-        request={"parent": parent, "payload": {"data": new_password.encode("utf-8")}})
+        request={"parent": parent, "payload": {"data": new_value.encode("utf-8")}})
     logger.info(f"GCP Secret 업데이트 완료: {secret_name}")
 
 
@@ -148,6 +166,7 @@ def update_pglogical_node_interface(new_password: str, admin_password: str) -> N
     finally:
         conn.close()
 
+
 def rotate_passwords(request):
     """Cloud Functions 엔트리포인트"""
     logger.info("비밀번호 로테이션 시작")
@@ -166,6 +185,7 @@ def rotate_passwords(request):
         logger.error(f"RDS admin 비밀번호 조회 실패: {e}")
         return {"status": "error", "message": str(e)}, 500
 
+    # ── DB 계정 비밀번호 로테이션 ─────────────────────────────────────────────
     for username, secret_name, also_rds in ROTATION_TARGETS:
         try:
             new_password = generate_password()
@@ -190,8 +210,22 @@ def rotate_passwords(request):
             logger.error(f"[{username}] 로테이션 실패: {e}")
             errors.append({"account": username, "error": str(e)})
 
+    # ── DR 앱 시크릿 로테이션 (GCP Secret Manager만) ──────────────────────────
+    for label, secret_name, length in SECRET_ONLY_TARGETS:
+        try:
+            new_value = generate_token(length)
+            logger.info(f"[{label}] 로테이션 시작")
+            update_gcp_secret(secret_name, new_value)
+            logger.info(f"[{label}] 로테이션 완료 ✅")
+        except Exception as e:
+            logger.error(f"[{label}] 로테이션 실패: {e}")
+            errors.append({"account": label, "error": str(e)})
+
     if errors:
         return {"status": "partial_error", "errors": errors}, 500
 
     logger.info("전체 로테이션 완료")
-    return {"status": "ok", "rotated": [t[0] for t in ROTATION_TARGETS]}, 200
+    return {
+        "status": "ok",
+        "rotated": [t[0] for t in ROTATION_TARGETS] + [t[0] for t in SECRET_ONLY_TARGETS]
+    }, 200
