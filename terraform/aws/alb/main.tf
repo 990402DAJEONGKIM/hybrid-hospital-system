@@ -183,7 +183,11 @@ resource "aws_lb" "patient" {
   subnets            = data.aws_subnets.public.ids
 
   enable_deletion_protection = false
-
+  # access_logs {
+  #   bucket  = "aws-k2p-storage-01"
+  #   prefix  = "alb/patient"
+  #   enabled = true
+  # }
   tags = { Name = "aws-patient-alb" }
 }
 
@@ -228,7 +232,11 @@ resource "aws_lb" "staff" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.staff_alb.id]
   subnets            = data.aws_subnets.public.ids
-
+  # access_logs {
+  #   bucket  = "aws-k2p-storage-01"
+  #   prefix  = "alb/staff"
+  #   enabled = true
+  # }
   enable_deletion_protection = false
 
   tags = { Name = "aws-staff-alb" }

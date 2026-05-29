@@ -137,21 +137,6 @@ resource "aws_s3_bucket_policy" "storage" {
         ]
       },
       {
-        Sid       = "DenyNonSSL"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.storage.arn,
-          "${aws_s3_bucket.storage.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      },
-      {
         Sid    = "AWSCloudTrailAclCheck"
         Effect = "Allow"
         Principal = { Service = "cloudtrail.amazonaws.com" }
@@ -166,6 +151,84 @@ resource "aws_s3_bucket_policy" "storage" {
         Resource = "${aws_s3_bucket.storage.arn}/cloudtrail/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
         Condition = {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      },
+      {
+        Sid    = "AllowGuardDutyGetBucketLocation"
+        Effect = "Allow"
+        Principal = { Service = "guardduty.amazonaws.com" }
+        Action   = "s3:GetBucketLocation"
+        Resource = aws_s3_bucket.storage.arn
+      },
+      {
+        Sid    = "AllowGuardDutyPutObject"
+        Effect = "Allow"
+        Principal = { Service = "guardduty.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
+      },
+      {
+        Sid    = "AWSFlowLogsWrite"
+        Effect = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/flowlogs/*"
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      },
+      {
+        Sid    = "AWSFlowLogsAclCheck"
+        Effect = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.storage.arn
+      },
+      # {
+      #   Sid    = "ALBLogDelivery"
+      #   Effect = "Allow"
+      #   Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
+      #   Action   = "s3:PutObject"
+      #   Resource = "${aws_s3_bucket.storage.arn}/alb/*"
+      #   Condition = {
+      #     StringEquals = {
+      #       "s3:x-amz-acl"     = "bucket-owner-full-control"
+      #       "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+      #     }
+      #   }
+      # },
+      # {
+      #   Sid    = "ALBLogAclCheck"
+      #   Effect = "Allow"
+      #   Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
+      #   Action   = "s3:GetBucketAcl"
+      #   Resource = aws_s3_bucket.storage.arn
+      #   Condition = {
+      #     StringEquals = {
+      #       "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+      #     }
+      #   }
+      # },
+      {
+        Sid       = "DenyNonSSL"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.storage.arn,
+          "${aws_s3_bucket.storage.arn}/*"
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+          StringNotEqualsIfExists = {
+            "aws:PrincipalServiceNamesList" = [
+              "logdelivery.elasticloadbalancing.amazonaws.com",
+              "cloudtrail.amazonaws.com",
+              "guardduty.amazonaws.com",
+              "delivery.logs.amazonaws.com",
+              "firehose.amazonaws.com"
+            ]
+          }
         }
       }
     ]
