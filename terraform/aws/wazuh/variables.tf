@@ -22,7 +22,7 @@ variable "wazuh_01_private_ip" {
 }
 
 variable "golden_ami_id" {
-  description = "Wazuh-01 골든 AMI ID"
+  description = "Wazuh-01 골든 AMI ID (AMI 재생성 시 workspace variable에서 업데이트)"
   type        = string
-  default     = "ami-08cb0385d97a16273"  # 오늘 생성한 AMI
+  
 }
