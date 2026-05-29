@@ -34,6 +34,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          sts-regional-endpoints: regional
 
       - name: Login to ECR
         id: login-ecr
@@ -96,6 +97,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          sts-regional-endpoints: regional
 
       - name: Deploy patient-service
         run: |
@@ -186,6 +188,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          sts-regional-endpoints: regional
 
       - name: Deploy staff-service
         run: |
