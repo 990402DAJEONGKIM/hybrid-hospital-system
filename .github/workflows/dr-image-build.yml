@@ -1,0 +1,150 @@
+name: DR App Image Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/dr-lite/**'
+      - 'packer/**'
+
+  # 수동 트리거 (긴급 이미지 갱신 시)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # WIF 필수
+
+jobs:
+  build-and-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. 코드 체크아웃 ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. GCP WIF 인증 ─────────────────────────────────────────────────────────
+      - name: Authenticate to GCP
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/567146047166/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: gcp-sa-github-packer@gcp-project-496802.iam.gserviceaccount.com
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: beta  # IAP 터널링에 필요
+
+      # ── 3. Packer 설치 ──────────────────────────────────────────────────────────
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: "1.11.0"
+
+      # ── 4. Packer 빌드 ──────────────────────────────────────────────────────────
+      - name: Packer Init
+        working-directory: packer
+        run: packer init dr-lite.pkr.hcl
+
+      - name: Packer Build
+        working-directory: packer
+        run: |
+          packer build \
+            -var "project_id=gcp-project-496802" \
+            -var "zone=asia-northeast3-a" \
+            dr-lite.pkr.hcl
+
+      # ── 5. 이미지 이름 추출 ─────────────────────────────────────────────────────
+      - name: Extract image name
+        id: image
+        working-directory: packer
+        run: |
+          IMAGE_NAME=$(jq -r '.builds[-1].artifact_id' packer-manifest.json)
+          FULL_PATH="projects/gcp-project-496802/global/images/${IMAGE_NAME}"
+          echo "name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "full_path=${FULL_PATH}" >> $GITHUB_OUTPUT
+          echo "Built image: ${FULL_PATH}"
+
+      # ── 6. TFC 워크스페이스 변수 업데이트 ──────────────────────────────────────
+      - name: Update TFC dr_source_image variable
+        env:
+          TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
+        run: |
+          WS_ID="ws-3wAP7iDiNKH8UHrR"
+          IMAGE_PATH="${{ steps.image.outputs.full_path }}"
+
+          # 기존 변수 ID 조회
+          VAR_ID=$(curl -sf \
+            --header "Authorization: Bearer $TFC_TOKEN" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/workspaces/$WS_ID/vars" \
+            | jq -r '.data[] | select(.attributes.key == "dr_source_image") | .id // empty')
+
+          if [ -n "$VAR_ID" ]; then
+            echo "기존 변수 업데이트: $VAR_ID"
+            curl -sf \
+              --header "Authorization: Bearer $TFC_TOKEN" \
+              --header "Content-Type: application/vnd.api+json" \
+              --request PATCH \
+              --data "{
+                \"data\": {
+                  \"id\": \"$VAR_ID\",
+                  \"type\": \"vars\",
+                  \"attributes\": {
+                    \"value\": \"$IMAGE_PATH\"
+                  }
+                }
+              }" \
+              "https://app.terraform.io/api/v2/vars/$VAR_ID"
+          else
+            echo "신규 변수 생성"
+            curl -sf \
+              --header "Authorization: Bearer $TFC_TOKEN" \
+              --header "Content-Type: application/vnd.api+json" \
+              --request POST \
+              --data "{
+                \"data\": {
+                  \"type\": \"vars\",
+                  \"attributes\": {
+                    \"key\": \"dr_source_image\",
+                    \"value\": \"$IMAGE_PATH\",
+                    \"category\": \"terraform\",
+                    \"description\": \"DR 앱 Custom Image — GitHub Actions에서 자동 업데이트\"
+                  }
+                }
+              }" \
+              "https://app.terraform.io/api/v2/workspaces/$WS_ID/vars"
+          fi
+
+      # ── 7. TFC run 트리거 ────────────────────────────────────────────────────────
+      - name: Trigger TFC run
+        env:
+          TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
+        run: |
+          RUN_RESPONSE=$(curl -sf \
+            --header "Authorization: Bearer $TFC_TOKEN" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request POST \
+            --data "{
+              \"data\": {
+                \"type\": \"runs\",
+                \"attributes\": {
+                  \"message\": \"Auto: DR image updated — ${{ steps.image.outputs.name }}\"
+                },
+                \"relationships\": {
+                  \"workspace\": {
+                    \"data\": {
+                      \"type\": \"workspaces\",
+                      \"id\": \"ws-3wAP7iDiNKH8UHrR\"
+                    }
+                  }
+                }
+              }
+            }" \
+            "https://app.terraform.io/api/v2/runs")
+
+          RUN_ID=$(echo "$RUN_RESPONSE" | jq -r '.data.id')
+          echo "TFC Run 트리거됨: $RUN_ID"
+          echo "확인: https://app.terraform.io/app/k2p/workspaces/TC-gcp-dr/runs/$RUN_ID"
