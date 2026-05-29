@@ -60,7 +60,6 @@ source "googlecompute" "dr_app" {
 
   ssh_username = "packer"
 
-  impersonate_service_account = "gcp-sa-github-packer@${var.project_id}.iam.gserviceaccount.com"
 }
 
 build {
