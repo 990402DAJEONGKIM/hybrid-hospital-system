@@ -1,36 +1,6 @@
-# KMS 키 (GuardDuty S3 내보내기 암호화 필수)
-resource "aws_kms_key" "aws-kms-guardduty" {
-  description             = "GuardDuty findings S3 export"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow GuardDuty to use the key"
-        Effect = "Allow"
-        Principal = {
-          Service = "guardduty.amazonaws.com"
-        }
-        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
-        Resource = "*"
-      }
-    ]
-  })
-}
 
 # GuardDuty Detector
-resource "aws_guardduty_detector" "aws-guardduty-main" {
+resource "aws_guardduty_detector" "aws-gd" {
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
 
@@ -41,7 +11,7 @@ resource "aws_guardduty_detector" "aws-guardduty-main" {
 }
 
 # S3 버킷 정책 (GuardDuty가 쓸 수 있도록)
-resource "aws_s3_bucket_policy" "aws-s3-policy-guardduty" {
+resource "aws_s3_bucket_policy" "aws-s3-policy-gd" {
   bucket = "aws-k2p-storage-01"
 
   policy = jsonencode({
@@ -70,11 +40,11 @@ resource "aws_s3_bucket_policy" "aws-s3-policy-guardduty" {
 }
 
 # GuardDuty → S3 직접 내보내기
-resource "aws_guardduty_publishing_destination" "aws-guardduty-s3" {
-  detector_id     = aws_guardduty_detector.aws-guardduty-main.id
+resource "aws_guardduty_publishing_destination" "aws-gd-s3" {
+  detector_id     = aws_guardduty_detector.aws-gd.id
   destination_arn = "arn:aws:s3:::aws-k2p-storage-01"
-  kms_key_arn     = aws_kms_key.aws-kms-guardduty.arn
+  kms_key_arn     =  data.terraform_remote_state.kms.outputs.s3_kms_key_arn
 
-  depends_on = [aws_s3_bucket_policy.aws-s3-policy-guardduty]
+  depends_on = [aws_s3_bucket_policy.aws-s3-policy-gd]
 }
 

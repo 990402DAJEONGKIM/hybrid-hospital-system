@@ -1,4 +1,4 @@
-resource "aws_flow_log" "aws-vpc-flowlog-main" {
+resource "aws_flow_log" "aws-vpc-flowlog" {
   vpc_id          = data.aws_vpc.aws-vpc-01.id
   traffic_type    = "ALL"
   iam_role_arn    = aws_iam_role.aws-iam-role-flowlog.arn
