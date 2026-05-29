@@ -68,6 +68,13 @@ data "tfe_outputs" "secrets" {
   workspace    = "TC-aws-secrets"
 }
 
+data "aws_caller_identity" "current" {}
+
+# ecs_db_rotator 가 master 계정으로 ALTER USER 실행 시 사용
+data "aws_rds_cluster" "main" {
+  cluster_identifier = "aws-aurora-01"
+}
+
 # ─────────────────────────────────────────────────────────
 # ALB Target Group (alb 모듈 apply 후 자동 조회)
 # ─────────────────────────────────────────────────────────
