@@ -68,3 +68,9 @@ variable "staff_allowed_hosts" {
   type        = string
   default     = "staff.mzclinic.cloud,localhost"
 }
+
+# ── 알람 수신 이메일 ──────────────────────────────────────
+variable "alert_email" {
+  description = "CloudWatch 알람 수신 이메일 (rotation 실패 시 알림)"
+  type        = string
+}
