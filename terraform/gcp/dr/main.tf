@@ -42,25 +42,6 @@ resource "google_storage_bucket_object" "dr_app" {
   source = data.archive_file.dr_app.output_path
 }
 
-resource "google_compute_router" "dr_nat" {
-  name    = "gcp-dr-router"
-  network = data.google_compute_network.main.id
-  region  = var.region
-}
-
-resource "google_compute_router_nat" "dr_nat" {
-  name                               = "gcp-dr-nat"
-  router                             = google_compute_router.dr_nat.name
-  region                             = var.region
-  nat_ip_allocate_option             = "AUTO_ONLY"
-  source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"
-
-  subnetwork {
-    name                    = data.google_compute_subnetwork.main.id
-    source_ip_ranges_to_nat = ["ALL_IP_RANGES"]
-  }
-}
-
 resource "google_secret_manager_secret" "jwt_secret" {
   secret_id = var.jwt_secret_name
 
