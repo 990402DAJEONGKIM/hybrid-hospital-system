@@ -1,0 +1,179 @@
+#!/bin/bash
+set -euo pipefail
+
+apt-get update -y
+apt-get install -y curl jq
+
+if [[ "${enable_ops_agent}" == "true" ]]; then
+  curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+  bash add-google-cloud-ops-agent-repo.sh --also-install
+fi
+
+cat > /usr/local/bin/gcp-dr-failover.sh <<'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+PROJECT_ID="${project_id}"
+ZONE="${zone}"
+MIG_NAME="${mig_name}"
+AWS_HEALTHCHECK_URL="${aws_healthcheck_url}"
+INTERVAL_SECONDS="${interval_seconds}"
+FAILURE_THRESHOLD="${failure_threshold}"
+RECOVERY_THRESHOLD="${recovery_threshold}"
+DNS_MANAGED_ZONE="${dns_managed_zone}"
+DNS_RECORD_NAME="${dns_record_name}"
+DNS_RECORD_TYPE="${dns_record_type}"
+DNS_TTL="${dns_ttl}"
+AWS_DNS_RRDATAS="${aws_dns_rrdatas}"
+GCP_DNS_RRDATAS="${gcp_dns_rrdatas}"
+FAILOVER_MODE="${failover_mode}"
+STATE_FILE="/var/lib/gcp-dr-failover/state"
+EVENT_FILE="/var/lib/gcp-dr-failover/events.log"
+
+mkdir -p "$(dirname "$STATE_FILE")"
+
+log_event() {
+  local event="$1"
+  local message="$2"
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"ts":"%s","event":"%s","mode":"%s","state":"%s","message":"%s"}\n' \
+    "$now" "$event" "$FAILOVER_MODE" "$(current_state)" "$message" >> "$EVENT_FILE"
+  logger -t gcp-dr-failover "event=$event mode=$FAILOVER_MODE state=$(current_state) $message"
+}
+
+read_state() {
+  if [[ -f "$STATE_FILE" ]]; then
+    cat "$STATE_FILE"
+  else
+    echo "aws"
+  fi
+}
+
+write_state() {
+  printf '%s\nupdated_at=%s\n' "$1" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$STATE_FILE"
+}
+
+current_state() {
+  read_state | head -n 1
+}
+
+resize_mig() {
+  gcloud compute instance-groups managed resize "$MIG_NAME" \
+    --project="$PROJECT_ID" \
+    --zone="$ZONE" \
+    --size="$1" \
+    --quiet
+}
+
+dns_switch() {
+  local rrdatas_csv="$1"
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+
+  gcloud dns record-sets transaction start \
+    --project="$PROJECT_ID" \
+    --zone="$DNS_MANAGED_ZONE" \
+    --transaction-file="$tmpdir/txn.yaml"
+
+  mapfile -t existing < <(gcloud dns record-sets list \
+    --project="$PROJECT_ID" \
+    --zone="$DNS_MANAGED_ZONE" \
+    --name="$DNS_RECORD_NAME" \
+    --type="$DNS_RECORD_TYPE" \
+    --format='value(rrdatas[])' | tr ';' '\n' | sed '/^$/d')
+
+  if [[ "$${#existing[@]}" -gt 0 ]]; then
+    gcloud dns record-sets transaction remove "$${existing[@]}" \
+      --project="$PROJECT_ID" \
+      --zone="$DNS_MANAGED_ZONE" \
+      --transaction-file="$tmpdir/txn.yaml" \
+      --name="$DNS_RECORD_NAME" \
+      --ttl="$DNS_TTL" \
+      --type="$DNS_RECORD_TYPE"
+  fi
+
+  IFS=',' read -ra new_rrdatas <<< "$rrdatas_csv"
+  gcloud dns record-sets transaction add "$${new_rrdatas[@]}" \
+    --project="$PROJECT_ID" \
+    --zone="$DNS_MANAGED_ZONE" \
+    --transaction-file="$tmpdir/txn.yaml" \
+    --name="$DNS_RECORD_NAME" \
+    --ttl="$DNS_TTL" \
+    --type="$DNS_RECORD_TYPE"
+
+  gcloud dns record-sets transaction execute \
+    --project="$PROJECT_ID" \
+    --zone="$DNS_MANAGED_ZONE" \
+    --transaction-file="$tmpdir/txn.yaml"
+
+  rm -rf "$tmpdir"
+}
+
+failover_to_gcp() {
+  log_event "aws_unhealthy" "failure_threshold=$FAILURE_THRESHOLD gcp_rrdatas=$GCP_DNS_RRDATAS"
+  if [[ "$FAILOVER_MODE" == "manual" ]]; then
+    log_event "manual_mode_skip_failover" "MIG resize and DNS switch skipped"
+    return
+  fi
+  resize_mig 1
+  dns_switch "$GCP_DNS_RRDATAS"
+  write_state "gcp"
+  log_event "failover_to_gcp" "mig_size=1 dns_record=$DNS_RECORD_NAME dns_rrdatas=$GCP_DNS_RRDATAS"
+}
+
+return_to_aws() {
+  log_event "aws_recovered" "recovery_threshold=$RECOVERY_THRESHOLD aws_rrdatas=$AWS_DNS_RRDATAS"
+  if [[ "$FAILOVER_MODE" == "manual" ]]; then
+    log_event "manual_mode_skip_return" "DNS switch and MIG resize skipped"
+    return
+  fi
+  dns_switch "$AWS_DNS_RRDATAS"
+  resize_mig 0
+  write_state "aws"
+  log_event "return_to_aws" "mig_size=0 dns_record=$DNS_RECORD_NAME dns_rrdatas=$AWS_DNS_RRDATAS"
+}
+
+failures=0
+successes=0
+
+while true; do
+  if curl -fsS --max-time 5 "$AWS_HEALTHCHECK_URL" >/dev/null; then
+    failures=0
+    successes=$((successes + 1))
+    if [[ "$(current_state)" == "gcp" && "$successes" -ge "$RECOVERY_THRESHOLD" ]]; then
+      return_to_aws
+      successes=0
+    fi
+  else
+    successes=0
+    failures=$((failures + 1))
+    if [[ "$(current_state)" == "aws" && "$failures" -ge "$FAILURE_THRESHOLD" ]]; then
+      failover_to_gcp
+      failures=0
+    fi
+  fi
+
+  sleep "$INTERVAL_SECONDS"
+done
+SCRIPT
+
+chmod 0755 /usr/local/bin/gcp-dr-failover.sh
+
+cat > /etc/systemd/system/gcp-dr-failover.service <<'UNIT'
+[Unit]
+Description=GCP DR failover monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/gcp-dr-failover.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now gcp-dr-failover
