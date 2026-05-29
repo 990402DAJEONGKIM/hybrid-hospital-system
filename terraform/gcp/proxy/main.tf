@@ -137,7 +137,7 @@ HAPROXY
     # ── Cloud SQL Audit Collector 설치 ───────────────────────
     # ISMS-P 2.9.1: 비밀번호를 디스크에 저장하지 않고
     # 실행 시마다 Secret Manager에서 동적으로 조회
-    pip3 install --quiet google-cloud-logging psycopg2-binary
+    pip3 install --quiet --break-system-packages google-cloud-logging psycopg2-binary
 
     mkdir -p /opt/audit-collector
 
