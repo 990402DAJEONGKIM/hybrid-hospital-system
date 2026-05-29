@@ -23,7 +23,11 @@ resource "aws_iam_role" "aws-wazuh-ssm-role" {
   tags = { Name = "aws-wazuh-ssm-role", Owner = "st2" }
 }
 
-
+# CloudWatch Agent가 메트릭/로그를 CloudWatch로 전송하기 위한 AWS 관리형 정책
+resource "aws_iam_role_policy_attachment" "aws-wazuh-cw" {
+  role       = aws_iam_role.aws-wazuh-ssm-role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
 
 # SSM Session Manager 접속 + Ansible 원격 명령 실행을 위한 AWS 관리형 정책
 resource "aws_iam_role_policy_attachment" "aws-wazuh-ssm" {

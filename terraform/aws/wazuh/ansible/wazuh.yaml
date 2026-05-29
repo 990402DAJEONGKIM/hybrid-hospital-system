@@ -553,47 +553,47 @@
         var: vector_status.stdout
       tags: vector
 
-    # # ──────────────────────────────────────────
-    # # CloudWatch Agent
-    # # ──────────────────────────────────────────
-    # - name: CloudWatch Agent 설치
-    #   shell: |
-    #     wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
-    #     dpkg -i /tmp/amazon-cloudwatch-agent.deb
-    #   args:
-    #     creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
-    #   tags: cloudwatch
+    # ──────────────────────────────────────────
+    # CloudWatch Agent
+    # ──────────────────────────────────────────
+    - name: CloudWatch Agent 설치
+      shell: |
+        wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
+        dpkg -i /tmp/amazon-cloudwatch-agent.deb
+      args:
+        creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
+      tags: cloudwatch
 
-    # - name: CloudWatch Agent 설정 배포
-    #   copy:
-    #     dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-    #     content: |
-    #       {
-    #         "metrics": {
-    #           "metrics_collected": {
-    #             "mem": {
-    #               "measurement": ["mem_used_percent"]
-    #             },
-    #             "disk": {
-    #               "measurement": ["disk_used_percent"],
-    #               "resources": ["/"]
-    #             }
-    #           },
-    #           "append_dimensions": {
-    #             "InstanceId": "${aws:InstanceId}"
-    #           }
-    #         }
-    #       }
-    #   tags: cloudwatch
+    - name: CloudWatch Agent 설정 배포
+      copy:
+        dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        content: |
+          {
+            "metrics": {
+              "metrics_collected": {
+                "mem": {
+                  "measurement": ["mem_used_percent"]
+                },
+                "disk": {
+                  "measurement": ["disk_used_percent"],
+                  "resources": ["/"]
+                }
+              },
+              "append_dimensions": {
+                "InstanceId": "${aws:InstanceId}"
+              }
+            }
+          }
+      tags: cloudwatch
 
-    # - name: CloudWatch Agent 시작
-    #   shell: |
-    #     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-    #     -a fetch-config -m ec2 \
-    #     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-    #   args:
-    #     creates: /var/run/amazon-cloudwatch-agent.pid
-    #   tags: cloudwatch
+    - name: CloudWatch Agent 시작
+      shell: |
+        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+        -a fetch-config -m ec2 \
+        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+      args:
+        creates: /var/run/amazon-cloudwatch-agent.pid
+      tags: cloudwatch
 
 
     # ──────────────────────────────────────────

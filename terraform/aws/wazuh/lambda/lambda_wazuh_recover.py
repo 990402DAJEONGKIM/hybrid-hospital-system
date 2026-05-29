@@ -14,21 +14,6 @@ PLAYBOOK_PATH = os.environ.get('PLAYBOOK_PATH', '/etc/ansible/wazuh')
 ec2  = boto3.client('ec2',  region_name=REGION)
 ssm  = boto3.client('ssm',  region_name=REGION)
 
-def _get_instance_id_by_private_ip(private_ip):
-    resp = ec2.describe_instances(
-        Filters=[
-            {'Name': 'private-ip-address', 'Values': [private_ip]},
-            {'Name': 'instance-state-name',
-             'Values': ['pending', 'running', 'stopping', 'stopped']}
-        ]
-    )
-    for r in resp.get('Reservations', []):
-        for i in r.get('Instances', []):
-            return i['InstanceId']
-    return None
-
-
-
 def lambda_handler(event, context):
     print(f"[INFO] 트리거 수신: {event}")
 
@@ -50,9 +35,8 @@ def lambda_handler(event, context):
 
     # EC2 상태 확인
     try:
-        target_id = _get_instance_id_by_private_ip(PRIVATE_IP)
         resp = ec2.describe_instance_status(
-            InstanceIds=[target_id],
+            InstanceIds=[ORIGINAL_INST_ID],
             IncludeAllInstances=True
         )
         if not resp['InstanceStatuses']:
@@ -79,20 +63,20 @@ def lambda_handler(event, context):
 
     if ec2_dead:
         print("[ACTION] 시나리오 1 - EC2 재생성")
-        _scenario1_rebuild(target_id)
+        _scenario1_rebuild()
     else:
         print("[ACTION] 시나리오 2 - 서비스 재시작")
-        _scenario2_restart_service(target_id)
+        _scenario2_restart_service()
 
     return {"status": "SUCCESS"}
 
 
-def _scenario1_rebuild(target_id):
+def _scenario1_rebuild():
     # 기존 인스턴스 종료
     if True:
         try:
-            ec2.terminate_instances(InstanceIds=[target_id])
-            print(f"[ACTION] 인스턴스 종료 요청: {target_id}")
+            ec2.terminate_instances(InstanceIds=[ORIGINAL_INST_ID])
+            print(f"[ACTION] 인스턴스 종료 요청: {ORIGINAL_INST_ID}")
         except ClientError as e:
             print(f"[WARN] 종료 실패 (이미 종료됐을 수 있음): {e}")
 
@@ -100,7 +84,7 @@ def _scenario1_rebuild(target_id):
     print("[ACTION] 종료 완료 대기 중...")
     waiter = ec2.get_waiter('instance_terminated')
     waiter.wait(
-        InstanceIds=[target_id],
+        InstanceIds=[ORIGINAL_INST_ID],
         WaiterConfig={'Delay': 10, 'MaxAttempts': 30}
     )
     print("[SUCCESS] 기존 인스턴스 종료 완료")
@@ -146,9 +130,9 @@ def _scenario1_rebuild(target_id):
     print("[SUCCESS] 시나리오 1 복구 완료")
 
 
-def _scenario2_restart_service(target_id):
+def _scenario2_restart_service():
     # SSM으로 서비스 태그만 실행
-    _run_ssm(target_id, [
+    _run_ssm(ORIGINAL_INST_ID, [
         f"cd {PLAYBOOK_PATH} && ansible-playbook -i localhost, wazuh.yaml "
         f"--connection=local --tags 'service'"
     ])
