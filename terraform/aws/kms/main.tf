@@ -90,6 +90,31 @@ locals {
           "kms:DescribeKey",
         ]
         Resource = "*"
+      }
+    ]
+  })
+    # S3 키 전용 정책
+  # Firehose가 WAF 로그를 S3에 저장할 때 SSE-KMS 암호화에 필요
+  # RDS/EBS/SM/ECR 키에는 Firehose 권한 불필요 → 최소 권한 원칙 준수 (ISMS-P 2.5.3)
+  s3_key_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      jsondecode(local.key_policy).Statement,
+      [
+        {
+        Sid    = "AllowFirehoseForS3Only"
+        Effect = "Allow"
+        Principal = { Service = "firehose.amazonaws.com" }
+        Action = [
+          "kms:GenerateDataKey",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
       },
       {
         Sid    = "AllowGuardDuty"
@@ -105,10 +130,14 @@ locals {
             "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:detector/*"
           }
         }
-      }
-    ]
+      }]
+    )
   })
 }
+
+
+
+
 
 
 # ─────────────────────────────────────────────────────────
@@ -169,7 +198,7 @@ resource "aws_kms_key" "s3" {
   enable_key_rotation     = true
   rotation_period_in_days = var.key_rotation_period_days
   deletion_window_in_days = var.deletion_window_days
-  policy                  = local.key_policy
+  policy                  = local.s3_key_policy
 
   tags = {
     Name    = "aws-kms-s3-01"
