@@ -1,0 +1,79 @@
+name: Backup Source Code to S3
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 15 * * *'   # KST 자정 (UTC 15:00)
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-2
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  backup:
+    name: Source Code Backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          sts-regional-endpoints: regional
+
+      - name: Create archive
+        id: archive
+        run: |
+          TIMESTAMP=$(date -u '+%Y-%m-%dT%H-%M-%SZ')
+          SHORT_SHA=${GITHUB_SHA::7}
+          FILENAME="source-${TIMESTAMP}-${SHORT_SHA}.tar.gz"
+          tar --exclude='.git' -czf "/tmp/${FILENAME}" .
+          SIZE=$(du -sh "/tmp/${FILENAME}" | cut -f1)
+          echo "filename=${FILENAME}" >> $GITHUB_OUTPUT
+          echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "size=${SIZE}" >> $GITHUB_OUTPUT
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp "/tmp/${{ steps.archive.outputs.filename }}" \
+            "s3://${{ secrets.S3_BUCKET }}/github-backup/source/${{ steps.archive.outputs.filename }}" \
+            --sse aws:kms
+
+      - name: Verify upload
+        id: verify
+        run: |
+          RESULT=$(aws s3api head-object \
+            --bucket ${{ secrets.S3_BUCKET }} \
+            --key "github-backup/source/${{ steps.archive.outputs.filename }}" \
+            --query '[ContentLength, ServerSideEncryption]' \
+            --output text)
+          echo "verified=true" >> $GITHUB_OUTPUT
+          echo "검증 완료: ${RESULT}"
+
+      - name: Write audit log
+        if: always()
+        run: |
+          STATUS=$([[ "${{ steps.verify.outputs.verified }}" == "true" ]] && echo "SUCCESS" || echo "FAILED")
+          cat > /tmp/backup.log <<EOF
+          timestamp=${{ steps.archive.outputs.timestamp }}
+          repository=${{ github.repository }}
+          branch=${{ github.ref_name }}
+          sha=${{ github.sha }}
+          actor=${{ github.actor }}
+          archive=${{ steps.archive.outputs.filename }}
+          size=${{ steps.archive.outputs.size }}
+          status=${STATUS}
+          EOF
+          aws s3 cp /tmp/backup.log \
+            "s3://${{ secrets.S3_BUCKET }}/github-backup/logs/source-${{ steps.archive.outputs.timestamp }}.log" \
+            --sse aws:kms
