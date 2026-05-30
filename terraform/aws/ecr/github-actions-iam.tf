@@ -6,7 +6,7 @@
 # =========================================================
 
 data "aws_iam_role" "github_actions" {
-  name = "github-actions-ecr-push"
+  name = "aws-github-actions-ecr-push"
 }
 
 
@@ -14,7 +14,7 @@ data "aws_iam_role" "github_actions" {
 # ECS 권한 — Task Definition 등록 & 서비스 배포
 # ─────────────────────────────────────────────────────────
 resource "aws_iam_role_policy" "github_actions_ecs" {
-  name = "github-actions-ecs"
+  name = "aws-github-actions-ecs"
   role = data.aws_iam_role.github_actions.name
 
   policy = jsonencode({
