@@ -5,7 +5,7 @@
 # =========================================================
 
 resource "aws_iam_role" "github_actions" {
-  name = "aws-github-actions-ecr-push"
+  name = "aws-github-actions-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
