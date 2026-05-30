@@ -107,15 +107,45 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     }
   }
 
-  # 추가: GitHub Actions 백업 90일 보존 (20260530, by 김다정)
-    rule {
-    id     = "github-backup-lifecycle"
+  # 추가: GitHub Actions 소스코드 백업 90일 보존 (20260530, by 김다정)
+  rule {
+    id     = "github-backup-source-lifecycle"
     status = "Enabled"
     filter {
-      prefix = "github-backup/"
+      prefix = "github-backup/source/"
     }
     expiration {
       days = var.github_backup_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+
+  # 추가: GitHub Actions tfstate 백업 90일 보존 (20260530, by 김다정)
+  rule {
+    id     = "github-backup-tfstate-lifecycle"
+    status = "Enabled"
+    filter {
+      prefix = "github-backup/tfstate/"
+    }
+    expiration {
+      days = var.github_backup_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+
+  # 추가: GitHub Actions 증적 로그 365일 보존 — ISMS-P 2.9.1 (20260530, by 김다정)
+  rule {
+    id     = "github-backup-logs-lifecycle"
+    status = "Enabled"
+    filter {
+      prefix = "github-backup/logs/"
+    }
+    expiration {
+      days = var.github_backup_log_retention_days
     }
     noncurrent_version_expiration {
       noncurrent_days = 7
