@@ -200,38 +200,40 @@ resource "aws_s3_bucket_policy" "storage" {
         }
       },
       # GuardDuty가 S3 버킷에 결과를 저장할 수 있도록 권한 부여 (20260530, by 김강환)
+      # ap-south-2 opt-in 리전 — guardduty.amazonaws.com 대신 리전별 엔드포인트 사용
+      # 공식문서: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_exportfindings.html
       {
         Sid    = "AllowGuardDutyGetBucketLocation"
         Effect = "Allow"
-        Principal = { Service = "guardduty.amazonaws.com" }
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:GetBucketLocation"
-        Resource = "arn:aws:s3:::aws-k2p-storage-01"
+        Resource = aws_s3_bucket.storage.arn
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn" = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
           }
         }
       },
       {
         Sid    = "AllowGuardDutyPutObject"
         Effect = "Allow"
-        Principal = { Service = "guardduty.amazonaws.com" }
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
-        Resource = "arn:aws:s3:::aws-k2p-storage-01/guardduty/*"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn" = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
           }
         }
       },
       {
         Sid    = "DenyGuardDutyUnencrypted"
         Effect = "Deny"
-        Principal = { Service = "guardduty.amazonaws.com" }
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
-        Resource = "arn:aws:s3:::aws-k2p-storage-01/guardduty/*"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -241,9 +243,9 @@ resource "aws_s3_bucket_policy" "storage" {
       {
         Sid    = "DenyGuardDutyWrongKMSKey"
         Effect = "Deny"
-        Principal = { Service = "guardduty.amazonaws.com" }
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
-        Resource = "arn:aws:s3:::aws-k2p-storage-01/guardduty/*"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption-aws-kms-key-id" = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
@@ -333,7 +335,7 @@ resource "aws_s3_bucket_policy" "storage" {
             "aws:PrincipalServiceNamesList" = [
               "logdelivery.elasticloadbalancing.amazonaws.com",
               "cloudtrail.amazonaws.com",
-              "guardduty.amazonaws.com",
+              "guardduty.ap-south-2.amazonaws.com",
               "delivery.logs.amazonaws.com",
               "firehose.amazonaws.com"
             ]

@@ -120,17 +120,21 @@ locals {
         Sid    = "AllowGuardDuty"
         Effect = "Allow"
         Principal = {
-          Service = "guardduty.amazonaws.com"
+          # ap-south-2는 opt-in 리전이므로 리전별 엔드포인트 사용
+          # 공식문서: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_exportfindings.html
+          Service = "guardduty.ap-south-2.amazonaws.com"
         }
-        Action   = ["kms:GenerateDataKey", "kms:DescribeKey"]
+        # 공식문서 기준 필요 Action은 kms:GenerateDataKey 단일
+        Action   = "kms:GenerateDataKey"
         Resource = "*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn" = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
           }
         }
-      }]
+      }
+      ]
     )
   })
 }
