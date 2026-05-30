@@ -203,14 +203,50 @@ resource "aws_s3_bucket_policy" "storage" {
         Effect = "Allow"
         Principal = { Service = "guardduty.amazonaws.com" }
         Action   = "s3:GetBucketLocation"
-        Resource = aws_s3_bucket.storage.arn
+        Resource = "arn:aws:s3:::aws-k2p-storage-01"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+          }
+        }
       },
       {
         Sid    = "AllowGuardDutyPutObject"
         Effect = "Allow"
         Principal = { Service = "guardduty.amazonaws.com" }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
+        Resource = "arn:aws:s3:::aws-k2p-storage-01/guardduty/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+          }
+        }
+      },
+      {
+        Sid    = "DenyGuardDutyUnencrypted"
+        Effect = "Deny"
+        Principal = { Service = "guardduty.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "arn:aws:s3:::aws-k2p-storage-01/guardduty/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      },
+      {
+        Sid    = "DenyGuardDutyWrongKMSKey"
+        Effect = "Deny"
+        Principal = { Service = "guardduty.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "arn:aws:s3:::aws-k2p-storage-01/guardduty/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption-aws-kms-key-id" = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
+          }
+        }
       },
       {
         Sid    = "AWSFlowLogsWrite"
@@ -229,6 +265,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.storage.arn
       },
+      ## ALB 로그 권한 예시 (20260530, by 김강환) - ALB → S3 로그 전달용
       # {
       #   Sid    = "ALBLogDelivery"
       #   Effect = "Allow"
