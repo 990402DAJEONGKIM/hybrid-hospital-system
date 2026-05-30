@@ -4,6 +4,20 @@
 # Terraform으로 역할 직접 관리 (기존 수동 생성 역할 대체)
 # =========================================================
 
+# ─────────────────────────────────────────────────────────
+# GitHub OIDC 공급자 — GitHub Actions 신뢰 설정
+# ─────────────────────────────────────────────────────────
+data "tls_certificate" "github_actions" {
+  url = "https://token.actions.githubusercontent.com"
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.github_actions.certificates[0].sha1_fingerprint]
+}
+
+
 resource "aws_iam_role" "github_actions" {
   name = "aws-github-actions-role"
 
@@ -13,7 +27,7 @@ resource "aws_iam_role" "github_actions" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com"
+          Federated = aws_iam_openid_connect_provider.github.arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
@@ -115,4 +129,9 @@ resource "aws_iam_role_policy" "github_actions_s3_backup" {
       }
     ]
   })
+}
+
+import {
+  to = aws_iam_openid_connect_provider.github
+  id = "arn:aws:iam::476293896981:oidc-provider/token.actions.githubusercontent.com"
 }
