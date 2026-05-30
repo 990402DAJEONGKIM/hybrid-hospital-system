@@ -1,5 +1,11 @@
 
 # GuardDuty Detector
+
+import {
+  to = aws_guardduty_detector.aws-gd
+  id = "692bc5874baa41429fc7396c82c862c6"
+}
+
 resource "aws_guardduty_detector" "aws-gd" {
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
