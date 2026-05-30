@@ -205,7 +205,7 @@ resource "aws_s3_bucket_policy" "storage" {
       {
         Sid    = "AllowGuardDutyGetBucketLocation"
         Effect = "Allow"
-        Principal = { Service = "guardduty.amazonaws.com" }
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:GetBucketLocation"
         Resource = aws_s3_bucket.storage.arn
         Condition = {
@@ -218,7 +218,7 @@ resource "aws_s3_bucket_policy" "storage" {
       {
         Sid    = "AllowGuardDutyPutObject"
         Effect = "Allow"
-        Principal = { Service = "guardduty.amazonaws.com" }
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
@@ -231,7 +231,7 @@ resource "aws_s3_bucket_policy" "storage" {
       {
         Sid    = "DenyGuardDutyUnencrypted"
         Effect = "Deny"
-        Principal = { Service = "guardduty.amazonaws.com" }
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
@@ -243,7 +243,7 @@ resource "aws_s3_bucket_policy" "storage" {
       {
         Sid    = "DenyGuardDutyWrongKMSKey"
         Effect = "Deny"
-        Principal = { Service = "guardduty.amazonaws.com" }
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
@@ -335,7 +335,7 @@ resource "aws_s3_bucket_policy" "storage" {
             "aws:PrincipalServiceNamesList" = [
               "logdelivery.elasticloadbalancing.amazonaws.com",
               "cloudtrail.amazonaws.com",
-              "guardduty.amazonaws.com",
+              "guardduty.ap-south-2.amazonaws.com",
               "delivery.logs.amazonaws.com",
               "firehose.amazonaws.com"
             ]
