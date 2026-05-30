@@ -130,8 +130,3 @@ resource "aws_iam_role_policy" "github_actions_s3_backup" {
     ]
   })
 }
-
-import {
-  to = aws_iam_openid_connect_provider.github
-  id = "arn:aws:iam::476293896981:oidc-provider/token.actions.githubusercontent.com"
-}
