@@ -122,7 +122,7 @@ locals {
         Principal = {
           Service = "guardduty.amazonaws.com"
         }
-        Action   = "kms:GenerateDataKey"
+        Action   = ["kms:GenerateDataKey", "kms:DescribeKey"]
         Resource = "*"
         Condition = {
           StringEquals = {
