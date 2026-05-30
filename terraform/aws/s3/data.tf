@@ -20,3 +20,13 @@ data "terraform_remote_state" "kms" {
     }
   }
 }
+# TC-aws-security output에서 guardduty_detector_id 동적 참조
+data "terraform_remote_state" "security" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = {
+      name = "TC-aws-security"
+    }
+  }
+}
