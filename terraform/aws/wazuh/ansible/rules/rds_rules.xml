@@ -89,6 +89,30 @@
   </rule>
 
 
+  <!-- 슬로우 쿼리 탐지 -->
+  <rule id="100112" level="6">
+    <location>Wazuh-AWS</location>
+    <match>duration: </match>
+    <description>RDS 슬로우 쿼리 탐지 (1초 이상 소요 쿼리)</description>
+    <group>performance,slow_query,</group>
+  </rule>
+
+  <!-- 접속 기록 탐지 -->
+  <rule id="100113" level="3">
+    <location>Wazuh-AWS</location>
+    <match>connection received</match>
+    <description>RDS 클라이언트 접속 기록</description>
+    <group>authentication,connection,</group>
+  </rule>
+
+  <!-- rdsproxyadmin WRITE 필터링 -->
+  <rule id="100114" level="0">
+    <if_sid>100102</if_sid>
+    <match>rdsproxyadmin</match>
+    <description>RDS Proxy 내부 WRITE - 무시</description>
+    <group>noise,</group>
+  </rule>
+
 
 
 
