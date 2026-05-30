@@ -205,7 +205,7 @@ resource "aws_s3_bucket_policy" "storage" {
       {
         Sid    = "AllowGuardDutyGetBucketLocation"
         Effect = "Allow"
-        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
+        Principal = { Service = "guardduty.amazonaws.com" }
         Action   = "s3:GetBucketLocation"
         Resource = aws_s3_bucket.storage.arn
         Condition = {
