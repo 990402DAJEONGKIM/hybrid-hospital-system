@@ -93,7 +93,7 @@ locals {
       }
     ]
   })
-    # S3 키 전용 정책
+  # S3 키 전용 정책
   # Firehose가 WAF 로그를 S3에 저장할 때 SSE-KMS 암호화에 필요
   # RDS/EBS/SM/ECR 키에는 Firehose 권한 불필요 → 최소 권한 원칙 준수 (ISMS-P 2.5.3)
   s3_key_policy = jsonencode({
@@ -127,7 +127,7 @@ locals {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+            "aws:SourceArn" = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
           }
         }
       }]

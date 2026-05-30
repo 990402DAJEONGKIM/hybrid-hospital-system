@@ -181,6 +181,7 @@ resource "aws_s3_bucket_policy" "storage" {
           "${aws_s3_bucket.storage.arn}/*"
         ]
       },
+      # AWS CloudTrail이 S3 버킷에 로그를 저장할 수 있도록 권한 부여 (20260530, by 김강환)
       {
         Sid    = "AWSCloudTrailAclCheck"
         Effect = "Allow"
@@ -198,6 +199,7 @@ resource "aws_s3_bucket_policy" "storage" {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
         }
       },
+      # GuardDuty가 S3 버킷에 결과를 저장할 수 있도록 권한 부여 (20260530, by 김강환)
       {
         Sid    = "AllowGuardDutyGetBucketLocation"
         Effect = "Allow"
@@ -207,7 +209,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+            "aws:SourceArn" = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
           }
         }
       },
@@ -220,7 +222,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+            "aws:SourceArn" = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
           }
         }
       },
@@ -248,6 +250,7 @@ resource "aws_s3_bucket_policy" "storage" {
           }
         }
       },
+      # AWS Flow Logs 권한 예시 (20260530, by 김강환) - VPC Flow Logs → S3 로그 전달용
       {
         Sid    = "AWSFlowLogsWrite"
         Effect = "Allow"
