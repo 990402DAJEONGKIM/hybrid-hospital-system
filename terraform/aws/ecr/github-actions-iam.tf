@@ -43,3 +43,45 @@ resource "aws_iam_role_policy" "github_actions_ecs" {
     ]
   })
 }
+
+
+# 추가: 소스코드 & tfstate 백업용 S3 권한 추가 — ISMS-P 백업 정책 대응 (20260530, by 김다정)
+# ─────────────────────────────────────────────────────────
+# S3 백업 권한 — 소스코드 & tfstate 백업용
+# ISMS-P 백업 정책 대응
+# ─────────────────────────────────────────────────────────
+data "aws_kms_key" "s3" {
+  key_id = "alias/aws-kms-s3-01"
+}
+
+resource "aws_iam_role_policy" "github_actions_s3_backup" {
+  name = "aws-github-actions-s3-backup"
+  role = data.aws_iam_role.github_actions.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowS3ListBucket"
+        Effect = "Allow"
+        Action = ["s3:ListBucket"]
+        Resource = ["arn:aws:s3:::aws-k2p-storage-01"]
+        Condition = {
+          StringLike = { "s3:prefix" = ["github-backup/*"] }
+        }
+      },
+      {
+        Sid    = "AllowS3ObjectOps"
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:GetObject"]
+        Resource = ["arn:aws:s3:::aws-k2p-storage-01/github-backup/*"]
+      },
+      {
+        Sid    = "AllowKMSForS3Backup"
+        Effect = "Allow"
+        Action = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = [data.aws_kms_key.s3.arn]
+      }
+    ]
+  })
+}
