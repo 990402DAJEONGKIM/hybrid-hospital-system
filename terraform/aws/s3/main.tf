@@ -106,6 +106,21 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
       noncurrent_days = 7
     }
   }
+
+  # 추가: GitHub Actions 백업 90일 보존 (20260530, by 김다정)
+    rule {
+    id     = "github-backup-lifecycle"
+    status = "Enabled"
+    filter {
+      prefix = "github-backup/"
+    }
+    expiration {
+      days = var.github_backup_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
 }
 
 
@@ -209,6 +224,30 @@ resource "aws_s3_bucket_policy" "storage" {
       #     }
       #   }
       # },
+
+      # 추가: GitHub Actions 백업 권한 (20260530, by 김다정)
+      {
+        Sid    = "AllowGitHubActionsListBucket"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-github-actions-ecr-push"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.storage.arn
+        Condition = {
+          StringLike = { "s3:prefix" = ["github-backup/*"] }
+        }
+      },
+      {
+        Sid    = "AllowGitHubActionsObjectOps"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-github-actions-ecr-push"
+        }
+        Action = ["s3:PutObject", "s3:GetObject"]
+        Resource = "${aws_s3_bucket.storage.arn}/github-backup/*"
+      },
+
       {
         Sid       = "DenyNonSSL"
         Effect    = "Deny"
