@@ -16,6 +16,16 @@ data "aws_caller_identity" "current" {} # 현재 실행 중인 AWS 계정 ID를 
 data "aws_region" "current" {}          # 현재 배포 중인 AWS 리전 정보를 동적으로 가져옴
 
 
+data "terraform_remote_state" "security" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = {
+      name = "TC-aws-security"
+    }
+  }
+}
+
 # ─────────────────────────────────────────────────────────
 # 공통 키 정책 (루트 계정 전체 권한 + 키 관리자만 관리 가능)
 # ─────────────────────────────────────────────────────────
@@ -125,16 +135,15 @@ locals {
           Service = "guardduty.amazonaws.com"
         }
         # 공식문서 기준 필요 Action은 kms:GenerateDataKey 단일
-        Action   = "kms:GenerateDataKey"
+        Action = ["kms:GenerateDataKey", "kms:DescribeKey"]
         Resource = "*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
-          }
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/${data.terraform_remote_state.security.outputs.guardduty_detector_id}"
         }
       }
-      ]
+    }]
     )
   })
 }
