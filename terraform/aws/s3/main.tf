@@ -211,7 +211,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+            "aws:SourceArn" = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/${data.terraform_remote_state.security.outputs.guardduty_detector_id}"
           }
         }
       },
@@ -224,7 +224,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/692bc5874baa41429fc7396c82c862c6"
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/${data.terraform_remote_state.security.outputs.guardduty_detector_id}"
           }
         }
       },
