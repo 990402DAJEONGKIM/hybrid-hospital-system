@@ -230,7 +230,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Sid    = "AllowGitHubActionsListBucket"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-github-actions-ecr-push"
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-github-actions-role"
         }
         Action   = "s3:ListBucket"
         Resource = aws_s3_bucket.storage.arn
@@ -242,7 +242,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Sid    = "AllowGitHubActionsObjectOps"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-github-actions-ecr-push"
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-github-actions-role"
         }
         Action = ["s3:PutObject", "s3:GetObject"]
         Resource = "${aws_s3_bucket.storage.arn}/github-backup/*"
