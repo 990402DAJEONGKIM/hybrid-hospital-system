@@ -132,10 +132,10 @@ locals {
         Principal = {
           # ap-south-2는 opt-in 리전이므로 리전별 엔드포인트 사용
           # 공식문서: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_exportfindings.html
-          Service = "guardduty.amazonaws.com"
+          Service = "guardduty.ap-south-2.amazonaws.com"
         }
         # 공식문서 기준 필요 Action은 kms:GenerateDataKey 단일
-        Action = ["kms:GenerateDataKey", "kms:DescribeKey"]
+        Action = "kms:GenerateDataKey"
         Resource = "*"
         Condition = {
           StringEquals = {
