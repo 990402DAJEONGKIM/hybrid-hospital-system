@@ -14,3 +14,6 @@ data "terraform_remote_state" "kms" {
     }
   }
 }
+
+
+data "aws_region" "current" {}

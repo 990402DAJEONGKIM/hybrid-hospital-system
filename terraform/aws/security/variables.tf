@@ -1,4 +1,5 @@
 # variables.tf
 variable "aws_region" {
-  default = "ap-south-2"
+  description = "AWS 배포 리전"
+  type        = string
 }
