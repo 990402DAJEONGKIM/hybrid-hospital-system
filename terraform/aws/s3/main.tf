@@ -181,6 +181,7 @@ resource "aws_s3_bucket_policy" "storage" {
           "${aws_s3_bucket.storage.arn}/*"
         ]
       },
+      # AWS CloudTrail이 S3 버킷에 로그를 저장할 수 있도록 권한 부여 (20260530, by 김강환)
       {
         Sid    = "AWSCloudTrailAclCheck"
         Effect = "Allow"
@@ -198,6 +199,7 @@ resource "aws_s3_bucket_policy" "storage" {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
         }
       },
+      # GuardDuty가 S3 버킷에 결과를 저장할 수 있도록 권한 부여 (20260530, by 김강환)
       {
         Sid    = "AllowGuardDutyGetBucketLocation"
         Effect = "Allow"
@@ -248,6 +250,7 @@ resource "aws_s3_bucket_policy" "storage" {
           }
         }
       },
+      # AWS Flow Logs 권한 예시 (20260530, by 김강환) - VPC Flow Logs → S3 로그 전달용
       {
         Sid    = "AWSFlowLogsWrite"
         Effect = "Allow"
