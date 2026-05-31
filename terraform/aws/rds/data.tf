@@ -19,8 +19,11 @@ data "aws_rds_cluster" "aws_aurora_01" {
   cluster_identifier = "aws-aurora-01"
 }
 
-# TC-aws-secrets 워크스페이스 outputs (Proxy auth 시크릿 ARN 참조)
-data "tfe_outputs" "secrets" {
-  organization = "k2p"
-  workspace    = "TC-aws-secrets"
+# RDS Proxy 유저 시크릿 직접 조회 (tfe_outputs 크로스 워크스페이스 인증 불필요)
+data "aws_secretsmanager_secret" "proxy_patient_user" {
+  name = "aws-rds-proxy-patient-user-secret"
+}
+
+data "aws_secretsmanager_secret" "proxy_staff_user" {
+  name = "aws-rds-proxy-staff-user-secret"
 }
