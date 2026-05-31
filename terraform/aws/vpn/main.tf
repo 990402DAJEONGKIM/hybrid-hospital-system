@@ -72,6 +72,22 @@ resource "aws_vpn_connection" "main" {
   type                = "ipsec.1"
   static_routes_only  = true
 
+
+  tunnel1_log_options {
+    cloudwatch_log_options {
+      log_enabled       = true
+      log_group_arn     = aws_cloudwatch_log_group.aws-cwl-vpn-onprem-logs.arn
+      log_output_format = "json"
+    }
+  }
+  tunnel2_log_options {
+    cloudwatch_log_options {
+      log_enabled       = true
+      log_group_arn     = aws_cloudwatch_log_group.aws-cwl-vpn-onprem-logs.arn
+      log_output_format = "json"
+    }
+  }
+
   tags = {
     Name = "aws-vpn-01"
   }
@@ -106,4 +122,11 @@ resource "aws_route" "db_to_onprem" {
   route_table_id         = data.aws_route_table.db.id
   destination_cidr_block = var.onprem_cidr
   gateway_id             = aws_vpn_gateway.main.id
+}
+
+
+resource "aws_cloudwatch_log_group" "aws-cwl-vpn-onprem-logs" {
+  name              = "/aws/vendedlogs/vpn/aws-vpn-01"
+  retention_in_days = 365
+  tags = { Name = "aws-cwl-vpn-onprem-logs" }
 }
