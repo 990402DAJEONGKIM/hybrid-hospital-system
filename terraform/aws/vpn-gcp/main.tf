@@ -122,3 +122,20 @@ resource "aws_route" "db_to_gcp_cloudfn" {
   destination_cidr_block = var.gcp_cloudfn_cidr
   gateway_id             = data.aws_vpn_gateway.main.id
 }
+
+
+# 260531 김강환
+# ── 라우팅 테이블 — App 서브넷 (Wazuh Agent → GCP 통신용) ────
+# app subnet은 Wazuh Agent가 위치한 곳으로, GCP VPN을 통해 Wazuh Manager와 통신할 수 있도록 라우트 추가
+data "aws_route_table" "app" {
+  filter {
+    name   = "tag:Name"
+    values = ["aws-rt-app-01"]
+  }
+}
+
+resource "aws_route" "app_to_gcp" {
+  route_table_id         = data.aws_route_table.app.id
+  destination_cidr_block = var.gcp_cidr
+  gateway_id             = data.aws_vpn_gateway.main.id
+}
