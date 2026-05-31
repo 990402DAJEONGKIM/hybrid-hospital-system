@@ -144,7 +144,7 @@ resource "aws_lb_target_group" "wazuh" {
   port        = 443
   protocol    = "HTTPS"
   vpc_id      = data.aws_vpc.main.id
-  target_type = "instance"
+  target_type = "ip"
 
   stickiness {
     type            = "lb_cookie"
@@ -167,7 +167,7 @@ resource "aws_lb_target_group" "wazuh" {
 
 resource "aws_lb_target_group_attachment" "wazuh" {
   target_group_arn = aws_lb_target_group.wazuh.arn
-  target_id        = data.aws_instance.wazuh.id
+  target_id        = var.wazuh_manager_ip
   port             = 443
 }
 
