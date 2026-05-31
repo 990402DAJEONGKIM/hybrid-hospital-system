@@ -8,8 +8,9 @@ load_dotenv()
 DATABASE_URL      = os.getenv("DATABASE_URL")
 DATABASE_READ_URL = os.getenv("DATABASE_READ_URL", DATABASE_URL)  # 미설정 시 writer로 fallback
 
-engine      = create_engine(DATABASE_URL)
-read_engine = create_engine(DATABASE_READ_URL)
+_ssl = {"sslmode": "require"}
+engine      = create_engine(DATABASE_URL,      connect_args=_ssl)
+read_engine = create_engine(DATABASE_READ_URL, connect_args=_ssl)
 
 SessionLocal     = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 ReadSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=read_engine)
