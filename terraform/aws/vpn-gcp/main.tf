@@ -75,6 +75,21 @@ resource "aws_vpn_connection" "gcp" {
   tunnel2_phase1_dh_group_numbers      = [14]
   tunnel2_phase2_dh_group_numbers      = [14]
 
+  tunnel1_log_options {
+    cloudwatch_log_options {
+      log_enabled       = true
+      log_group_arn     = aws_cloudwatch_log_group.aws-cwl-vpn-gcp-logs.arn
+      log_output_format = "json"
+    }
+  }
+  tunnel2_log_options {
+    cloudwatch_log_options {
+      log_enabled       = true
+      log_group_arn     = aws_cloudwatch_log_group.aws-cwl-vpn-gcp-logs.arn
+      log_output_format = "json"
+    }
+  }
+
   tags = {
     Name = "aws-vpn-gcp"
   }
@@ -138,4 +153,11 @@ resource "aws_route" "app_to_gcp" {
   route_table_id         = data.aws_route_table.app.id
   destination_cidr_block = var.gcp_cidr
   gateway_id             = data.aws_vpn_gateway.main.id
+}
+
+
+resource "aws_cloudwatch_log_group" "aws-cwl-vpn-gcp-logs" {
+  name              = "/aws/vendedlogs/vpn/aws-vpn-gcp"
+  retention_in_days = 365
+  tags = { Name = "aws-cwl-vpn-gcp-logs" }
 }
