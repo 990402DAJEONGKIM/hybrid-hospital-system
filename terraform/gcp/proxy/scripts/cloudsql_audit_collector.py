@@ -152,6 +152,23 @@ def insert_rows(rows: list[dict]):
         conn.close()
 
 
+
+# =============================================================
+# 파일 쓰기 (Wazuh Agent 수집용)
+# =============================================================
+def write_to_log(rows: list[dict]):
+    """
+    Wazuh Agent가 수집할 수 있도록 /var/log/audit-collector.log에 JSON으로 기록
+    ISMS-P 2.9.1: 실시간 보안 모니터링용
+    """
+    if not rows:
+        return
+    log_path = Path("/var/log/cloudsql-audit.log")
+    with log_path.open("a") as f:
+        for row in rows:
+            record = {k: str(v) if v is not None else None for k, v in row.items()}
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
 # =============================================================
 # 메인
 # =============================================================
@@ -183,6 +200,7 @@ def main():
                 latest_ts = ts_str
 
     inserted = insert_rows(rows)
+    write_to_log(rows)
     save_last_timestamp(latest_ts)
 
     elapsed = time.time() - start
