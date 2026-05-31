@@ -49,8 +49,14 @@ def lambda_handler(event, context):
         print(f"[WARN] SNS 메시지 파싱 실패: {e}")
 
     # EC2 상태 확인
+    target_id = _get_instance_id_by_private_ip(PRIVATE_IP)
+    print(f"[INFO] 조회된 인스턴스 ID: {target_id}")
+
+    if target_id is None:
+        print("[ACTION] 인스턴스 없음 → 시나리오 1 바로 진입")
+        _scenario1_rebuild(None)
+        return {"status": "SUCCESS"}
     try:
-        target_id = _get_instance_id_by_private_ip(PRIVATE_IP)
         resp = ec2.describe_instance_status(
             InstanceIds=[target_id],
             IncludeAllInstances=True
@@ -88,22 +94,21 @@ def lambda_handler(event, context):
 
 
 def _scenario1_rebuild(target_id):
-    # 기존 인스턴스 종료
-    if True:
+    if target_id is not None:
         try:
             ec2.terminate_instances(InstanceIds=[target_id])
             print(f"[ACTION] 인스턴스 종료 요청: {target_id}")
         except ClientError as e:
             print(f"[WARN] 종료 실패 (이미 종료됐을 수 있음): {e}")
 
-    # 종료 완료 대기
-    print("[ACTION] 종료 완료 대기 중...")
-    waiter = ec2.get_waiter('instance_terminated')
-    waiter.wait(
-        InstanceIds=[target_id],
-        WaiterConfig={'Delay': 10, 'MaxAttempts': 30}
-    )
-    print("[SUCCESS] 기존 인스턴스 종료 완료")
+        # 종료 완료 대기
+        print("[ACTION] 종료 완료 대기 중...")
+        waiter = ec2.get_waiter('instance_terminated')
+        waiter.wait(
+            InstanceIds=[target_id],
+            WaiterConfig={'Delay': 10, 'MaxAttempts': 30}
+        )
+        print("[SUCCESS] 기존 인스턴스 종료 완료")
 
     # AMI로 새 EC2 생성
     print(f"[ACTION] AMI {AMI_ID}로 새 EC2 생성 중...")
