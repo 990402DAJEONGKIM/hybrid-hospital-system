@@ -392,8 +392,8 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
       # ───────────────────────────────────────────────────────────
       Resource = [
         aws_rds_cluster.main.master_user_secret[0].secret_arn,
-        data.tfe_outputs.secrets.values.proxy_patient_user_secret_arn,
-        data.tfe_outputs.secrets.values.proxy_staff_user_secret_arn,
+        data.aws_secretsmanager_secret.proxy_patient_user.arn,
+        data.aws_secretsmanager_secret.proxy_staff_user.arn,
       ]
     }]
   })
@@ -422,13 +422,13 @@ resource "aws_db_proxy" "main" {
   auth {
     auth_scheme = "SECRETS"
     iam_auth    = "DISABLED"
-    secret_arn  = data.tfe_outputs.secrets.values.proxy_patient_user_secret_arn
+    secret_arn  = data.aws_secretsmanager_secret.proxy_patient_user.arn
   }
 
   auth {
     auth_scheme = "SECRETS"
     iam_auth    = "DISABLED"
-    secret_arn  = data.tfe_outputs.secrets.values.proxy_staff_user_secret_arn
+    secret_arn  = data.aws_secretsmanager_secret.proxy_staff_user.arn
   }
 
   tags = merge(local.common_tags, { Name = "aws-rds-proxy-01" })
