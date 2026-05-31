@@ -146,6 +146,11 @@ resource "aws_lb_target_group" "wazuh" {
   vpc_id      = data.aws_vpc.main.id
   target_type = "ip"
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
+
   stickiness {
     type            = "lb_cookie"
     cookie_duration = 86400

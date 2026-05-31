@@ -40,10 +40,12 @@ CLOUD_SQL_PASS    = os.environ.get("CLOUD_SQL_APP_PASS", "")   # 환경변수로
 STATE_FILE        = Path("/opt/audit-collector/.last_timestamp")
 
 # Cloud Logging 필터 — Cloud SQL 감사 로그만
+# connection authorized/authenticated/disconnection 이벤트 필터링(DB 접속/인증/종료 이벤트 위주로 수집)-김강환
 LOG_FILTER = (
     f'resource.type="cloudsql_database" '
     f'resource.labels.database_id="{GCP_PROJECT}:{CLOUD_SQL_INSTANCE}" '
-    f'protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"'
+    f'(protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog" OR '
+    f'textPayload=~"connection authorized|connection authenticated|disconnection")'
 )
 
 # =============================================================
@@ -70,66 +72,35 @@ def save_last_timestamp(ts: str):
 # =============================================================
 def parse_log_entry(entry) -> dict | None:
     try:
-        proto = entry.payload  # AuditLog protobuf
-
-        # 기본 필드
-        event_at    = entry.timestamp  # datetime (UTC)
-        source_ip   = None
-        user_name   = None
-        action_type = "UNKNOWN"
+        event_at     = entry.timestamp
+        source_ip    = None
+        action_type  = "UNKNOWN"
         target_table = None
         result_code  = "200"
 
-        # 호출자 IP
-        request_meta = getattr(proto, "request_metadata", None)
-        if request_meta:
-            source_ip = getattr(request_meta, "caller_ip", None) or None
+        payload = entry.payload
 
-        # 호출자 계정
-        auth_info = getattr(proto, "authentication_info", None)
-        if auth_info:
-            user_name = getattr(auth_info, "principal_email", None) or None
+        # TextEntry: textPayload (PostgreSQL 엔진 로그)
+        if isinstance(payload, str):
+            text = payload
+            db_match = re.search(r'db=\S*,user=(\S*),host=(\S*)', text)
+            if db_match:
+                source_ip = db_match.group(2).split()[0] or None
+            if "connection authorized" in text or "connection authenticated" in text:
+                action_type = "LOGIN"
+            elif "disconnection" in text:
+                action_type = "LOGOUT"
 
-        # 메서드명으로 action_type 추정
-        method = getattr(proto, "method_name", "") or ""
-        if "login" in method.lower() or "connect" in method.lower():
-            action_type = "LOGIN"
-        elif "select" in method.lower() or "read" in method.lower():
-            action_type = "READ"
-        elif "insert" in method.lower() or "create" in method.lower():
-            action_type = "INSERT"
-        elif "update" in method.lower():
-            action_type = "UPDATE"
-        elif "delete" in method.lower():
-            action_type = "DELETE"
-        elif "ddl" in method.lower():
-            action_type = "DDL"
-
-        # resource_name에서 테이블명 추출 시도
-        resource_name = getattr(proto, "resource_name", "") or ""
-        table_match = re.search(r'tables/([^/]+)', resource_name)
-        if table_match:
-            target_table = table_match.group(1)[:50]
-
-        # 상태 코드
-        status = getattr(proto, "status", None)
-        if status:
-            code = getattr(status, "code", 0)
-            result_code = str(code) if code else "200"
-
-        # pgaudit 스타일 로그 파싱 (log entry에 textPayload가 있는 경우)
-        if hasattr(entry, "text_payload") and entry.text_payload:
-            text = entry.text_payload
-            # AUDIT: SESSION, ..., READ, public.appointments, ...
-            audit_match = re.search(
-                r'AUDIT:.*?,.*?,.*?,.*?,(\w+),([^,]+),', text
-            )
-            if audit_match:
-                action_type  = audit_match.group(1).upper()[:20]
-                target_table = audit_match.group(2).strip().split(".")[-1][:50]
+        # ProtobufEntry: protoPayload (GCP 관리 감사 로그)
+        elif isinstance(payload, dict):
+            method = payload.get("methodName", "") or ""
+            if method:
+                action_type = ("ADMIN_" + method.split(".")[-1].upper())[:20]
+            request_meta = payload.get("requestMetadata", {})
+            source_ip = request_meta.get("callerIp", None)
 
         return {
-            "user_id":         None,   # DB 레벨 로그라 user_id 없음
+            "user_id":         None,
             "patient_id_hash": None,
             "action_type":     action_type[:20],
             "target_table":    target_table,
