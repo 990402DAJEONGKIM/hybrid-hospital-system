@@ -334,6 +334,7 @@ locals {
     "roles/serviceusage.serviceUsageAdmin",
     "roles/dns.admin",
     "roles/cloudsql.viewer",
+    "roles/logging.admin",
   ]
 }
 
@@ -449,3 +450,4 @@ resource "google_service_account_iam_member" "github_packer_token_creator" {
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
 }
+
