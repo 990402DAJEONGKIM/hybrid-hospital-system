@@ -160,6 +160,7 @@ resource "aws_lambda_function" "ecs_db_rotator" {
       MASTER_SECRET_ARN        = data.aws_rds_cluster.main.master_user_secret[0].secret_arn
       PROXY_PATIENT_SECRET_ARN = data.tfe_outputs.secrets.values.proxy_patient_user_secret_arn
       PROXY_STAFF_SECRET_ARN   = data.tfe_outputs.secrets.values.proxy_staff_user_secret_arn
+      AURORA_HOST              = data.aws_rds_cluster.main.endpoint
     }
   }
 

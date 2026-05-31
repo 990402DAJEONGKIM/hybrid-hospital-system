@@ -15,6 +15,7 @@ sm = boto3.client('secretsmanager')
 
 # hospital_user(master) 시크릿 ARN — ALTER USER 실행에 사용
 MASTER_SECRET_ARN        = os.environ['MASTER_SECRET_ARN']
+AURORA_HOST              = os.environ.get('AURORA_HOST')  # testSecret에서 Proxy 우회용
 PROXY_PATIENT_SECRET_ARN = os.environ.get('PROXY_PATIENT_SECRET_ARN')
 PROXY_STAFF_SECRET_ARN   = os.environ.get('PROXY_STAFF_SECRET_ARN')
 
@@ -165,11 +166,12 @@ def set_secret(secret_id, token):
 
 def test_secret(secret_id, token):
     # AWSPENDING 자격증명으로 실제 DB 접속 검증
+    # Proxy를 통하지 않고 Aurora에 직접 연결 (Proxy 캐시 갱신 타이밍 문제 방지)
     pending = sm.get_secret_value(SecretId=secret_id, VersionId=token, VersionStage='AWSPENDING')
     db = _parse_db_url(pending['SecretString'])
 
     conn = psycopg2.connect(
-        host=db['host'],
+        host=AURORA_HOST or db['host'],
         port=db['port'],
         dbname=db['dbname'],
         user=db['username'],
