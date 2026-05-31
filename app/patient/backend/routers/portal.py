@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session as DbSession
 
-from core.database import get_db
+from core.database import get_db, get_read_db
 from core.security import get_current_user, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
@@ -129,7 +129,7 @@ class AppointmentUpdateRequest(BaseModel):
 @router.get("/appointment-types")
 def get_appointment_types(
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     types = (
         db.query(AppointmentType)
@@ -153,7 +153,7 @@ def get_appointment_types(
 def get_departments(
     visited_only: bool     = Query(default=False),
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     query = db.query(SyncDepartment).filter(SyncDepartment.is_active == True)
 
@@ -179,7 +179,7 @@ def get_departments(
 def get_doctors(
     department_code: Optional[str] = Query(default=None),
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     query = db.query(SyncDoctor).filter(SyncDoctor.is_active == True)
     if department_code:
@@ -199,7 +199,7 @@ def get_doctors(
 @router.get("/appointments")
 def list_appointments(
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     pid = _require_patient(current_user)
     appts = (
@@ -217,7 +217,7 @@ def get_available_slots(
     doctor_id:       Optional[str] = Query(default=None),
     department_code: Optional[str] = Query(default=None),
     current_user:    dict          = Depends(get_current_user),
-    db:              DbSession     = Depends(get_db),
+    db:              DbSession     = Depends(get_read_db),
 ):
     """날짜·의사·진료과 기준 예약 가능 슬롯 조회 (09:00~17:30, 30분 간격)."""
     try:
@@ -265,7 +265,7 @@ def get_available_slots(
 def get_appointment(
     appointment_id: str,
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     pid = _require_patient(current_user)
     try:
@@ -524,7 +524,7 @@ class UpdateProfileRequest(BaseModel):
 @router.get("/my-profile")
 def get_my_profile(
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     """본인 이메일 + 비식별 인적정보 조회."""
     user = db.query(User).filter(User.user_id == current_user["sub"]).first()
@@ -567,7 +567,7 @@ def update_my_profile(
 def get_wards_availability(
     room_type:    Optional[str] = Query(default=None, description="single | double | shared"),
     current_user: dict          = Depends(get_current_user),
-    db:           DbSession     = Depends(get_db),
+    db:           DbSession     = Depends(get_read_db),
 ):
     """가용 병상이 있는 병동 목록 조회 (입원 예약 병동 선택용)."""
     q = db.query(SyncWard).filter(SyncWard.available_beds > 0)
