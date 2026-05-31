@@ -8,10 +8,15 @@ output "cluster_reader_endpoint" {
   value       = aws_rds_cluster.main.reader_endpoint
 }
 
-# output "proxy_endpoint" {
-#   description = "RDS Proxy 엔드포인트 (App 서버 연결용)"
-#   value       = aws_db_proxy.main.endpoint
-# }
+output "proxy_endpoint" {
+  description = "RDS Proxy Writer 엔드포인트 — INSERT/UPDATE/DELETE 전용"
+  value       = aws_db_proxy.main.endpoint
+}
+
+output "proxy_reader_endpoint" {
+  description = "RDS Proxy Reader 엔드포인트 — SELECT 전용"
+  value       = aws_db_proxy_endpoint.reader.endpoint
+}
 
 output "cluster_id" {
   description = "Aurora 클러스터 ID"
