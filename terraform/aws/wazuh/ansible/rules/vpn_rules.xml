@@ -1,0 +1,33 @@
+<group name="vpn,ipsec,aws,">
+
+  <!-- 기록용 — CloudWatch Alarm이 Slack 담당 -->
+  <rule id="100300" level="7">
+    <decoded_as>json</decoded_as>
+    <field name="ike_phase1_state">^Down$</field>
+    <description>VPN 터널 DOWN 로그 기록</description>
+    <group>vpn,tunnel_down,</group>
+  </rule>
+
+  <rule id="100302" level="7">
+    <decoded_as>json</decoded_as>
+    <field name="details">DPD timed out</field>
+    <description>VPN DPD 타임아웃 로그 기록</description>
+    <group>vpn,dpd_timeout,</group>
+  </rule>
+
+  <rule id="100303" level="7">
+    <decoded_as>json</decoded_as>
+    <field name="ike_phase1_state">^Established$</field>
+    <description>VPN 터널 수립 완료 로그 기록</description>
+    <group>vpn,tunnel_up,</group>
+  </rule>
+
+  <!-- 보안 이벤트 — Wazuh → Slack -->
+  <rule id="100301" level="12">
+    <decoded_as>json</decoded_as>
+    <field name="details">pre-shared key mismatch</field>
+    <description>VPN PSK 불일치 탐지 — 무단 접속 시도 가능성</description>
+    <group>vpn,psk_mismatch,</group>
+  </rule>
+
+</group>

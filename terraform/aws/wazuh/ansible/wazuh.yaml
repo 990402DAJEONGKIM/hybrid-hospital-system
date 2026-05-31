@@ -240,6 +240,8 @@
         - local_rules.xml
         - rds_rules.xml
         - onprem_rules.xml
+        - cloudsql_rules.xml
+        - vpn_rules.xml
       tags: config
 
     # 1. ecs-ec2 그룹 생성
