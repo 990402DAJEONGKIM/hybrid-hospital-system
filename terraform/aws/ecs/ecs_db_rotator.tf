@@ -107,6 +107,15 @@ resource "aws_iam_role_policy" "ecs_db_rotator" {
         Resource = [data.aws_rds_cluster.main.master_user_secret[0].secret_arn]
       },
       {
+        # Proxy auth 시크릿 업데이트 (ALTER USER 후 비밀번호 동기화)
+        Effect   = "Allow"
+        Action   = ["secretsmanager:PutSecretValue"]
+        Resource = [
+          data.tfe_outputs.secrets.values.proxy_patient_user_secret_arn,
+          data.tfe_outputs.secrets.values.proxy_staff_user_secret_arn,
+        ]
+      },
+      {
         # KMS 복호화 (시크릿 암호화 키)
         Effect = "Allow"
         Action = ["kms:Decrypt", "kms:GenerateDataKey"]
@@ -148,8 +157,9 @@ resource "aws_lambda_function" "ecs_db_rotator" {
 
   environment {
     variables = {
-      # hospital_user AWS 관리형 시크릿 ARN — ALTER USER 실행 시 사용
-      MASTER_SECRET_ARN = data.aws_rds_cluster.main.master_user_secret[0].secret_arn
+      MASTER_SECRET_ARN        = data.aws_rds_cluster.main.master_user_secret[0].secret_arn
+      PROXY_PATIENT_SECRET_ARN = data.tfe_outputs.secrets.values.proxy_patient_user_secret_arn
+      PROXY_STAFF_SECRET_ARN   = data.tfe_outputs.secrets.values.proxy_staff_user_secret_arn
     }
   }
 

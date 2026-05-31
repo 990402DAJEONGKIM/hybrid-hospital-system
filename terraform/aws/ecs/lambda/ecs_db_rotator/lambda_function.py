@@ -14,7 +14,15 @@ logger.setLevel(logging.INFO)
 sm = boto3.client('secretsmanager')
 
 # hospital_user(master) 시크릿 ARN — ALTER USER 실행에 사용
-MASTER_SECRET_ARN = os.environ['MASTER_SECRET_ARN']
+MASTER_SECRET_ARN        = os.environ['MASTER_SECRET_ARN']
+PROXY_PATIENT_SECRET_ARN = os.environ.get('PROXY_PATIENT_SECRET_ARN')
+PROXY_STAFF_SECRET_ARN   = os.environ.get('PROXY_STAFF_SECRET_ARN')
+
+# username → Proxy auth 시크릿 ARN 매핑
+PROXY_SECRET_MAP = {
+    'ecs_patient_user': PROXY_PATIENT_SECRET_ARN,
+    'ecs_staff_user':   PROXY_STAFF_SECRET_ARN,
+}
 
 
 def lambda_handler(event, context):
@@ -141,6 +149,18 @@ def set_secret(secret_id, token):
         logger.info(f"ALTER USER 완료: {new_db['username']}")
     finally:
         conn.close()
+
+    # Aurora 비밀번호 변경 후 Proxy auth 시크릿도 동기화
+    proxy_arn = PROXY_SECRET_MAP.get(new_db['username'])
+    if proxy_arn:
+        sm.put_secret_value(
+            SecretId=proxy_arn,
+            SecretString=json.dumps({
+                'username': new_db['username'],
+                'password': new_db['password'],
+            })
+        )
+        logger.info(f"Proxy auth 시크릿 업데이트 완료: {new_db['username']}")
 
 
 def test_secret(secret_id, token):
