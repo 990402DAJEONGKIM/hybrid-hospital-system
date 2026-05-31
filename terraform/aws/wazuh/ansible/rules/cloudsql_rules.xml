@@ -1,0 +1,35 @@
+<group name="cloudsql,audit,gcp,">
+
+  <!-- Cloud SQL DB 접속 탐지 (ISMS-P 2.9.1) -->
+  <rule id="100200" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="action_type">^LOGIN$</field>
+    <description>Cloud SQL DB 접속 — source_ip: $(source_ip)</description>
+    <group>cloudsql,login,</group>
+  </rule>
+
+  <!-- Cloud SQL DB 접속 종료 -->
+  <rule id="100201" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="action_type">^LOGOUT$</field>
+    <description>Cloud SQL DB 접속 종료 — source_ip: $(source_ip)</description>
+    <group>cloudsql,logout,</group>
+  </rule>
+
+  <!-- Cloud SQL 관리자 작업 (설정변경, 재시작 등) -->
+  <rule id="100202" level="8">
+    <decoded_as>json</decoded_as>
+    <field name="action_type">^ADMIN_</field>
+    <description>Cloud SQL 관리자 작업 탐지 — action: $(action_type)</description>
+    <group>cloudsql,admin,</group>
+  </rule>
+
+  <!-- 예상치 못한 외부 IP 접속 (보안 이벤트) -->
+  <rule id="100203" level="12">
+    <if_sid>100200</if_sid>
+    <field name="source_ip" negate="yes">^127\.|^172\.29\.</field>
+    <description>Cloud SQL 외부 IP 접속 탐지 — source_ip: $(source_ip)</description>
+    <group>cloudsql,login,suspicious,</group>
+  </rule>
+
+</group>

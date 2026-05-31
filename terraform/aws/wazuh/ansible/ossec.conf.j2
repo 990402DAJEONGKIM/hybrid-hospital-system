@@ -199,4 +199,53 @@
   </wodle>
 
 
+  <!-- ======================================= -->
+  <!-- VPN 로그 수집 (CloudWatch)              -->
+  <!-- ISMS-P 2.9.1: 네트워크 접근 로그 365일  -->
+  <!-- ======================================= -->
+  <wodle name="aws-s3">
+    <disabled>no</disabled>
+    <interval>5m</interval>
+    <run_on_start>yes</run_on_start>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/vendedlogs/vpn/aws-vpn-01</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
+  </wodle>
+
+  <wodle name="aws-s3">
+    <disabled>no</disabled>
+    <interval>5m</interval>
+    <run_on_start>yes</run_on_start>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/vendedlogs/vpn/aws-vpn-gcp</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
+  </wodle>
+
+  <!-- ======================================= -->
+  <!-- WAF 로그 수집 (CloudWatch)              -->
+  <!-- ISMS-P 2.9.1: 웹 접근 로그 365일        -->
+  <!-- ======================================= -->
+  <wodle name="aws-s3">
+    <disabled>no</disabled>
+    <interval>5m</interval>
+    <run_on_start>yes</run_on_start>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>aws-waf-logs-patient-alb</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
+  </wodle>
+
+  <wodle name="aws-s3">
+    <disabled>no</disabled>
+    <interval>5m</interval>
+    <run_on_start>yes</run_on_start>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>aws-waf-logs-staff-alb</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
+  </wodle>
+
+
 </ossec_config>

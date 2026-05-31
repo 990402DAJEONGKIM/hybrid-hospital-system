@@ -88,3 +88,56 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-manager-01" {
 resource "aws_sns_topic" "aws-wazuh-cw-alerts-01" {
   name = "aws-wazuh-cw-alerts-01"
 }
+
+
+# VPN OnPrem 터널 DOWN 알람
+# 공식문서: https://docs.aws.amazon.com/vpn/latest/s2svpn/monitoring-overview-vpn.html
+data "aws_vpn_connection" "aws-vpn-onprem-01" {
+  filter {
+    name   = "tag:Name"
+    values = ["aws-vpn-01"]
+  }
+}
+
+data "aws_vpn_connection" "aws-vpn-gcp-01" {
+  filter {
+    name   = "tag:Name"
+    values = ["aws-vpn-gcp"]
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "aws-cw-vpn-onprem-down-01" {
+  alarm_name          = "aws-cw-vpn-onprem-down-01"
+  namespace           = "AWS/VPN"
+  metric_name         = "TunnelState"
+  dimensions = {
+    VpnId = data.aws_vpn_connection.aws-vpn-onprem-01.id
+  }
+  period              = 60
+  evaluation_periods  = 2
+  statistic           = "Minimum"
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  tags = { Name = "aws-cw-vpn-onprem-down-01" }
+}
+
+resource "aws_cloudwatch_metric_alarm" "aws-cw-vpn-gcp-down-01" {
+  alarm_name          = "aws-cw-vpn-gcp-down-01"
+  namespace           = "AWS/VPN"
+  metric_name         = "TunnelState"
+  dimensions = {
+    VpnId = data.aws_vpn_connection.aws-vpn-gcp-01.id
+  }
+  period              = 60
+  evaluation_periods  = 2
+  statistic           = "Minimum"
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  tags = { Name = "aws-cw-vpn-gcp-down-01" }
+}

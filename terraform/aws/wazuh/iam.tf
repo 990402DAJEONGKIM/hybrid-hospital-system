@@ -95,7 +95,15 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
           "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/patient",
           "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/patient:*",
           "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/staff",
-          "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/staff:*"
+          "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/staff:*",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/vendedlogs/vpn/aws-vpn-01",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/vendedlogs/vpn/aws-vpn-01:*",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/vendedlogs/vpn/aws-vpn-gcp",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/vendedlogs/vpn/aws-vpn-gcp:*",
+          "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-patient-alb",
+          "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-patient-alb:*",
+          "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-staff-alb",
+          "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-staff-alb:*",
         ]
       },
       # aws-wazuh-s3 인라인 정책에 추가
