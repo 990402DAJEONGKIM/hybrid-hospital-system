@@ -110,3 +110,37 @@ resource "aws_secretsmanager_secret" "api_key_v2" {
   tags = merge(local.common_tags, { Name = "aws-ecs-api-key-secret" })
 }
 
+
+# ─────────────────────────────────────────────────────────
+# RDS Proxy 유저 자격증명 — 환자 포털 (ecs_patient_user)
+# 형식: {"username": "ecs_patient_user", "password": "..."}
+# Proxy auth 등록용 — DATABASE_URL 시크릿과 별개
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "proxy_patient_user" {
+  name        = "aws-rds-proxy-patient-user-secret"
+  description = "RDS Proxy 환자 앱 유저 자격증명 (ecs_patient_user)"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-rds-proxy-patient-user-secret" })
+}
+
+# ─────────────────────────────────────────────────────────
+# RDS Proxy 유저 자격증명 — 의료진 포털 (ecs_staff_user)
+# 형식: {"username": "ecs_staff_user", "password": "..."}
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "proxy_staff_user" {
+  name        = "aws-rds-proxy-staff-user-secret"
+  description = "RDS Proxy 의료진 앱 유저 자격증명 (ecs_staff_user)"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-rds-proxy-staff-user-secret" })
+}
+
