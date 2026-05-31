@@ -91,8 +91,8 @@ resource "aws_launch_template" "ecs" {
 
 # ─────────────────────────────────────────────────────────
 # Auto Scaling Group
-# 상시 2대 운영, 트래픽 급증 시 1대 추가 → 최대 3대
-# 2대 상시 유지: 롤링 배포 시 다운타임 없음 (1대가 트래픽 처리)
+# 평소 1대 운영 (t3.large 1대에 patient + staff 태스크 모두 수용)
+# 트래픽 급증 시 Capacity Provider가 자동 추가 → 최대 4대
 # ─────────────────────────────────────────────────────────
 resource "aws_autoscaling_group" "ecs" {
   name                = "aws-ecs-asg-01"
