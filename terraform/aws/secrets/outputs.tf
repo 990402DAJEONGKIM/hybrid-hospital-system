@@ -92,3 +92,15 @@ output "api_key_secret_arn" {
   value       = aws_secretsmanager_secret.api_key_v2.arn
   sensitive   = true
 }
+
+output "proxy_patient_user_secret_arn" {
+  description = "aws-rds-proxy-patient-user-secret ARN (RDS Proxy auth용)"
+  value       = aws_secretsmanager_secret.proxy_patient_user.arn
+  sensitive   = true
+}
+
+output "proxy_staff_user_secret_arn" {
+  description = "aws-rds-proxy-staff-user-secret ARN (RDS Proxy auth용)"
+  value       = aws_secretsmanager_secret.proxy_staff_user.arn
+  sensitive   = true
+}
