@@ -390,7 +390,12 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
       #          data.tfe_outputs.secrets.values.api_user_secret_arn,
       #        ]
       # ───────────────────────────────────────────────────────────
-      Resource = ["*"]  }]
+      Resource = [
+        aws_rds_cluster.main.master_user_secret[0].secret_arn,
+        data.tfe_outputs.secrets.values.proxy_patient_user_secret_arn,
+        data.tfe_outputs.secrets.values.proxy_staff_user_secret_arn,
+      ]
+    }]
   })
 }
 
@@ -408,12 +413,22 @@ resource "aws_db_proxy" "main" {
   vpc_security_group_ids = [aws_security_group.proxy.id]
   vpc_subnet_ids         = var.db_subnet_ids
 
-  # Aurora 관리형 마스터 유저 시크릿 (manage_master_user_password = true)
-  # 앱 유저 시크릿 추가 시: auth 블록을 for_each로 확장
   auth {
     auth_scheme = "SECRETS"
     iam_auth    = "DISABLED"
     secret_arn  = aws_rds_cluster.main.master_user_secret[0].secret_arn
+  }
+
+  auth {
+    auth_scheme = "SECRETS"
+    iam_auth    = "DISABLED"
+    secret_arn  = data.tfe_outputs.secrets.values.proxy_patient_user_secret_arn
+  }
+
+  auth {
+    auth_scheme = "SECRETS"
+    iam_auth    = "DISABLED"
+    secret_arn  = data.tfe_outputs.secrets.values.proxy_staff_user_secret_arn
   }
 
   tags = merge(local.common_tags, { Name = "aws-rds-proxy-01" })
