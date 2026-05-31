@@ -85,10 +85,7 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   vpc_id            = aws_vpc.aws-vpc-01.id
   service_name      = "com.amazonaws.${data.aws_region.current.region}.secretsmanager"
   vpc_endpoint_type = "Interface"
-  subnet_ids = concat(
-    [for s in aws_subnet.aws-app-sub : s.id],
-    [for s in aws_subnet.aws-db-sub : s.id],
-  )
+  subnet_ids = [for s in aws_subnet.aws-app-sub : s.id]
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
 
