@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DbSession
 
-from core.database import get_db
+from core.database import get_db, get_read_db
 from core.security import get_current_user, has_permission
 from core.ses import send_appointment_notification
 from models.db import (
@@ -124,7 +124,7 @@ class ManualAppointmentRequest(BaseModel):
 @router.get("/appointment-types")
 def get_appointment_types(
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     """예약 유형 목록 (수동 예약 폼용)."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
@@ -146,7 +146,7 @@ def get_appointment_types(
 def get_doctors(
     department_code: Optional[str] = Query(default=None),
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     """의사 목록 (진료과 필터 선택)."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
@@ -163,7 +163,7 @@ def get_doctors(
 @router.get("/staff/departments")
 def get_departments(
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     """진료과 목록 (달력 레이블 표시용)."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
@@ -179,7 +179,7 @@ def get_departments(
 @router.get("/schedule")
 def get_doctor_schedule(
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     """의사 본인의 예약 일정 조회."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
@@ -200,7 +200,7 @@ def get_doctor_schedule(
 @router.get("/patients")
 def get_managed_patients(
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     """담당 의사가 진료했던 환자 목록 (비식별 정보 기반)."""
     _verify(current_user, db, "VIEW_PATIENT_RECORDS")
@@ -308,7 +308,7 @@ def get_all_appointments(
     appt_date:   Optional[date_type] = Query(default=None),
     status_code: Optional[str]       = Query(default=None),
     current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_db),
+    db:           DbSession = Depends(get_read_db),
 ):
     """전체 예약 목록 조회 (원무과용)."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
@@ -427,7 +427,7 @@ def get_ward_status(
 def get_appointment_detail(
     appointment_id: uuid.UUID,
     current_user:   dict     = Depends(get_current_user),
-    db:             DbSession = Depends(get_db),
+    db:             DbSession = Depends(get_read_db),
 ):
     """예약 단건 상세 조회 (원무과·의사 공용)."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
