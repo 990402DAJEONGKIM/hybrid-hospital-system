@@ -111,7 +111,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-vpn-onprem-down-01" {
   namespace           = "AWS/VPN"
   metric_name         = "TunnelState"
   dimensions = {
-    VpnId = data.aws_vpn_connection.aws-vpn-onprem-01.id
+    VpnId = data.aws_vpn_connection.aws-vpn-onprem-01.vpn_connection_id
   }
   period              = 60
   evaluation_periods  = 2
@@ -129,7 +129,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-vpn-gcp-down-01" {
   namespace           = "AWS/VPN"
   metric_name         = "TunnelState"
   dimensions = {
-    VpnId = data.aws_vpn_connection.aws-vpn-gcp-01.id
+    VpnId = data.aws_vpn_connection.aws-vpn-gcp-01.vpn_connection_id
   }
   period              = 60
   evaluation_periods  = 2
