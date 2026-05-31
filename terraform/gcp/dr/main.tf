@@ -458,3 +458,21 @@ resource "google_logging_project_bucket_config" "default" {
   bucket_id      = "_Default"
   retention_days = 365
 }
+
+# ── Cloud DNS ─────────────────────────────────────────────────────────────────
+
+resource "google_dns_managed_zone" "dr" {
+  name        = var.dns_managed_zone
+  dns_name    = var.dns_record_name
+  description = "DR 앱 전용 DNS zone (dr.mzclinic.cloud)"
+
+  depends_on = [google_project_service.dns]
+}
+
+resource "google_dns_record_set" "dr_app" {
+  name         = var.dns_record_name
+  type         = var.dns_record_type
+  ttl          = var.dns_ttl
+  managed_zone = google_dns_managed_zone.dr.name
+  rrdatas      = local.gcp_dns_rrdatas
+}
