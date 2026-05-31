@@ -216,7 +216,7 @@ RUNEOF
 
     # cron 등록 (1분 주기)
     (crontab -l 2>/dev/null | grep -v audit-collector; \
-     echo "* * * * * /opt/audit-collector/run.sh >> /var/log/audit-collector.log 2>&1") \
+     echo "* * * * * /opt/audit-collector/run.sh >> /var/log/audit-collector-info.log 2>&1") \
     | crontab -
 
     # ── DR Failover 모니터 설치 ──────────────────────────────
