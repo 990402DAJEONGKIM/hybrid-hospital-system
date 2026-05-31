@@ -273,7 +273,7 @@ resource "aws_rds_cluster" "main" {
 
 
 # ─────────────────────────────────────────────
-# Writer 인스턴스
+# Writer 인스턴스 (AZ A)
 # ─────────────────────────────────────────────
 resource "aws_rds_cluster_instance" "writer" {
   identifier              = "aws-aurora-01-instance-1-ap-south-2a"
@@ -295,6 +295,27 @@ resource "aws_rds_cluster_instance" "writer" {
   }
 
   tags = merge(local.common_tags, { Name = "aws-aurora-01-writer", Role = "writer" })
+}
+
+
+# ─────────────────────────────────────────────
+# Reader 인스턴스 (AZ B)
+# ─────────────────────────────────────────────
+resource "aws_rds_cluster_instance" "reader" {
+  identifier           = "aws-aurora-01-instance-2-ap-south-2b"
+  cluster_identifier   = aws_rds_cluster.main.id
+  instance_class       = var.db_instance_class
+  engine               = aws_rds_cluster.main.engine
+  engine_version       = aws_rds_cluster.main.engine_version
+
+  db_subnet_group_name = aws_db_subnet_group.main.name
+
+  availability_zone    = "${var.aws_region}b"
+  promotion_tier       = 1
+
+  monitoring_interval  = 0
+
+  tags = merge(local.common_tags, { Name = "aws-aurora-01-reader", Role = "reader" })
 }
 
 
@@ -375,9 +396,54 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
 
 
 # ─────────────────────────────────────────────
-# RDS Proxy (toggle.sh로 별도 관리 — 주석 해제 후 import)
+# RDS Proxy
 # ─────────────────────────────────────────────
-# resource "aws_db_proxy" "main" { ... }
+resource "aws_db_proxy" "main" {
+  name                   = "aws-rds-proxy-01"
+  debug_logging          = false
+  engine_family          = "POSTGRESQL"
+  idle_client_timeout    = 1800
+  require_tls            = true
+  role_arn               = aws_iam_role.rds_proxy.arn
+  vpc_security_group_ids = [aws_security_group.proxy.id]
+  vpc_subnet_ids         = var.db_subnet_ids
+
+  # Aurora 관리형 마스터 유저 시크릿 (manage_master_user_password = true)
+  # 앱 유저 시크릿 추가 시: auth 블록을 for_each로 확장
+  auth {
+    auth_scheme = "SECRETS"
+    iam_auth    = "DISABLED"
+    secret_arn  = aws_rds_cluster.main.master_user_secret[0].secret_arn
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-rds-proxy-01" })
+}
+
+resource "aws_db_proxy_default_target_group" "main" {
+  db_proxy_name = aws_db_proxy.main.name
+
+  connection_pool_config {
+    max_connections_percent      = 100
+    max_idle_connections_percent = 50
+    connection_borrow_timeout    = 120
+  }
+}
+
+resource "aws_db_proxy_target" "main" {
+  db_proxy_name         = aws_db_proxy.main.name
+  target_group_name     = aws_db_proxy_default_target_group.main.name
+  db_cluster_identifier = aws_rds_cluster.main.id
+}
+
+resource "aws_db_proxy_endpoint" "reader" {
+  db_proxy_name          = aws_db_proxy.main.name
+  db_proxy_endpoint_name = "aws-rds-proxy-01-reader"
+  vpc_subnet_ids         = var.db_subnet_ids
+  vpc_security_group_ids = [aws_security_group.proxy.id]
+  target_role            = "READ_ONLY"
+
+  tags = merge(local.common_tags, { Name = "aws-rds-proxy-01-reader" })
+}
 
 
 # bastion host 용 (by 김다정 2026.05.13)

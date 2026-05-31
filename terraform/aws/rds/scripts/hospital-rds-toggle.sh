@@ -17,6 +17,8 @@ SUBNET_GROUP_NAME="aws-db-subnet-group-01"
 PROXY_SG_NAME="aws-proxy-sg"
 SECRET_NAME_HOSPITAL="aws-secret-rds-hospital-user"
 SECRET_NAME_API="aws-secret-rds-api-user"
+# (by 김다정, 2026.06.01) Reader Endpoint 이름 추가 — start 시 재생성, stop 시 Proxy 삭제와 함께 자동 삭제됨
+READER_ENDPOINT_NAME="aws-rds-proxy-01-reader"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -151,6 +153,29 @@ wait_for_proxy() {
   echo -e "${RED}  타임아웃${NC}"; return 1
 }
 
+# (by 김다정, 2026.06.01) Reader Endpoint 상태 조회
+get_reader_endpoint_status() {
+  aws rds describe-db-proxy-endpoints \
+    --db-proxy-name "$PROXY_NAME" \
+    --db-proxy-endpoint-name "$READER_ENDPOINT_NAME" \
+    --region "$REGION" \
+    --query 'DBProxyEndpoints[0].Status' \
+    --output text 2>/dev/null
+}
+
+# (by 김다정, 2026.06.01) Reader Endpoint available 대기
+wait_for_reader_endpoint() {
+  local elapsed=0
+  echo -e "${CYAN}  Reader Endpoint 대기 중 (목표: available)...${NC}"
+  while [ $elapsed -lt 600 ]; do
+    local s=$(get_reader_endpoint_status)
+    echo -e "  [$(date +%H:%M:%S)] $s"
+    [ "$s" = "available" ] && echo -e "${GREEN}  완료${NC}" && return 0
+    sleep 15; elapsed=$((elapsed+15))
+  done
+  echo -e "${RED}  타임아웃${NC}"; return 1
+}
+
 wait_proxy_deleted() {
   local elapsed=0
   echo -e "${CYAN}  Proxy 삭제 대기 중...${NC}"
@@ -198,6 +223,7 @@ stop_cmd() {
       --db-proxy-name "$PROXY_NAME" \
       --region "$REGION" --output text > /dev/null
     wait_proxy_deleted
+    # (by 김다정, 2026.06.01) Proxy 삭제 시 Reader Endpoint(aws-rds-proxy-01-reader)도 AWS에서 자동 삭제됨
   else
     echo -e "\n${CYAN}[1/2] Proxy 없음 — 건너뜀${NC}"
   fi
@@ -271,6 +297,23 @@ start_cmd() {
       --db-cluster-identifiers "$CLUSTER_ID" \
       --region "$REGION" --output text > /dev/null
     echo -e "${GREEN}  Target 연결 완료${NC}"
+
+    # (by 김다정, 2026.06.01) Reader Endpoint 재생성 — Proxy 재생성 시 함께 생성해야 함
+    echo -e "${YELLOW}  Reader Endpoint 생성 중...${NC}"
+    aws rds create-db-proxy-endpoint \
+      --db-proxy-name "$PROXY_NAME" \
+      --db-proxy-endpoint-name "$READER_ENDPOINT_NAME" \
+      --vpc-subnet-ids $PROXY_SUBNET_IDS \
+      --vpc-security-group-ids "$PROXY_SG_ID" \
+      --target-role READ_ONLY \
+      --region "$REGION" --output text > /dev/null
+    wait_for_reader_endpoint
+
+    # (by 김다정, 2026.06.01) 이 스크립트는 AWS CLI로 Proxy를 직접 생성하므로 Terraform state와 불일치 발생
+    # start 완료 후 아래 명령으로 state 동기화 필요 (TC-aws-rds workspace에서 실행)
+    #   terraform import aws_db_proxy.main aws-rds-proxy-01
+    #   terraform import aws_db_proxy_default_target_group.main aws-rds-proxy-01
+    #   terraform import 'aws_db_proxy_endpoint.reader' 'aws-rds-proxy-01/aws-rds-proxy-01-reader'
   fi
 
   echo -e "\n${GREEN}====== 시작 완료 ======${NC}\n${CYAN}[접속 정보]${NC}"
@@ -286,7 +329,15 @@ start_cmd() {
       --region "$REGION" \
       --query 'DBProxies[0].Endpoint' \
       --output text 2>/dev/null)
-    echo -e "  Proxy: ${GREEN}$pe${NC}"
+    echo -e "  Proxy Writer: ${GREEN}$pe${NC}"
+    # (by 김다정, 2026.06.01) Reader Endpoint URL 출력 추가
+    local re=$(aws rds describe-db-proxy-endpoints \
+      --db-proxy-name "$PROXY_NAME" \
+      --db-proxy-endpoint-name "$READER_ENDPOINT_NAME" \
+      --region "$REGION" \
+      --query 'DBProxyEndpoints[0].Endpoint' \
+      --output text 2>/dev/null)
+    [ -n "$re" ] && [ "$re" != "None" ] && echo -e "  Proxy Reader: ${GREEN}$re${NC}"
   fi
   echo ""
 }
