@@ -51,3 +51,8 @@ variable "cloud_sql_instance" {
   type        = string
   default     = "gcp-cloud-sql"
 }
+
+variable "wazuh_manager_ip" {
+  description = "Wazuh Manager Private IP"
+  type        = string
+}

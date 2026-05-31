@@ -230,6 +230,54 @@ RUNEOF
     else
       echo "DR monitor script not found in GCS, skipping." | logger -t dr-monitor-setup
     fi
+
+    # ── Wazuh Agent 설치 ─────────────────────────────────────
+    # ISMS-P 2.9.1: 보안 이벤트 로그 수집
+    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH \
+      | gpg --no-default-keyring \
+            --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg \
+            --import
+    chmod 644 /usr/share/keyrings/wazuh.gpg
+
+    echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] \
+https://packages.wazuh.com/4.x/apt/ stable main" \
+      | tee /etc/apt/sources.list.d/wazuh.list
+
+    apt-get update -y
+    apt-get install -y wazuh-agent=4.14.5-*
+
+    cat > /var/ossec/etc/ossec.conf << 'WAZUH_EOF'
+<ossec_config>
+  <client>
+    <server>
+      <address>${var.wazuh_manager_ip}</address>
+      <port>1514</port>
+      <protocol>tcp</protocol>
+      <max_retries>100</max_retries>
+      <retry_interval>15</retry_interval>
+    </server>
+    <notify_time>10</notify_time>
+    <time-reconnect>60</time-reconnect>
+    <auto_restart>yes</auto_restart>
+    <enrollment>
+      <enabled>yes</enabled>
+      <manager_address>${var.wazuh_manager_ip}</manager_address>
+      <port>1515</port>
+      <agent_name>gcp-rds-proxy-01</agent_name>
+      <groups>gcp-proxy</groups>
+    </enrollment>
+  </client>
+</ossec_config>
+WAZUH_EOF
+
+    systemctl daemon-reload
+    systemctl enable wazuh-agent
+    systemctl start wazuh-agent
+
+    sed -i "s/^deb/#deb/" /etc/apt/sources.list.d/wazuh.list
+    apt-get update -y
+
+
   SCRIPT
 
   metadata = {
