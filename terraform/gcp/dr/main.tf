@@ -334,6 +334,7 @@ locals {
     "roles/serviceusage.serviceUsageAdmin",
     "roles/dns.admin",
     "roles/cloudsql.viewer",
+    "roles/logging.admin",
   ]
 }
 
