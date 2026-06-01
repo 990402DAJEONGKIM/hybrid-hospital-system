@@ -7,6 +7,10 @@ echo "ECS_CLUSTER=${cluster_name}" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true" >> /etc/ecs/ecs.config
 echo 'ECS_AVAILABLE_LOGGING_DRIVERS=["json-file","awslogs"]' >> /etc/ecs/ecs.config  # 추가
+
+# 260601 박경수 ECS agent 자동시작 일시 중지 (Wazuh 설치 완료 후 수동 시작)
+systemctl stop ecs || true
+
 %{ if wazuh_server_ip != "" }
 # ── Wazuh 에이전트 설치 ──────────────────────────────────
 rpm --import https://packages.wazuh.com/key/GPG-KEY-WAZUH
@@ -59,3 +63,8 @@ systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl start wazuh-agent || true
 %{ endif }
+
+# 260601 박경수  Wazuh 안정화 대기 후 ECS agent 시작
+
+sleep 30
+systemctl start ecs
