@@ -262,6 +262,45 @@ resource "aws_wafv2_web_acl" "staff" {
     block {}
   }
 
+  # ── Rule 0: 로그인 엔드포인트 Rate Limiting — ISMS-P 2.5.4 ─────
+  # 허용 IP라도 /auth/ 에 5분당 100회 초과 시 차단 (내부 브루트포스 방어)
+  # 우선순위 0 — AllowStaffIPs(1)보다 먼저 평가되어 초과 IP를 차단
+  rule {
+    name     = "RateLimitAuthEndpoint"
+    priority = 0
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = var.rate_limit_auth
+        aggregate_key_type = "IP"
+
+        scope_down_statement {
+          byte_match_statement {
+            search_string = "/auth/"
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
+            positional_constraint = "STARTS_WITH"
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "StaffRateLimitAuth"
+      sampled_requests_enabled   = true
+    }
+  }
+
   # ── Rule 1: 허용 IP 통과 — ISMS-P 2.6.1 ────────────────
   rule {
     name     = "AllowStaffIPs"
