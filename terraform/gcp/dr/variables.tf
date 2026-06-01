@@ -188,5 +188,10 @@ variable "failover_mode" {
   validation {
     condition     = contains(["manual", "automatic"], var.failover_mode)
     error_message = "failover_mode는 manual 또는 automatic이어야 합니다."
-  }
+  }  
+}
+variable "cookie_secure" {
+  description = "COOKIE_SECURE 환경변수. HTTPS 적용 전 false, 적용 후 true로 변경"
+  type        = bool
+  default     = false
 }
