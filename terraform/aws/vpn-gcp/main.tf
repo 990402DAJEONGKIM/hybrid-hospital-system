@@ -44,6 +44,18 @@ resource "aws_customer_gateway" "gcp" {
   }
 }
 
+
+# ─────────────────────────────────────────────────────────
+# KMS 키 ARN 참조 (TC-aws-KMS 워크스페이스 output)
+# ─────────────────────────────────────────────────────────
+data "terraform_remote_state" "aws-kms" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-aws-KMS" }
+  }
+}
+
 # ── VPN Connection (IKEv2 강제, PSK 직접 지정) ───────────────
 
 resource "aws_vpn_connection" "gcp" {
@@ -160,4 +172,116 @@ resource "aws_cloudwatch_log_group" "aws-cwl-vpn-gcp-logs" {
   name              = "/aws/vendedlogs/vpn/aws-vpn-gcp"
   retention_in_days = 365
   tags = { Name = "aws-cwl-vpn-gcp-logs" }
+}
+
+
+# ─────────────────────────────────────────────────────────
+# Firehose IAM Role — S3 쓰기 + KMS 암호화 권한
+# TC-VPN과 별도 워크스페이스라 Role 분리 필요
+# ISMS-P 2.5.3 최소 권한 원칙
+# ─────────────────────────────────────────────────────────
+resource "aws_iam_role" "aws-firehose-vpn-gcp-role" {
+  name = "aws-firehose-vpn-gcp-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "firehose.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = { Name = "aws-firehose-vpn-gcp-role" }
+}
+
+resource "aws_iam_role_policy" "aws-firehose-vpn-gcp-policy" {
+  name = "aws-firehose-vpn-gcp-policy"
+  role = aws_iam_role.aws-firehose-vpn-gcp-role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # S3 버킷에 로그 파일 저장 권한
+        Sid    = "S3Write"
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:GetBucketLocation", "s3:ListBucket"]
+        Resource = [
+          "arn:aws:s3:::aws-k2p-storage-01",
+          "arn:aws:s3:::aws-k2p-storage-01/*"
+        ]
+      },
+      {
+        # KMS 키로 S3 저장 파일 암호화 (ISMS-P 2.7.1)
+        Sid    = "KMSEncrypt"
+        Effect = "Allow"
+        Action = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
+      }
+    ]
+  })
+}
+
+# ─────────────────────────────────────────────────────────
+# Firehose — GCP VPN 로그 → S3
+# CloudWatch에서 받은 GCP 터널 이벤트를 S3에 장기보관
+# prefix: vpn/gcp/ (S3 버킷 정책 AllowFirehoseVPN과 일치)
+# ─────────────────────────────────────────────────────────
+resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-vpn-gcp-01" {
+  name        = "aws-firehose-vpn-gcp-01"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn            = aws_iam_role.aws-firehose-vpn-gcp-role.arn
+    bucket_arn          = "arn:aws:s3:::aws-k2p-storage-01"
+    prefix              = "vpn/gcp/"
+    error_output_prefix = "vpn/gcp/errors/"
+    buffering_size      = 5
+    buffering_interval  = 300
+    kms_key_arn         = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
+  }
+
+  tags = { Name = "aws-firehose-vpn-gcp-01" }
+}
+
+# ─────────────────────────────────────────────────────────
+# CloudWatch → Firehose 전달 IAM Role
+# CloudWatch Logs가 Firehose에 로그를 푸시할 때 사용하는 Role
+# ─────────────────────────────────────────────────────────
+resource "aws_iam_role" "aws-cwl-firehose-vpn-gcp-role" {
+  name = "aws-cwl-firehose-vpn-gcp-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "logs.ap-south-2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = { Name = "aws-cwl-firehose-vpn-gcp-role" }
+}
+
+resource "aws_iam_role_policy" "aws-cwl-firehose-vpn-gcp-policy" {
+  name = "aws-cwl-firehose-vpn-gcp-policy"
+  role = aws_iam_role.aws-cwl-firehose-vpn-gcp-role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      # CloudWatch가 Firehose에 레코드를 전송할 수 있는 권한
+      Effect   = "Allow"
+      Action   = ["firehose:PutRecord", "firehose:PutRecordBatch"]
+      Resource = aws_kinesis_firehose_delivery_stream.aws-firehose-vpn-gcp-01.arn
+    }]
+  })
+}
+
+# ─────────────────────────────────────────────────────────
+# CloudWatch Subscription Filter — GCP VPN 로그 → Firehose
+# /aws/vendedlogs/vpn/aws-vpn-gcp 로그그룹의 모든 이벤트를
+# Firehose로 실시간 전달 (filter_pattern="" = 전체 전달)
+# ─────────────────────────────────────────────────────────
+resource "aws_cloudwatch_log_subscription_filter" "aws-cwl-vpn-gcp-to-s3" {
+  name            = "aws-cwl-vpn-gcp-to-s3"
+  log_group_name  = aws_cloudwatch_log_group.aws-cwl-vpn-gcp-logs.name
+  filter_pattern  = ""
+  destination_arn = aws_kinesis_firehose_delivery_stream.aws-firehose-vpn-gcp-01.arn
+  role_arn        = aws_iam_role.aws-cwl-firehose-vpn-gcp-role.arn
 }
