@@ -64,6 +64,7 @@ resource "aws_iam_role_policy" "vault_rotator_secrets" {
       Resource = [
         aws_secretsmanager_secret.vault_lambda_approle_v2.arn,
         "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:rds!cluster-1073d242*",
+        aws_secretsmanager_secret.jwt_secret_v2.arn,
       ]
     }]
   })
@@ -99,7 +100,9 @@ resource "aws_lambda_function" "vault_rotator" {
     variables = {
       VAULT_APPROLE_SECRET_ID = aws_secretsmanager_secret.vault_lambda_approle_v2.name
       RDS_SECRET_ID           = "rds!cluster-1073d242-a1f9-49fa-8855-054d05d6af5b"
+      JWT_SECRET_ID           = aws_secretsmanager_secret.jwt_secret_v2.name  
       VAULT_DB_CONFIG_PATH    = "database/config/rds-hospital"
+      VAULT_AUTH_SECRET_PATH  = "secret/data/hospital-auth"    
       RDS_HOST                = "aws-aurora-01.cluster-cjsaws8mcmwn.ap-south-2.rds.amazonaws.com"
       AWS_REGION_NAME         = var.aws_region
     }
@@ -116,18 +119,22 @@ resource "aws_lambda_function" "vault_rotator" {
 # ─────────────────────────────────────────────────────────
 resource "aws_cloudwatch_event_rule" "rds_rotation_to_vault" {
   name        = local.vault_rotator_eb_rule
-  description = "RDS 마스터 계정 로테이션 성공 시 Vault DB config 업데이트 트리거"
+  description = "RDS 로테이션 및 JWT Secret 변경 시 Vault 자동 업데이트 트리거"
 
   event_pattern = jsonencode({
     source      = ["aws.secretsmanager"]
     detail-type = ["AWS API Call via CloudTrail"]
     detail = {
-      eventName = ["RotationSucceeded"]
+      eventName = ["RotationSucceeded", "PutSecretValue"]
       additionalEventData = {
-        SecretId = ["rds!cluster-1073d242-a1f9-49fa-8855-054d05d6af5b"]
+        SecretId = [
+          "rds!cluster-1073d242-a1f9-49fa-8855-054d05d6af5b",
+          aws_secretsmanager_secret.jwt_secret_v2.name
+        ]
       }
     }
   })
+
 
   tags = local.common_tags
 }
@@ -173,3 +180,5 @@ resource "aws_lambda_permission" "eventbridge_vault_rotator" {
 #   aws iam delete-role \
 #     --role-name hospital-lambda-vault-rotator-role
 # ─────────────────────────────────────────────────────────
+
+
