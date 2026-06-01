@@ -165,10 +165,10 @@ jobs:
             sleep 30
           done
 
-  # ── 2단계: staff-service 배포 (build 완료 후 병렬 실행) ───────
+  # ── 3단계: staff-service 배포 (patient 완료 후 순차 실행) ───────
   deploy-staff:
     name: Deploy staff-service
-    needs: build
+    needs: [build, deploy-patient]
     runs-on: ubuntu-latest
 
     permissions:
