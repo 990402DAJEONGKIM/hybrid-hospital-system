@@ -113,11 +113,11 @@ resource "aws_ecs_task_definition" "patient" {
         container_name = "nginx-patient"
       }
       logConfiguration = {
-      logDriver = "json-file"
-      options = {
-        "labels"   = "container_name"
-        "max-size" = "10m"
-        "max-file" = "3"
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/patient"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "nginx"
         }
       }
 
@@ -142,11 +142,11 @@ resource "aws_ecs_task_definition" "patient" {
       ]
       secrets = local.patient_secrets
       logConfiguration = {
-        logDriver = "json-file"
+        logDriver = "awslogs"
         options = {
-          "labels"   = "container_name"
-          "max-size" = "10m"
-          "max-file" = "3"
+          "awslogs-group"         = "/ecs/patient"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "api"
         }
       }
     }
@@ -180,11 +180,11 @@ resource "aws_ecs_task_definition" "staff" {
         container_name = "nginx-staff"
       }
       logConfiguration = {
-        logDriver = "json-file"
+        logDriver = "awslogs"
         options = {
-          "labels"   = "container_name"
-          "max-size" = "10m"
-          "max-file" = "3"
+          "awslogs-group"         = "/ecs/staff"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "nginx"
         }
       }
 
@@ -209,11 +209,11 @@ resource "aws_ecs_task_definition" "staff" {
       ]
       secrets = local.staff_secrets
       logConfiguration = {
-        logDriver = "json-file"
+        logDriver = "awslogs"
         options = {
-          "labels"   = "container_name"
-          "max-size" = "10m"
-          "max-file" = "3"
+          "awslogs-group"         = "/ecs/staff"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "api"
         }
       }
     }
