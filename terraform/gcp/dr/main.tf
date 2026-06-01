@@ -232,6 +232,7 @@ resource "google_compute_instance_template" "dr_app" {
       allowed_origins         = local.allowed_origins
       enable_ops_agent        = var.enable_ops_agent
       app_port                = local.app_port
+      cookie_secure           = var.cookie_secure
     })
   }
 
@@ -302,7 +303,7 @@ resource "google_compute_global_forwarding_rule" "dr_app" {
   name                  = "gcp-dr-reservation-http"
   ip_address            = google_compute_global_address.dr_lb.id
   port_range            = "80"
-  target                = google_compute_target_http_proxy.dr_app.id
+  target                = google_compute_target_http_proxy.dr_app_redirect.id
   load_balancing_scheme = "EXTERNAL_MANAGED"
 }
 
