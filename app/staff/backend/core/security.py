@@ -20,6 +20,7 @@ _DEFAULT_PW_EXPIRE_DAYS = 90
 load_dotenv()
 
 JWT_SECRET    = os.getenv("JWT_SECRET", "changeme")
+JWT_SECRET_PREVIOUS = os.getenv("JWT_SECRET_PREVIOUS", "")  # 추가 260601 박경수 수정
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 API_KEY       = os.getenv("API_KEY", "")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
@@ -67,10 +68,14 @@ def create_access_token(payload: dict, expires_in: int = 1800) -> str:
 
 
 def decode_access_token(token: str) -> dict:
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except JWTError:
-        raise HTTPException(status_code=401, detail="유효하지 않은 인증입니다. 다시 로그인하세요.")
+    for secret in filter(None, [JWT_SECRET, JWT_SECRET_PREVIOUS]):
+        try:
+            return jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
+        except JWTError:
+            continue
+    raise HTTPException(status_code=401, detail="유효하지 않은 인증입니다. 다시 로그인하세요.")
+
+    # 260601 박경수 수정 - JWT_SECRET과 JWT_SECRET_PREVIOUS 모두 실패 시 401 예외 발생하도록 변경
 
 
 def get_current_user(
