@@ -22,7 +22,7 @@ resource "aws_guardduty_detector" "aws-gd" {
 resource "aws_guardduty_publishing_destination" "aws-gd-s3" {
   detector_id     = aws_guardduty_detector.aws-gd.id
   destination_type = "S3"  
-  destination_arn  = "arn:aws:s3:::aws-k2p-storage-01/guardduty/"
+  destination_arn  = "arn:aws:s3:::aws-k2p-storage-01"
   kms_key_arn     =  data.terraform_remote_state.kms.outputs.s3_kms_key_arn
 
 
