@@ -83,12 +83,20 @@ run_import() {
 
   cd "$TF_DIR" || { echo -e "${RED}[ERROR] 디렉터리 이동 실패: $TF_DIR${NC}"; exit 1; }
 
+  # (추가 by 김다정, 2026.06.01) stop → start 후 구 Proxy가 state에 남아 있으면 import 실패
+  # import 전에 state rm 으로 먼저 제거 (이미 없으면 무시)
+  echo -e "${CYAN}[사전 정리] 기존 state 항목 제거 (있을 경우만)...${NC}"
+  terraform state rm aws_db_proxy.main                    2>/dev/null && echo -e "  aws_db_proxy.main 제거됨" || true
+  terraform state rm aws_db_proxy_default_target_group.main 2>/dev/null && echo -e "  aws_db_proxy_default_target_group.main 제거됨" || true
+  terraform state rm 'aws_db_proxy_endpoint.reader'       2>/dev/null && echo -e "  aws_db_proxy_endpoint.reader 제거됨" || true
+  echo ""
+
   # 1. aws_db_proxy.main
   echo -e "${CYAN}[1/3] aws_db_proxy.main import...${NC}"
   if terraform import aws_db_proxy.main "$PROXY_NAME"; then
     echo -e "${GREEN}  완료${NC}"
   else
-    echo -e "${RED}  [ERROR] import 실패 — 이미 state에 있거나 TFC 인증을 확인하세요.${NC}"
+    echo -e "${RED}  [ERROR] import 실패 — TFC 인증을 확인하세요.${NC}"
     exit 1
   fi
   echo ""
