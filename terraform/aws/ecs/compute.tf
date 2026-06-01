@@ -132,7 +132,7 @@ resource "aws_autoscaling_group" "ecs" {
   warm_pool {
     pool_state                  = "Stopped"
     min_size                    = 1
-    max_group_prepared_capacity = 2
+    max_group_prepared_capacity = 1
 
     instance_reuse_policy {
       reuse_on_scale_in = true
