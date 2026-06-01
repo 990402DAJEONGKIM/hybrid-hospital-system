@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 load_dotenv()
 
 JWT_SECRET    = os.getenv("JWT_SECRET", "changeme-onprem")
+JWT_SECRET_PREVIOUS = os.getenv("JWT_SECRET_PREVIOUS", "")  # 260601 박경수 추가 - JWT 듀얼 키 grace period
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 # 온프레미스 내부망 — HTTP 허용, COOKIE_SECURE 기본값 false
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
@@ -47,11 +48,12 @@ def create_access_token(payload: dict, expires_in: int = 1800) -> str:
 
 
 def decode_access_token(token: str) -> dict:
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except JWTError:
-        raise HTTPException(status_code=401, detail="유효하지 않은 인증입니다. 다시 로그인하세요.")
-
+    for secret in filter(None, [JWT_SECRET, JWT_SECRET_PREVIOUS]):
+        try:
+            return jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
+        except JWTError:
+            continue
+    raise HTTPException(status_code=401, detail="유효하지 않은 인증입니다. 다시 로그인하세요.")
 
 def get_current_user(
     access_token: str | None = Cookie(default=None),

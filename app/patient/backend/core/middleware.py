@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.database import SessionLocal
-from core.security import JWT_ALGORITHM, JWT_SECRET
+from core.security import JWT_ALGORITHM, JWT_SECRET, JWT_SECRET_PREVIOUS  # 260601 박경수 수정 - JWT_SECRET_PREVIOUS 추가
 
 SESSION_WARN_SECONDS = 300  # 세션 만료 5분 전 경고
 
@@ -90,10 +90,13 @@ def _decode_token_silent(request: Request) -> dict:
     token = request.cookies.get("access_token")
     if not token:
         return {}
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except JWTError:
-        return {}
+    # 260601 박경수 수정 - current 키 실패 시 previous 키로 재시도 (JWT 로테이션 grace period)
+    for secret in filter(None, [JWT_SECRET, JWT_SECRET_PREVIOUS]):
+        try:
+            return jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
+        except JWTError:
+            continue
+    return {}
 
 
 def _get_client_ip(request: Request) -> str | None:
@@ -119,16 +122,21 @@ class SessionExpiryMiddleware(BaseHTTPMiddleware):
         if not token:
             return response
 
-        try:
-            payload   = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            exp       = payload.get("exp")
+        # 260601 박경수 수정 - current 키 실패 시 previous 키로 재시도 (JWT 로테이션 grace period)
+        payload = None
+        for secret in filter(None, [JWT_SECRET, JWT_SECRET_PREVIOUS]):
+            try:
+                payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
+                break
+            except JWTError:
+                continue
+        if payload:
+            exp = payload.get("exp")
             if exp:
                 remaining = int(exp - datetime.now(timezone.utc).timestamp())
                 if 0 < remaining < SESSION_WARN_SECONDS:
                     response.headers["X-Session-Expiring-Soon"]     = "true"
                     response.headers["X-Session-Remaining-Seconds"] = str(remaining)
-        except JWTError:
-            pass
 
         return response
 
@@ -167,4 +175,3 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             pass  # 감사 로그 실패가 실제 응답에 영향을 주지 않도록
 
         return response
-
