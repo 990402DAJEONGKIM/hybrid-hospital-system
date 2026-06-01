@@ -42,6 +42,9 @@ resource "aws_customer_gateway" "gcp" {
   tags = {
     Name = "aws-cgw-gcp"
   }
+    lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # ── VPN Connection (IKEv2 강제, PSK 직접 지정) ───────────────
