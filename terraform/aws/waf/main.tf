@@ -13,14 +13,14 @@
 # =========================================================
 
 
-# ─────────────────────────────────────────────────────────
-# CloudWatch Log Group — WAF 로그 (ISMS-P 2.9.1)
-# WAF 로그 그룹명은 반드시 "aws-waf-logs-" 접두사 필요
-# ─────────────────────────────────────────────────────────
-resource "aws_cloudwatch_log_group" "waf" {
-  name              = "aws-waf-logs-patient-alb"
-  retention_in_days = var.waf_log_retention_days
-}
+# # ─────────────────────────────────────────────────────────
+# # CloudWatch Log Group — WAF 로그 (ISMS-P 2.9.1)
+# # WAF 로그 그룹명은 반드시 "aws-waf-logs-" 접두사 필요
+# # ─────────────────────────────────────────────────────────
+# resource "aws_cloudwatch_log_group" "waf" {
+#   name              = "aws-waf-logs-patient-alb"
+#   retention_in_days = var.waf_log_retention_days
+# }
 
 
 # ─────────────────────────────────────────────────────────
@@ -189,18 +189,47 @@ resource "aws_wafv2_web_acl_association" "patient" {
 # ─────────────────────────────────────────────────────────
 # WAF 로그 → CloudWatch 연결 (ISMS-P 2.9.1)
 # ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl_logging_configuration" "patient" {
-  log_destination_configs = [aws_cloudwatch_log_group.waf.arn]
-  resource_arn            = aws_wafv2_web_acl.patient.arn
-}
+resource "aws_wafv2_web_acl_logging_configuration" "aws-waf-patient-logging" {
+  log_destination_configs = [
+    aws_kinesis_firehose_delivery_stream.aws-firehose-waf-patient.arn
+  ]
+  resource_arn = aws_wafv2_web_acl.patient.arn
 
+  logging_filter {
+    default_behavior = "DROP"
+    filter {
+      behavior    = "KEEP"
+      requirement = "MEETS_ANY"
+      condition {
+        action_condition {
+          action = "BLOCK"
+        }
+      }
+    }
+  }
+}
 
 # ─────────────────────────────────────────────────────────
 # CloudWatch Log Group — staff WAF 로그 (ISMS-P 2.9.1)
 # ─────────────────────────────────────────────────────────
-resource "aws_cloudwatch_log_group" "waf_staff" {
-  name              = "aws-waf-logs-staff-alb"
-  retention_in_days = var.waf_log_retention_days
+resource "aws_wafv2_web_acl_logging_configuration" "aws-waf-staff-logging" {
+  log_destination_configs = [
+    aws_kinesis_firehose_delivery_stream.aws-firehose-waf-staff.arn
+  ]
+  resource_arn = aws_wafv2_web_acl.staff.arn
+  
+  logging_filter {
+    default_behavior = "DROP"
+    filter {
+      behavior    = "KEEP"
+      requirement = "MEETS_ANY"
+      condition {
+        action_condition {
+          action = "BLOCK"
+        }
+      }
+    }
+  }
 }
 
 
@@ -280,7 +309,87 @@ resource "aws_wafv2_web_acl_association" "staff" {
 # ─────────────────────────────────────────────────────────
 # WAF 로그 → CloudWatch 연결 (ISMS-P 2.9.1)
 # ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl_logging_configuration" "staff" {
-  log_destination_configs = [aws_cloudwatch_log_group.waf_staff.arn]
-  resource_arn            = aws_wafv2_web_acl.staff.arn
+# resource "aws_wafv2_web_acl_logging_configuration" "staff" {
+#   log_destination_configs = [aws_cloudwatch_log_group.waf_staff.arn]
+#   resource_arn            = aws_wafv2_web_acl.staff.arn
+# }
+
+
+
+
+# ── Firehose IAM Role (ISMS-P 2.5.3 최소 권한) ───────────────
+# 공식문서: https://docs.aws.amazon.com/firehose/latest/dev/controlling-access.html
+resource "aws_iam_role" "aws-firehose-waf-role" {
+  name = "aws-firehose-waf-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "firehose.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = { Name = "aws-firehose-waf-role" }
+}
+
+resource "aws_iam_role_policy" "aws-firehose-waf-policy" {
+  name = "aws-firehose-waf-policy"
+  role = aws_iam_role.aws-firehose-waf-role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3Write"
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:GetBucketLocation", "s3:ListBucket"]
+        Resource = [
+          "arn:aws:s3:::aws-k2p-storage-01",
+          "arn:aws:s3:::aws-k2p-storage-01/*"
+        ]
+      },
+      {
+        Sid    = "KMSEncrypt"
+        Effect = "Allow"
+        Action = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
+      }
+    ]
+  })
+}
+
+# ── Firehose — patient WAF 로그 → S3 ─────────────────────────
+
+resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-patient" {
+  name        = "aws-waf-logs-patient"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn            = aws_iam_role.aws-firehose-waf-role.arn
+    bucket_arn          = "arn:aws:s3:::aws-k2p-storage-01"
+    prefix              = "waf/patient/"
+    error_output_prefix = "waf/patient/errors/"
+    buffering_size      = 5
+    buffering_interval  = 300
+    kms_key_arn         = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
+  }
+
+  tags = { Name = "aws-firehose-waf-patient" }
+}
+
+# ── Firehose — staff WAF 로그 → S3 ───────────────────────────
+resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-staff" {
+  name        = "aws-waf-logs-staff"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn            = aws_iam_role.aws-firehose-waf-role.arn
+    bucket_arn          = "arn:aws:s3:::aws-k2p-storage-01"
+    prefix              = "waf/staff/"
+    error_output_prefix = "waf/staff/errors/"
+    buffering_size      = 5
+    buffering_interval  = 300
+    kms_key_arn         = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
+  }
+
+  tags = { Name = "aws-firehose-waf-staff" }
 }
