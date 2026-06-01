@@ -208,7 +208,33 @@ sync_schema() {
 
     echo -e "  ${GREEN}스키마 복제 완료${NC}"
 }
+# =============================================================
+# Stale replication slot 정리 (reconnect 전용)
+# VPN 재연결 시 RDS에 slot이 남아있으면 subscription 재생성 실패
+# =============================================================
+drop_stale_slot() {
+    local slot_name="pgl_hospital_rds_provider_rds_to_cloud_sql"
+    echo -e "\n${CYAN}Stale replication slot 정리${NC}"
 
+    cat > /tmp/drop_slot.sql << SQL
+SELECT pg_drop_replication_slot('$slot_name')
+WHERE EXISTS (
+    SELECT 1 FROM pg_replication_slots WHERE slot_name = '$slot_name'
+);
+SQL
+
+    gcloud compute scp /tmp/drop_slot.sql \
+        "${PROXY_VM}:/tmp/" \
+        --zone="$GCP_ZONE" --project="$GCP_PROJECT" --tunnel-through-iap
+
+    gcloud compute ssh "$PROXY_VM" \
+        --zone="$GCP_ZONE" --project="$GCP_PROJECT" --tunnel-through-iap \
+        --command="PGPASSWORD='$RDS_REPL_PASS' psql 'host=$PROXY_IP port=$PROXY_PORT dbname=hospital user=pglogical_repl sslmode=require' -f /tmp/drop_slot.sql" \
+        && echo -e "  ${GREEN}slot 제거 완료${NC}" \
+        || echo -e "  ${YELLOW}slot 없거나 제거 실패 — 계속 진행${NC}"
+
+    rm -f /tmp/drop_slot.sql
+}
 # =============================================================
 # Subscription 생성 (RDS → Cloud SQL)
 # =============================================================
@@ -448,6 +474,7 @@ case "$MODE" in
         echo -e "모드: ${GREEN}reconnect${NC} (VPN 재연결 — subscription만 재생성)"
         echo ""
         resolve_config
+        drop_stale_slot
         create_subscription "false"
         verify
         ;;
