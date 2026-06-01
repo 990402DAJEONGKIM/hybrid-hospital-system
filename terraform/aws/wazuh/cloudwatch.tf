@@ -1,6 +1,45 @@
 #cloudwatch.tf
-resource "aws_sns_topic" "aws-wazuh-cw-alerts-01" {
-  name = "aws-wazuh-cw-alerts-01"
+resource "aws_sns_topic_policy" "aws-wazuh-cw-alerts-01" {
+  arn = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+  policy = jsonencode({
+    Version = "2008-10-17"
+    Id      = "__default_policy_ID"
+    Statement = [
+      {
+        Sid    = "__default_statement_ID"
+        Effect = "Allow"
+        Principal = { AWS = "*" }
+        Action = [
+          "SNS:GetTopicAttributes",
+          "SNS:SetTopicAttributes",
+          "SNS:AddPermission",
+          "SNS:RemovePermission",
+          "SNS:DeleteTopic",
+          "SNS:Subscribe",
+          "SNS:ListSubscriptionsByTopic",
+          "SNS:Publish"
+        ]
+        Resource = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+        Condition = {
+          StringEquals = { "AWS:SourceOwner" = "476293896981" }
+        }
+      },
+      {
+        Sid    = "AllowCloudWatchAlarms"
+        Effect = "Allow"
+        Principal = { Service = "cloudwatch.amazonaws.com" }
+        Action   = "SNS:Publish"
+        Resource = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+      },
+      {
+        Sid    = "AllowEventBridge"
+        Effect = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+        Action   = "SNS:Publish"
+        Resource = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+      }
+    ]
+  })
 }
 
 
@@ -44,4 +83,8 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-manager-01" {
   alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
   ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
   tags = { Name = "aws-wazuh-cw-manager-01", Owner = "st2" }
+}
+
+resource "aws_sns_topic" "aws-wazuh-cw-alerts-01" {
+  name = "aws-wazuh-cw-alerts-01"
 }

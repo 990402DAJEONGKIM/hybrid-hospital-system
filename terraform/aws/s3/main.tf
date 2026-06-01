@@ -106,6 +106,51 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
       noncurrent_days = 7
     }
   }
+
+  # 추가: GitHub Actions 소스코드 백업 90일 보존 (20260530, by 김다정)
+  rule {
+    id     = "github-backup-source-lifecycle"
+    status = "Enabled"
+    filter {
+      prefix = "github-backup/source/"
+    }
+    expiration {
+      days = var.github_backup_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+
+  # 추가: GitHub Actions tfstate 백업 90일 보존 (20260530, by 김다정)
+  rule {
+    id     = "github-backup-tfstate-lifecycle"
+    status = "Enabled"
+    filter {
+      prefix = "github-backup/tfstate/"
+    }
+    expiration {
+      days = var.github_backup_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+
+  # 추가: GitHub Actions 증적 로그 365일 보존 — ISMS-P 2.9.1 (20260530, by 김다정)
+  rule {
+    id     = "github-backup-logs-lifecycle"
+    status = "Enabled"
+    filter {
+      prefix = "github-backup/logs/"
+    }
+    expiration {
+      days = var.github_backup_log_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
 }
 
 
@@ -136,21 +181,7 @@ resource "aws_s3_bucket_policy" "storage" {
           "${aws_s3_bucket.storage.arn}/*"
         ]
       },
-      {
-        Sid       = "DenyNonSSL"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.storage.arn,
-          "${aws_s3_bucket.storage.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      },
+      # AWS CloudTrail이 S3 버킷에 로그를 저장할 수 있도록 권한 부여 (20260530, by 김강환)
       {
         Sid    = "AWSCloudTrailAclCheck"
         Effect = "Allow"
@@ -166,6 +197,149 @@ resource "aws_s3_bucket_policy" "storage" {
         Resource = "${aws_s3_bucket.storage.arn}/cloudtrail/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
         Condition = {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      },
+      # GuardDuty가 S3 버킷에 결과를 저장할 수 있도록 권한 부여 (20260530, by 김강환)
+      # ap-south-2 opt-in 리전 — guardduty.amazonaws.com 대신 리전별 엔드포인트 사용
+      # 공식문서: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_exportfindings.html
+      {
+        Sid    = "AllowGuardDutyGetBucketLocation"
+        Effect = "Allow"
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
+        Action   = "s3:GetBucketLocation"
+        Resource = aws_s3_bucket.storage.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "aws:SourceArn" = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/${data.terraform_remote_state.security.outputs.guardduty_detector_id}"
+          }
+        }
+      },
+      {
+        Sid    = "AllowGuardDutyPutObject"
+        Effect = "Allow"
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/${data.terraform_remote_state.security.outputs.guardduty_detector_id}"
+          }
+        }
+      },
+      {
+        Sid    = "DenyGuardDutyUnencrypted"
+        Effect = "Deny"
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      },
+      {
+        Sid    = "DenyGuardDutyWrongKMSKey"
+        Effect = "Deny"
+        Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption-aws-kms-key-id" = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
+          }
+        }
+      },
+      # AWS Flow Logs 권한 예시 (20260530, by 김강환) - VPC Flow Logs → S3 로그 전달용
+      {
+        Sid    = "AWSFlowLogsWrite"
+        Effect = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/flowlogs/*"
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      },
+      {
+        Sid    = "AWSFlowLogsAclCheck"
+        Effect = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.storage.arn
+      },
+      ## ALB 로그 권한 예시 (20260530, by 김강환) - ALB → S3 로그 전달용
+      # {
+      #   Sid    = "ALBLogDelivery"
+      #   Effect = "Allow"
+      #   Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
+      #   Action   = "s3:PutObject"
+      #   Resource = "${aws_s3_bucket.storage.arn}/alb/*"
+      #   Condition = {
+      #     StringEquals = {
+      #       "s3:x-amz-acl"     = "bucket-owner-full-control"
+      #       "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+      #     }
+      #   }
+      # },
+      # {
+      #   Sid    = "ALBLogAclCheck"
+      #   Effect = "Allow"
+      #   Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
+      #   Action   = "s3:GetBucketAcl"
+      #   Resource = aws_s3_bucket.storage.arn
+      #   Condition = {
+      #     StringEquals = {
+      #       "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+      #     }
+      #   }
+      # },
+
+      # 추가: GitHub Actions 백업 권한 (20260530, by 김다정)
+      {
+        Sid    = "AllowGitHubActionsListBucket"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-github-actions-role"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.storage.arn
+        Condition = {
+          StringLike = { "s3:prefix" = ["github-backup/*"] }
+        }
+      },
+      {
+        Sid    = "AllowGitHubActionsObjectOps"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-github-actions-role"
+        }
+        Action = ["s3:PutObject", "s3:GetObject"]
+        Resource = "${aws_s3_bucket.storage.arn}/github-backup/*"
+      },
+
+      {
+        Sid       = "DenyNonSSL"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.storage.arn,
+          "${aws_s3_bucket.storage.arn}/*"
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+          StringNotEqualsIfExists = {
+            "aws:PrincipalServiceNamesList" = [
+              "logdelivery.elasticloadbalancing.amazonaws.com",
+              "cloudtrail.amazonaws.com",
+              "guardduty.ap-south-2.amazonaws.com",
+              "delivery.logs.amazonaws.com",
+              "firehose.amazonaws.com"
+            ]
+          }
         }
       }
     ]

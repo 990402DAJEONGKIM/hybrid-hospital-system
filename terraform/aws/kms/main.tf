@@ -16,6 +16,16 @@ data "aws_caller_identity" "current" {} # 현재 실행 중인 AWS 계정 ID를 
 data "aws_region" "current" {}          # 현재 배포 중인 AWS 리전 정보를 동적으로 가져옴
 
 
+data "terraform_remote_state" "security" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = {
+      name = "TC-aws-security"
+    }
+  }
+}
+
 # ─────────────────────────────────────────────────────────
 # 공통 키 정책 (루트 계정 전체 권한 + 키 관리자만 관리 가능)
 # ─────────────────────────────────────────────────────────
@@ -90,25 +100,57 @@ locals {
           "kms:DescribeKey",
         ]
         Resource = "*"
+      }
+    ]
+  })
+  # S3 키 전용 정책
+  # Firehose가 WAF 로그를 S3에 저장할 때 SSE-KMS 암호화에 필요
+  # RDS/EBS/SM/ECR 키에는 Firehose 권한 불필요 → 최소 권한 원칙 준수 (ISMS-P 2.5.3)
+  s3_key_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      jsondecode(local.key_policy).Statement,
+      [
+        {
+        Sid    = "AllowFirehoseForS3Only"
+        Effect = "Allow"
+        Principal = { Service = "firehose.amazonaws.com" }
+        Action = [
+          "kms:GenerateDataKey",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
       },
       {
         Sid    = "AllowGuardDuty"
         Effect = "Allow"
         Principal = {
-          Service = "guardduty.amazonaws.com"
+          # ap-south-2는 opt-in 리전이므로 리전별 엔드포인트 사용
+          # 공식문서: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_exportfindings.html
+          Service = "guardduty.ap-south-2.amazonaws.com"
         }
-        Action   = "kms:GenerateDataKey"
+        # 공식문서 기준 필요 Action은 kms:GenerateDataKey 단일
+        Action = "kms:GenerateDataKey"
         Resource = "*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:detector/*"
-          }
+            "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/${data.terraform_remote_state.security.outputs.guardduty_detector_id}"
         }
       }
-    ]
+    }]
+    )
   })
 }
+
+
+
+
 
 
 # ─────────────────────────────────────────────────────────
@@ -169,7 +211,7 @@ resource "aws_kms_key" "s3" {
   enable_key_rotation     = true
   rotation_period_in_days = var.key_rotation_period_days
   deletion_window_in_days = var.deletion_window_days
-  policy                  = local.key_policy
+  policy                  = local.s3_key_policy
 
   tags = {
     Name    = "aws-kms-s3-01"

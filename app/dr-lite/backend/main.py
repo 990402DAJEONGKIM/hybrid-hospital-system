@@ -434,7 +434,7 @@ def login(
         db.commit()
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
-    if user.role_ref.role_code != "patient" or not user.patient_id_hash:
+    if user.role_ref.role_code not in ("patient", "doctor") or (user.role_ref.role_code == "patient" and not user.patient_id_hash):
         history.result = "fail"
         db.add(history)
         db.commit()
@@ -610,13 +610,25 @@ def available_slots(
 
 @app.get("/portal/appointments")
 def list_appointments(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    _require_patient(current_user)
-    rows = (
-        db.query(Appointment)
-        .filter(Appointment.patient_id_hash == current_user["pid"])
-        .order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc())
-        .all()
-    )
+    role = current_user.get("role")
+    if role == "doctor":
+        doctor_id = current_user.get("did")
+        if not doctor_id:
+            raise HTTPException(status_code=403, detail="의사 계정 정보가 올바르지 않습니다.")
+        rows = (
+            db.query(Appointment)
+            .filter(Appointment.doctor_id == uuid.UUID(doctor_id))
+            .order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc())
+            .all()
+        )
+    else:
+        _require_patient(current_user)
+        rows = (
+            db.query(Appointment)
+            .filter(Appointment.patient_id_hash == current_user["pid"])
+            .order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc())
+            .all()
+        )
     return [_appointment_out(row) for row in rows]
 
 

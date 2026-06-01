@@ -144,7 +144,7 @@ resource "aws_lb_target_group" "wazuh" {
   port        = 443
   protocol    = "HTTPS"
   vpc_id      = data.aws_vpc.main.id
-  target_type = "instance"
+  target_type = "ip"
 
   stickiness {
     type            = "lb_cookie"
@@ -167,7 +167,7 @@ resource "aws_lb_target_group" "wazuh" {
 
 resource "aws_lb_target_group_attachment" "wazuh" {
   target_group_arn = aws_lb_target_group.wazuh.arn
-  target_id        = data.aws_instance.wazuh.id
+  target_id        = var.wazuh_manager_ip
   port             = 443
 }
 
@@ -183,7 +183,11 @@ resource "aws_lb" "patient" {
   subnets            = data.aws_subnets.public.ids
 
   enable_deletion_protection = false
-
+  # access_logs {
+  #   bucket  = "aws-k2p-storage-01"
+  #   prefix  = "alb/patient"
+  #   enabled = true
+  # }
   tags = { Name = "aws-patient-alb" }
 }
 
@@ -228,7 +232,11 @@ resource "aws_lb" "staff" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.staff_alb.id]
   subnets            = data.aws_subnets.public.ids
-
+  # access_logs {
+  #   bucket  = "aws-k2p-storage-01"
+  #   prefix  = "alb/staff"
+  #   enabled = true
+  # }
   enable_deletion_protection = false
 
   tags = { Name = "aws-staff-alb" }

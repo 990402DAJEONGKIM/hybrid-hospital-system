@@ -10,8 +10,9 @@
 #   - GCP HAProxy VM(gcp-rds-proxy-01) 실행 중
 #
 # 사용법:
-#   ./pglogical_setup.sh init       # 최초 설정 (스키마 복제 + 데이터 동기화)
-#   ./pglogical_setup.sh reconnect  # VPN 재연결 후 (subscription만 재생성)
+#   ./pglogical_setup.sh init         # 최초 설정 (스키마 복제 + 데이터 동기화)
+#   ./pglogical_setup.sh reconnect    # VPN 재연결 후 (subscription만 재생성)
+#   ./pglogical_setup.sh init_audit   # Cloud SQL 감사 로그 역방향 복제 최초 설정
 # =============================================================
 set -euo pipefail
 
@@ -79,7 +80,7 @@ resolve_config() {
 
     # RDS pglogical_repl 비밀번호 (Secrets Manager)
     RDS_REPL_PASS=$(aws secretsmanager get-secret-value \
-        --secret-id rds-pglogical-repl-password \
+        --secret-id aws-rds-pglogical-password-secret \
         --region "$REGION" \
         --query 'SecretString' \
         --output text | python3 -c "import sys,json; print(json.load(sys.stdin)['password'])")
@@ -209,7 +210,7 @@ sync_schema() {
 }
 
 # =============================================================
-# Subscription 생성
+# Subscription 생성 (RDS → Cloud SQL)
 # =============================================================
 create_subscription() {
     local sync_data=$1  # true or false
@@ -246,7 +247,7 @@ SQL
 }
 
 # =============================================================
-# 상태 확인
+# 상태 확인 (RDS → Cloud SQL)
 # =============================================================
 verify() {
     echo -e "\n${CYAN}복제 상태 확인${NC}"
@@ -273,13 +274,161 @@ verify() {
 }
 
 # =============================================================
+# [init_audit] Cloud SQL audit 테이블 생성
+# =============================================================
+create_audit_table() {
+    echo -e "\n${CYAN}Cloud SQL: cloudsql_audit_logs 테이블 생성${NC}"
+
+    cat > /tmp/create_audit_table.sql << SQL
+CREATE TABLE IF NOT EXISTS public.cloudsql_audit_logs (
+    audit_log_id    uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id         uuid,
+    patient_id_hash character varying(64),
+    action_type     character varying(20) NOT NULL,
+    target_table    character varying(50),
+    target_id       uuid,
+    source_ip       inet,
+    result_code     character varying(20),
+    event_at        timestamp with time zone DEFAULT now() NOT NULL
+);
+
+COMMENT ON TABLE public.cloudsql_audit_logs IS 'GCP Cloud SQL 접근 감사 로그 (읽기/쓰기 전체, DR 환경 포함)';
+
+-- pglogical_repl이 읽을 수 있도록 권한 부여
+GRANT SELECT ON public.cloudsql_audit_logs TO pglogical_repl;
+-- 앱이 insert할 수 있도록 권한 부여
+GRANT INSERT ON public.cloudsql_audit_logs TO hospital_app;
+SQL
+
+    gcloud compute scp /tmp/create_audit_table.sql \
+        "${PROXY_VM}:/tmp/" \
+        --zone="$GCP_ZONE" --project="$GCP_PROJECT" --tunnel-through-iap
+
+    gcloud compute ssh "$PROXY_VM" \
+        --zone="$GCP_ZONE" --project="$GCP_PROJECT" --tunnel-through-iap \
+        --command="PGPASSWORD='$CLOUD_SQL_APP_PASS' psql 'host=$CLOUD_SQL_IP port=5432 dbname=hospital user=hospital_app sslmode=require' -f /tmp/create_audit_table.sql"
+
+    rm -f /tmp/create_audit_table.sql
+    echo -e "  ${GREEN}테이블 생성 완료${NC}"
+}
+
+# =============================================================
+# [init_audit] Cloud SQL을 audit replication set의 provider로 설정
+# =============================================================
+setup_audit_provider() {
+    echo -e "\n${CYAN}Cloud SQL: audit replication set 설정${NC}"
+
+    cat > /tmp/setup_audit_provider.sql << SQL
+-- replication set 생성 (audit 전용)
+SELECT pglogical.create_replication_set(
+    set_name := 'cloudsql_audit',
+    replicate_insert := true,
+    replicate_update := false,
+    replicate_delete := false,
+    replicate_truncate := false
+);
+
+-- cloudsql_audit_logs 테이블을 replication set에 추가
+SELECT pglogical.replication_set_add_table(
+    set_name := 'cloudsql_audit',
+    relation := 'public.cloudsql_audit_logs',
+    synchronize_data := false
+);
+SQL
+
+    gcloud compute scp /tmp/setup_audit_provider.sql \
+        "${PROXY_VM}:/tmp/" \
+        --zone="$GCP_ZONE" --project="$GCP_PROJECT" --tunnel-through-iap
+
+    gcloud compute ssh "$PROXY_VM" \
+        --zone="$GCP_ZONE" --project="$GCP_PROJECT" --tunnel-through-iap \
+        --command="PGPASSWORD='$CLOUD_SQL_APP_PASS' psql 'host=$CLOUD_SQL_IP port=5432 dbname=hospital user=hospital_app sslmode=require' -f /tmp/setup_audit_provider.sql"
+
+    rm -f /tmp/setup_audit_provider.sql
+    echo -e "  ${GREEN}Cloud SQL provider 설정 완료${NC}"
+}
+
+# =============================================================
+# [init_audit] RDS에 audit 테이블 생성 + Cloud SQL subscriber 등록
+# =============================================================
+setup_rds_audit_subscriber() {
+    echo -e "\n${CYAN}RDS: cloudsql_audit_logs 테이블 생성 + subscription 등록${NC}"
+
+    PGPASSWORD="$RDS_MASTER_PASS" psql \
+        "host=$RDS_ENDPOINT port=5432 dbname=hospital user=hospital_user sslmode=require" << SQL
+-- RDS에도 동일한 구조의 테이블 생성 (복제 대상)
+CREATE TABLE IF NOT EXISTS public.cloudsql_audit_logs (
+    audit_log_id    uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id         uuid,
+    patient_id_hash character varying(64),
+    action_type     character varying(20) NOT NULL,
+    target_table    character varying(50),
+    target_id       uuid,
+    source_ip       inet,
+    result_code     character varying(20),
+    event_at        timestamp with time zone DEFAULT now() NOT NULL
+);
+
+COMMENT ON TABLE public.cloudsql_audit_logs IS 'GCP Cloud SQL 감사 로그 — Cloud SQL에서 pglogical 역방향 복제';
+
+GRANT SELECT ON public.cloudsql_audit_logs TO pglogical_repl;
+
+-- Cloud SQL → RDS subscription 생성
+-- Cloud SQL IP는 VPN을 통해 RDS에서 직접 접근 가능
+DO \$\$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pglogical.subscription WHERE sub_name = 'cloud_sql_to_rds_audit') THEN
+        PERFORM pglogical.drop_subscription('cloud_sql_to_rds_audit', true);
+    END IF;
+END
+\$\$;
+
+SELECT pglogical.create_subscription(
+    subscription_name := 'cloud_sql_to_rds_audit',
+    provider_dsn := 'host=$CLOUD_SQL_IP port=5432 dbname=hospital user=pglogical_repl password=$CLOUD_SQL_REPL_PASS',
+    replication_sets := ARRAY['cloudsql_audit'],
+    synchronize_data := false
+);
+SQL
+
+    echo -e "  ${GREEN}RDS audit subscriber 설정 완료${NC}"
+}
+
+# =============================================================
+# [init_audit] audit 복제 상태 확인
+# =============================================================
+verify_audit() {
+    echo -e "\n${CYAN}audit 복제 상태 확인${NC}"
+    sleep 10
+
+    STATUS=$(PGPASSWORD="$RDS_MASTER_PASS" psql \
+        "host=$RDS_ENDPOINT port=5432 dbname=hospital user=hospital_user sslmode=require" \
+        -tAc "SELECT status FROM pglogical.show_subscription_status() WHERE subscription_name = 'cloud_sql_to_rds_audit';" \
+        2>/dev/null | tr -d '[:space:]')
+
+    if [ "$STATUS" = "replicating" ]; then
+        echo -e "  audit 복제 상태: ${GREEN}replicating ✅${NC}"
+    else
+        echo -e "  audit 복제 상태: ${YELLOW}$STATUS${NC} (잠시 후 확인하세요)"
+    fi
+
+    unset RDS_MASTER_PASS CLOUD_SQL_APP_PASS CLOUD_SQL_REPL_PASS RDS_REPL_PASS
+
+    echo ""
+    echo -e "${GREEN}=====================================================${NC}"
+    echo -e "${GREEN} 완료!${NC}"
+    echo -e "${GREEN}=====================================================${NC}"
+    echo ""
+}
+
+# =============================================================
 # 메인
 # =============================================================
 MODE="${1:-}"
 
 echo ""
 echo -e "${YELLOW}=====================================================${NC}"
-echo -e "${YELLOW} pglogical 복제 설정 (RDS → Cloud SQL)${NC}"
+echo -e "${YELLOW} pglogical 복제 설정 (RDS ↔ Cloud SQL)${NC}"
 echo -e "${YELLOW}=====================================================${NC}"
 echo ""
 
@@ -302,11 +451,26 @@ case "$MODE" in
         create_subscription "false"
         verify
         ;;
-    *)
-        echo -e "  사용법: $0 {init|reconnect}"
+    init_audit)
+        echo -e "모드: ${GREEN}init_audit${NC} (Cloud SQL 감사 로그 역방향 복제 최초 설정)"
+        echo -e "  cloud_sql_audit_logs 테이블 생성 후 Cloud SQL → RDS 복제 구성"
         echo ""
-        echo -e "  ${GREEN}init${NC}       — 최초 설정 (스키마 복제 + 전체 데이터 동기화)"
-        echo -e "  ${GREEN}reconnect${NC}  — VPN 재연결 후 subscription만 재생성"
+        resolve_config
+        create_audit_table
+        setup_audit_provider
+        setup_rds_audit_subscriber
+        verify_audit
+        ;;
+    *)
+        echo -e "  사용법: $0 {init|reconnect|init_audit}"
+        echo ""
+        echo -e "  ${GREEN}init${NC}        — 최초 설정 (스키마 복제 + 전체 데이터 동기화)"
+        echo -e "  ${GREEN}reconnect${NC}   — VPN 재연결 후 subscription만 재생성"
+        echo -e "  ${GREEN}init_audit${NC}  — Cloud SQL 감사 로그 역방향 복제 최초 설정"
+        echo ""
+        echo -e "  실행 순서 (최초):"
+        echo -e "    1. ./pglogical_setup.sh init"
+        echo -e "    2. ./pglogical_setup.sh init_audit"
         echo ""
         exit 1
         ;;

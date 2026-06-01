@@ -303,6 +303,30 @@
       ignore_errors: yes
       tags: config
 
+    - name: gcp-proxy 그룹 생성
+      shell: |
+        /var/ossec/bin/agent_groups -a -g gcp-proxy -q || true
+      tags: config
+
+    - name: gcp-proxy 그룹 디렉토리 생성
+      file:
+        path: /var/ossec/etc/shared/gcp-proxy
+        state: directory
+        owner: wazuh
+        group: wazuh
+        mode: '0770'
+      tags: config
+
+    - name: gcp-proxy Agent 설정 배포
+      copy:
+        src: agent_gcp_proxy.conf
+        dest: /var/ossec/etc/shared/gcp-proxy/agent.conf
+        owner: wazuh
+        group: wazuh
+        mode: '0640'
+      tags: config
+
+
     - name: ossec.conf XML 검증
       shell: |
         python3 -c "

@@ -22,3 +22,16 @@ variable "db_dump_retention_days" {
   type        = number
   default     = 30
 }
+
+# 추가: s3 백업 보존 기간 지정 - (20260530, by 김다정)
+variable "github_backup_retention_days" {
+  description = "GitHub 백업 보존 기간 (일) — source/, tfstate/"
+  type        = number
+  default     = 90
+}
+
+variable "github_backup_log_retention_days" {
+  description = "GitHub 백업 증적 로그 보존 기간 (일) — ISMS-P 2.9.1"
+  type        = number
+  default     = 365
+}

@@ -13,6 +13,7 @@ sudo pip3 install --break-system-packages --no-cache-dir \
   "python-dotenv==1.0.1" \
   "python-jose[cryptography]==3.3.0" \
   "passlib[bcrypt]==1.7.4" \
+  "bcrypt==4.0.1" \
   "pydantic[email]==2.10.4"
 
 echo "[install] 앱 디렉토리 구성"

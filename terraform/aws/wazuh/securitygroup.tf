@@ -8,15 +8,16 @@
       from_port   = 1514
       to_port     = 1514
       protocol    = "tcp"
-      cidr_blocks = ["10.0.0.0/16", "172.30.1.0/24"]
+      cidr_blocks = ["10.0.0.0/16", "172.30.1.0/24", "10.10.1.0/24"]
+      description = "Wazuh Agent including GCP VPN"
     }
 
     ingress {
-
       from_port   = 1515
       to_port     = 1515
       protocol    = "tcp"
-      cidr_blocks = ["10.0.0.0/16", "172.30.1.0/24"]
+      cidr_blocks = ["10.0.0.0/16", "172.30.1.0/24", "10.10.1.0/24"]
+      description = "Wazuh Agent enrollment including GCP VPN"
     }
 
     # 443 수정

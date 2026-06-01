@@ -110,9 +110,9 @@ resource "aws_autoscaling_group" "ecs" {
   # ECS Capacity Provider 연동 시 필수
   protect_from_scale_in = true
 
-  # 헬스체크: EC2 상태 기반 (ECS 태스크는 ECS가 별도 관리)
-  health_check_type         = "EC2"
-  health_check_grace_period = 120
+  # 헬스체크: ALB 응답 기반 (앱 정상 응답 확인)
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
 
   tag {
     key                 = "Name"
@@ -137,6 +137,17 @@ resource "aws_autoscaling_group" "ecs" {
     instance_reuse_policy {
       reuse_on_scale_in = true
     }
+  }
+
+  # AMI 업데이트 시 EC2 인스턴스 자동 롤링 교체
+  # Launch Template 변경(AMI 등) 감지 → 순차적으로 인스턴스 교체
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+      instance_warmup        = 120
+    }
+    triggers = ["launch_template"]
   }
 
   lifecycle {

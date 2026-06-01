@@ -9,3 +9,8 @@ variable "base_domain" {
   type        = string
   default     = "mzclinic.cloud"
 }
+
+variable "wazuh_manager_ip" {
+  description = "Wazuh Manager Private IP"
+  type        = string
+}

@@ -133,7 +133,7 @@
   </localfile>
 
   <!-- ======================================= -->
-  <!-- Slack 연동 (level 7 이상)               -->
+  <!-- Slack 연동 (level 10 이상)               -->
   <!-- ======================================= -->
   {% if slack_webhook_url is defined and slack_webhook_url %}
   <integration>
@@ -160,7 +160,7 @@
   </auth>
 
   <!-- ======================================= -->
-  <!-- RDS pgaudit. ECS  로그 수집 (CloudWatch)      -->
+  <!-- RDS pgaudit 로그 수집 (CloudWatch)      -->
   <!-- ======================================= -->
   <wodle name="aws-s3">
     <disabled>no</disabled>
@@ -169,15 +169,33 @@
     <service type="cloudwatchlogs">
       <aws_log_groups>/aws/rds/cluster/aws-aurora-01/postgresql</aws_log_groups>
       <regions>ap-south-2</regions>
-    </service>
-    <service type="cloudwatchlogs">
-      <aws_log_groups>/ecs/patient</aws_log_groups>
-      <regions>ap-south-2</regions>
-    </service>
-    <service type="cloudwatchlogs">
-      <aws_log_groups>/ecs/staff</aws_log_groups>
-      <regions>ap-south-2</regions>
-    </service>
+     </service>
+  </wodle>
+
+  <!-- ======================================= -->
+  <!-- s3(Cloudtrail, VPC flow logs , Guard Duty) 로그 수집 (CloudWatch)      -->
+  <!-- ======================================= -->
+
+  <wodle name="aws-s3">
+    <disabled>no</disabled>
+    <interval>10m</interval>
+    <run_on_start>yes</run_on_start>
+    <skip_on_error>yes</skip_on_error>
+
+    <bucket type="cloudtrail">
+      <name>aws-k2p-storage-01</name>
+      <path>cloudtrail</path>
+    </bucket>
+
+    <bucket type="guardduty">
+      <name>aws-k2p-storage-01</name>
+      <path>guardduty</path>
+    </bucket>
+
+    <bucket type="vpcflow">
+      <name>aws-k2p-storage-01</name>
+      <path>flowlogs</path>
+    </bucket>
   </wodle>
 
 

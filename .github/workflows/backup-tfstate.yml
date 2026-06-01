@@ -1,0 +1,92 @@
+name: Backup Terraform Cloud State to S3
+
+on:
+  schedule:
+    - cron: '0 16 * * *'   # KST 01:00 (UTC 16:00)
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-2
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  backup:
+    name: Terraform State Backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          sts-regional-endpoints: regional
+
+      - name: Fetch and backup all workspace states
+        env:
+          TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
+          TFC_ORG: ${{ secrets.TFC_ORG }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+        run: |
+          TIMESTAMP=$(date -u '+%Y-%m-%dT%H-%M-%SZ')
+          LOG_FILE="/tmp/tfstate-backup.log"
+          SUCCESS_COUNT=0
+          FAIL_COUNT=0
+
+          # 전체 워크스페이스 목록 조회 (page_size=100으로 한번에)
+          WORKSPACES=$(curl -sf \
+            --header "Authorization: Bearer ${TFC_TOKEN}" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/organizations/${TFC_ORG}/workspaces?page%5Bsize%5D=100" \
+            | jq -r '.data[] | "\(.id) \(.attributes.name)"')
+
+          echo "=== tfstate 백업 시작: ${TIMESTAMP} ===" > "${LOG_FILE}"
+
+          while IFS=' ' read -r WS_ID WS_NAME; do
+            echo "처리 중: ${WS_NAME} (${WS_ID})"
+
+            # 현재 state version 다운로드 URL 조회
+            STATE_URL=$(curl -sf \
+              --header "Authorization: Bearer ${TFC_TOKEN}" \
+              --header "Content-Type: application/vnd.api+json" \
+              "https://app.terraform.io/api/v2/workspaces/${WS_ID}/current-state-version" \
+              | jq -r '.data.attributes["hosted-state-download-url"] // empty')
+
+            if [ -z "${STATE_URL}" ]; then
+              echo "[SKIP] ${WS_NAME}: state 없음" | tee -a "${LOG_FILE}"
+              continue
+            fi
+
+            # tfstate 다운로드
+            curl -sf \
+              --header "Authorization: Bearer ${TFC_TOKEN}" \
+              "${STATE_URL}" \
+              -o "/tmp/${WS_NAME}.tfstate"
+
+            # S3 업로드 (날짜별 폴더로 구분)
+            if aws s3 cp "/tmp/${WS_NAME}.tfstate" \
+              "s3://${S3_BUCKET}/github-backup/tfstate/${TIMESTAMP}/${WS_NAME}.tfstate" \
+              --sse aws:kms; then
+              echo "[OK] ${WS_NAME}" | tee -a "${LOG_FILE}"
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            else
+              echo "[FAIL] ${WS_NAME}: S3 업로드 실패" | tee -a "${LOG_FILE}"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            fi
+
+            rm -f "/tmp/${WS_NAME}.tfstate"
+          done <<< "${WORKSPACES}"
+
+          echo "=== 완료: 성공=${SUCCESS_COUNT} 실패=${FAIL_COUNT} ===" | tee -a "${LOG_FILE}"
+
+          # 증적 로그 S3 업로드
+          aws s3 cp "${LOG_FILE}" \
+            "s3://${S3_BUCKET}/github-backup/logs/tfstate-${TIMESTAMP}.log" \
+            --sse aws:kms
+
+          # 실패 워크스페이스 있으면 워크플로우 실패 처리
+          [ "${FAIL_COUNT}" -eq 0 ] || exit 1

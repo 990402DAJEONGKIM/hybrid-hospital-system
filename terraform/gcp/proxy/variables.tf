@@ -45,3 +45,14 @@ variable "proxy_count" {
   type        = number
   default     = 1
 }
+
+variable "cloud_sql_instance" {
+  description = "Cloud SQL 인스턴스 이름"
+  type        = string
+  default     = "gcp-cloud-sql"
+}
+
+variable "wazuh_manager_ip" {
+  description = "Wazuh Manager Private IP"
+  type        = string
+}
