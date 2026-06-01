@@ -367,35 +367,30 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "secretsmanager:GetSecretValue",
-        "secretsmanager:DescribeSecret"
-      ]
-      # ───────────────────────────────────────────────────────────
-      # [현재 상태] 하드코딩 ARN + 와일드카드 사용 중.
-      #   Secrets Manager ARN 뒤에 랜덤 suffix가 붙어서
-      #   TC-aws-secrets 적용 전에는 와일드카드로 처리.
-      #
-      # [TC-aws-secrets 적용 후] 아래 단계로 교체:
-      #   1. 이 파일 상단(또는 data.tf)에 추가:
-      #        data "tfe_outputs" "secrets" {
-      #          organization = "k2p"
-      #          workspace    = "TC-aws-secrets"
-      #        }
-      #   2. 아래 Resource 블록을 교체:
-      #        Resource = [
-      #          data.tfe_outputs.secrets.values.hospital_user_secret_arn,
-      #          data.tfe_outputs.secrets.values.api_user_secret_arn,
-      #        ]
-      # ───────────────────────────────────────────────────────────
-      Resource = [
-        aws_rds_cluster.main.master_user_secret[0].secret_arn,
-        data.aws_secretsmanager_secret.proxy_patient_user.arn,
-        data.aws_secretsmanager_secret.proxy_staff_user.arn,
-      ]
-    }]
+    Statement = [
+      {
+        Sid    = "SecretsManagerAccess"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          aws_rds_cluster.main.master_user_secret[0].secret_arn,
+          data.aws_secretsmanager_secret.proxy_patient_user.arn,
+          data.aws_secretsmanager_secret.proxy_staff_user.arn,
+        ]
+      },
+      {
+        Sid    = "KMSDecrypt"
+        Effect = "Allow"
+        Action = ["kms:Decrypt"]
+        # Proxy가 Secrets Manager 시크릿을 복호화하기 위해 필요.
+        # 로테이션 후 시크릿이 커스텀 KMS 키로 재암호화되는 경우 이 권한이 없으면
+        # "no credentials for the role" 에러 발생.
+        Resource = [data.aws_kms_key.secretsmanager.arn]
+      }
+    ]
   })
 }
 

@@ -5,6 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session as DbSession
+from fastapi import Depends
+
+from core.database import get_db
 from core.middleware import AuditLogMiddleware, SessionExpiryMiddleware
 from routers import auth, portal
 
@@ -30,5 +35,6 @@ app.include_router(portal.router)
 
 
 @app.get("/health")
-def health():
+def health(db: DbSession = Depends(get_db)):
+    db.execute(text("SELECT 1"))
     return {"status": "ok"}

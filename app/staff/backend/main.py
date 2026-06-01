@@ -5,10 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from core.middleware import AuditLogMiddleware, SessionExpiryMiddleware
-from routers import admin, auth, portal
+from sqlalchemy import text
+from sqlalchemy.orm import Session as DbSession
+from fastapi import Depends
 
-app = FastAPI(title="김이박 병원 API — 의료진 포털")
+from core.database import get_db
+from core.middleware import AuditLogMiddleware, SessionExpiryMiddleware
+from routers import admin, auth, emr, portal
+
+app = FastAPI(title="김이박 병원 API — 통합 의료진 포털")
 
 # 요청 처리 순서: TrustedHost → SessionExpiry → AuditLog → GZip → CORS → App
 app.add_middleware(SessionExpiryMiddleware)
@@ -28,8 +33,10 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 app.include_router(auth.router)
 app.include_router(portal.router)
 app.include_router(admin.router)
+app.include_router(emr.router)
 
 
 @app.get("/health")
-def health():
+def health(db: DbSession = Depends(get_db)):
+    db.execute(text("SELECT 1"))
     return {"status": "ok"}

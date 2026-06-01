@@ -27,3 +27,8 @@ data "aws_secretsmanager_secret" "proxy_patient_user" {
 data "aws_secretsmanager_secret" "proxy_staff_user" {
   name = "aws-rds-proxy-staff-user-secret"
 }
+
+# Secrets Manager 전용 KMS 키 (Proxy IAM kms:Decrypt 권한에 필요)
+data "aws_kms_key" "secretsmanager" {
+  key_id = "alias/aws-kms-sm-01"
+}
