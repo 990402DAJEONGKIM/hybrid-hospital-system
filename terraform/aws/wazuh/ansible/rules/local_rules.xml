@@ -300,5 +300,22 @@
     <group>indexer,availability</group>
   </rule>
 
+
+  <!-- ───────────────────────────────────────── -->
+  <!-- GuardDuty HIGH — EventBridge가 Slack 담당 -->
+  <!-- Wazuh는 대시보드 기록용만 (중복 알람 방지) -->
+  <!-- ───────────────────────────────────────── -->
+  <rule id="100500" level="7" overwrite="yes">
+    <if_sid>80303</if_sid>
+    <description>AWS GuardDuty HIGH — 대시보드 기록용 (Slack은 EventBridge 담당)</description>
+    <group>guardduty,aws,</group>
+  </rule>
+
+  <rule id="100501" level="7" overwrite="yes">
+    <if_sid>80307</if_sid>
+    <description>AWS GuardDuty HIGH 포트스캔 — 대시보드 기록용 (Slack은 EventBridge 담당)</description>
+    <group>guardduty,aws,</group>
+  </rule>
+
 </group>
 

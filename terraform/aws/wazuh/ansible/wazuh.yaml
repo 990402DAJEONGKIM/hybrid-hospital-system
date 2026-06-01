@@ -242,6 +242,7 @@
         - onprem_rules.xml
         - cloudsql_rules.xml
         - vpn_rules.xml
+        - waf_rules.xml
       tags: config
 
     # 1. ecs-ec2 그룹 생성
@@ -363,7 +364,14 @@
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^opensearch_security.session.ttl:'
-        line: 'opensearch_security.session.ttl: 900000'
+        line: 'opensearch_security.session.ttl: 3600000'
+      tags: config
+
+    - name: Dashboard session keepalive 설정
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.session.keepalive:'
+        line: 'opensearch_security.session.keepalive: true'
       tags: config
 
     - name: Filebeat 설정 배포
@@ -713,9 +721,40 @@
       ignore_errors: yes
       tags: ssm
 
+
+
+
     # ──────────────────────────────────────────
     # 서비스 재시작
     # ──────────────────────────────────────────
+
+    - name: Indexer keystore username 설정
+      shell: /var/ossec/bin/wazuh-keystore -f indexer -k username -v admin
+      no_log: true
+      tags: config
+
+    - name: Indexer keystore password 설정
+      shell: /var/ossec/bin/wazuh-keystore -f indexer -k password -v '{{ wazuh_admin_password }}'
+      no_log: true
+      tags: config
+
+    - name: root .aws 디렉토리 생성
+      file:
+        path: /root/.aws
+        state: directory
+        mode: '0700'
+      tags: config
+
+    - name: AWS wodle 리전 설정
+      copy:
+        dest: /root/.aws/config
+        content: |
+          [default]
+          region = {{ aws_region }}
+        mode: '0600'
+      tags: config
+
+
     - name: 1단계 - Wazuh Manager 재시작
       systemd:
         name: wazuh-manager
