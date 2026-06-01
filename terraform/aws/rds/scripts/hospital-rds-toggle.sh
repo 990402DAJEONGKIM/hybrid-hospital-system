@@ -7,6 +7,33 @@
 #   ./hospital-rds-toggle.sh stop    # Proxy 삭제 + 클러스터 중지
 #   ./hospital-rds-toggle.sh start   # 클러스터 시작 + Proxy 재생성
 #   ./hospital-rds-toggle.sh status  # 현재 상태 확인
+#
+# ================================================================
+# [재시작 순서] stop 후 다시 켤 때 아래 순서대로 진행
+#
+#   1. Aurora + Proxy 재생성
+#        ./hospital-rds-toggle.sh start
+#        → Aurora 시작(3~5분) + Proxy 재생성(5~10분) + Reader Endpoint 생성
+#
+#   2. Terraform state 동기화
+#        ./hospital-rds-proxy-import.sh
+#        → start 가 AWS CLI로 Proxy를 직접 생성하므로 Terraform state 불일치 발생
+#        → import 로 동기화 필요 (TC-aws-RDS 워크스페이스에서 실행)
+#
+#   3. TC-aws-RDS apply
+#        app.terraform.io → TC-aws-RDS → Apply
+#        → Proxy auth(시크릿 3개), IAM 정책 등 Terraform 설정 최종 반영
+#
+#   4. Proxy 자격증명 캐시 갱신
+#        AWS 콘솔 → RDS → Proxies → aws-rds-proxy-01 → 수정 → 저장
+#        → 새 Proxy 가 Secrets Manager 에서 자격증명을 로드하도록 강제
+#
+#   5. ECS 서비스 재배포
+#        aws ecs update-service --cluster aws-ecs-cluster-01 \
+#          --service patient-service --force-new-deployment --region ap-south-2
+#        aws ecs update-service --cluster aws-ecs-cluster-01 \
+#          --service staff-service --force-new-deployment --region ap-south-2
+#        → 컨테이너가 끊긴 DB 연결을 새로 맺음
 # ================================================================
 
 REGION="ap-south-2"
@@ -15,8 +42,12 @@ PROXY_NAME="aws-rds-proxy-01"
 PROXY_ROLE_NAME="aws-rds-proxy-role"
 SUBNET_GROUP_NAME="aws-db-subnet-group-01"
 PROXY_SG_NAME="aws-proxy-sg"
-SECRET_NAME_HOSPITAL="aws-secret-rds-hospital-user"
-SECRET_NAME_API="aws-secret-rds-api-user"
+# (주석처리 by 김다정, 2026.06.01) 구 시크릿 네이밍 — 현재 AWS에 존재하지 않음
+# SECRET_NAME_HOSPITAL="aws-secret-rds-hospital-user"
+# SECRET_NAME_API="aws-secret-rds-api-user"
+# (추가 by 김다정, 2026.06.01) 신규 시크릿 네이밍 — RDS Proxy auth용 앱 유저 시크릿
+SECRET_NAME_PROXY_PATIENT="aws-rds-proxy-patient-user-secret"
+SECRET_NAME_PROXY_STAFF="aws-rds-proxy-staff-user-secret"
 # (by 김다정, 2026.06.01) Reader Endpoint 이름 추가 — start 시 재생성, stop 시 Proxy 삭제와 함께 자동 삭제됨
 READER_ENDPOINT_NAME="aws-rds-proxy-01-reader"
 
@@ -46,13 +77,30 @@ resolve_config() {
 
   PROXY_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${PROXY_ROLE_NAME}"
 
-  SECRET_ARN_HOSPITAL=$(aws secretsmanager describe-secret \
-    --secret-id "$SECRET_NAME_HOSPITAL" \
+  # (주석처리 by 김다정, 2026.06.01) 구 시크릿 ARN 조회 — SECRET_NAME_HOSPITAL/API 가 없으므로 비활성화
+  # SECRET_ARN_HOSPITAL=$(aws secretsmanager describe-secret \
+  #   --secret-id "$SECRET_NAME_HOSPITAL" \
+  #   --region "$REGION" \
+  #   --query 'ARN' --output text 2>/dev/null)
+  # SECRET_ARN_API=$(aws secretsmanager describe-secret \
+  #   --secret-id "$SECRET_NAME_API" \
+  #   --region "$REGION" \
+  #   --query 'ARN' --output text 2>/dev/null)
+
+  # (추가 by 김다정, 2026.06.01) 신규 시크릿 ARN 조회 — Proxy auth용 3개 시크릿
+  MASTER_SECRET_ARN=$(aws rds describe-db-clusters \
+    --db-cluster-identifier "$CLUSTER_ID" \
+    --region "$REGION" \
+    --query 'DBClusters[0].MasterUserSecret.SecretArn' \
+    --output text 2>/dev/null)
+
+  SECRET_ARN_PROXY_PATIENT=$(aws secretsmanager describe-secret \
+    --secret-id "$SECRET_NAME_PROXY_PATIENT" \
     --region "$REGION" \
     --query 'ARN' --output text 2>/dev/null)
 
-  SECRET_ARN_API=$(aws secretsmanager describe-secret \
-    --secret-id "$SECRET_NAME_API" \
+  SECRET_ARN_PROXY_STAFF=$(aws secretsmanager describe-secret \
+    --secret-id "$SECRET_NAME_PROXY_STAFF" \
     --region "$REGION" \
     --query 'ARN' --output text 2>/dev/null)
 
@@ -70,9 +118,14 @@ resolve_config() {
 
   # 검증
   local errors=0
-  [ -z "$SECRET_ARN_HOSPITAL" ] && echo -e "${RED}  [ERROR] 시크릿 없음: $SECRET_NAME_HOSPITAL${NC}" && errors=$((errors+1))
-  [ -z "$SECRET_ARN_API" ]      && echo -e "${RED}  [ERROR] 시크릿 없음: $SECRET_NAME_API${NC}"      && errors=$((errors+1))
-  [ -z "$PROXY_SUBNET_IDS" ]    && echo -e "${RED}  [ERROR] 서브넷 그룹 없음: $SUBNET_GROUP_NAME${NC}" && errors=$((errors+1))
+  # (주석처리 by 김다정, 2026.06.01) 구 시크릿 검증 비활성화
+  # [ -z "$SECRET_ARN_HOSPITAL" ] && echo -e "${RED}  [ERROR] 시크릿 없음: $SECRET_NAME_HOSPITAL${NC}" && errors=$((errors+1))
+  # [ -z "$SECRET_ARN_API" ]      && echo -e "${RED}  [ERROR] 시크릿 없음: $SECRET_NAME_API${NC}"      && errors=$((errors+1))
+  # (추가 by 김다정, 2026.06.01) 신규 시크릿 검증
+  [ -z "$MASTER_SECRET_ARN" ]        && echo -e "${RED}  [ERROR] master 시크릿 없음 (RDS 자동관리)${NC}"              && errors=$((errors+1))
+  [ -z "$SECRET_ARN_PROXY_PATIENT" ] && echo -e "${RED}  [ERROR] 시크릿 없음: $SECRET_NAME_PROXY_PATIENT${NC}"       && errors=$((errors+1))
+  [ -z "$SECRET_ARN_PROXY_STAFF" ]   && echo -e "${RED}  [ERROR] 시크릿 없음: $SECRET_NAME_PROXY_STAFF${NC}"         && errors=$((errors+1))
+  [ -z "$PROXY_SUBNET_IDS" ]         && echo -e "${RED}  [ERROR] 서브넷 그룹 없음: $SUBNET_GROUP_NAME${NC}"          && errors=$((errors+1))
   [ -z "$PROXY_SG_ID" ] || [ "$PROXY_SG_ID" = "None" ] && echo -e "${RED}  [ERROR] 보안 그룹 없음: $PROXY_SG_NAME${NC}" && errors=$((errors+1))
 
   if [ $errors -gt 0 ]; then
@@ -275,12 +328,22 @@ start_cmd() {
     echo -e "\n${CYAN}[2/2] Proxy 이미 존재함 — 건너뜀${NC}"
   else
     echo -e "\n${YELLOW}[2/2] Proxy 재생성 중...${NC}"
+    # (주석처리 by 김다정, 2026.06.01) 구 시크릿 2개로 Proxy 생성 — 현재 존재하지 않는 시크릿명
+    # aws rds create-db-proxy \
+    #   --db-proxy-name "$PROXY_NAME" \
+    #   --engine-family POSTGRESQL \
+    #   --auth "[
+    #     {\"AuthScheme\":\"SECRETS\",\"SecretArn\":\"$SECRET_ARN_HOSPITAL\",\"IAMAuth\":\"DISABLED\"},
+    #     {\"AuthScheme\":\"SECRETS\",\"SecretArn\":\"$SECRET_ARN_API\",\"IAMAuth\":\"DISABLED\"}
+    #   ]" \
+    # (추가 by 김다정, 2026.06.01) 신규 시크릿 3개로 Proxy 생성 — master + ecs_patient_user + ecs_staff_user
     aws rds create-db-proxy \
       --db-proxy-name "$PROXY_NAME" \
       --engine-family POSTGRESQL \
       --auth "[
-        {\"AuthScheme\":\"SECRETS\",\"SecretArn\":\"$SECRET_ARN_HOSPITAL\",\"IAMAuth\":\"DISABLED\"},
-        {\"AuthScheme\":\"SECRETS\",\"SecretArn\":\"$SECRET_ARN_API\",\"IAMAuth\":\"DISABLED\"}
+        {\"AuthScheme\":\"SECRETS\",\"SecretArn\":\"$MASTER_SECRET_ARN\",\"IAMAuth\":\"DISABLED\"},
+        {\"AuthScheme\":\"SECRETS\",\"SecretArn\":\"$SECRET_ARN_PROXY_PATIENT\",\"IAMAuth\":\"DISABLED\"},
+        {\"AuthScheme\":\"SECRETS\",\"SecretArn\":\"$SECRET_ARN_PROXY_STAFF\",\"IAMAuth\":\"DISABLED\"}
       ]" \
       --role-arn "$PROXY_ROLE_ARN" \
       --vpc-subnet-ids $PROXY_SUBNET_IDS \
