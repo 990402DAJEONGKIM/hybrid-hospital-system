@@ -220,7 +220,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Effect = "Allow"
         Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
-        Resource =  "${aws_s3_bucket.storage.arn}/AWSLogs/*"
+        Resource =  "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -233,7 +233,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Effect = "Deny"
         Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.storage.arn}/AWSLogs/*"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -245,7 +245,7 @@ resource "aws_s3_bucket_policy" "storage" {
         Effect = "Deny"
         Principal = { Service = "guardduty.ap-south-2.amazonaws.com" }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.storage.arn}/AWSLogs/*"
+        Resource = "${aws_s3_bucket.storage.arn}/guardduty/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption-aws-kms-key-id" = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
