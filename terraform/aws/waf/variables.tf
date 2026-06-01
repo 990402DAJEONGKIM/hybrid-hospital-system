@@ -31,5 +31,5 @@ variable "staff_alb_name" {
 variable "staff_allowed_ips" {
   description = "의료진 포털 허용 공인 IP 목록 (CIDR) — 병원 공인 IP 확정 시 추가"
   type        = list(string)
-  default     = ["218.235.89.82/32", "221.164.19.186/32"]
+  default     = ["218.235.89.82/32", "221.164.19.186/32",  "175.199.193.165/32"] #집에서 접속해보려고  "175.199.193.165/32" 추가했습니다. 260601 박경수.
 }
