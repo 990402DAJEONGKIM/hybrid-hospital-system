@@ -56,8 +56,8 @@ locals {
   # db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
   patient_secrets = [
     { name = "DATABASE_URL", valueFrom = data.tfe_outputs.secrets.values.db_url_patient_secret_arn },
-    { name = "JWT_SECRET",          valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSCURRENT::" },
-    { name = "JWT_SECRET_PREVIOUS", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSPREVIOUS::" },  # 260601 박경수 추가
+    { name = "JWT_SECRET",          valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}:AWSCURRENT:" },
+    { name = "JWT_SECRET_PREVIOUS", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}:AWSPREVIOUS:" },  # 260601 박경수 추가
     { name = "API_KEY",      valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
   ]
   # db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
