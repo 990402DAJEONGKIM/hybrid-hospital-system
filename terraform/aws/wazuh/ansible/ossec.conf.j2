@@ -172,6 +172,19 @@
      </service>
   </wodle>
 
+  <!-- RDS Proxy 로그 수집 (CloudWatch) -->
+  <!-- 연결 오류, 인증 실패 탐지용 -->
+  <!-- ISMS-P 2.9.1: DB 접근 로그 보존 -->
+  <wodle name="aws-s3">
+    <disabled>no</disabled>
+    <interval>10m</interval>
+    <run_on_start>yes</run_on_start>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/rds/proxy/aws-rds-proxy-01</aws_log_groups>
+      <regions>ap-south-2</regions>
+    </service>
+  </wodle>
+
   <!-- ======================================= -->
   <!-- s3(Cloudtrail, VPC flow logs , Guard Duty) 로그 수집 (CloudWatch)      -->
   <!-- ======================================= -->
@@ -223,29 +236,38 @@
     </service>
   </wodle>
 
-  <!-- ======================================= -->
-  <!-- WAF 로그 수집 (CloudWatch)              -->
-  <!-- ISMS-P 2.9.1: 웹 접근 로그 365일        -->
-  <!-- ======================================= -->
   <wodle name="aws-s3">
     <disabled>no</disabled>
-    <interval>5m</interval>
+    <interval>10m</interval>
     <run_on_start>yes</run_on_start>
-    <service type="cloudwatchlogs">
-      <aws_log_groups>aws-waf-logs-patient-alb</aws_log_groups>
+    <skip_on_error>yes</skip_on_error>
+    <!-- WAF BLOCK 이벤트 수집 (Firehose → S3 저장분) -->
+    <!-- ISMS-P 2.9.1: 웹 공격 차단 로그 365일 보존 -->
+    <bucket type="custom">
+      <name>aws-k2p-storage-01</name>
+      <path>waf/</path>
+      <only_logs_after>2026-JUN-01</only_logs_after>
       <regions>ap-south-2</regions>
-    </service>
+    </bucket>
   </wodle>
 
-  <wodle name="aws-s3">
-    <disabled>no</disabled>
-    <interval>5m</interval>
-    <run_on_start>yes</run_on_start>
-    <service type="cloudwatchlogs">
-      <aws_log_groups>aws-waf-logs-staff-alb</aws_log_groups>
-      <regions>ap-south-2</regions>
-    </service>
-  </wodle>
+  
+  <!-- ======================================= -->
+  <!-- Indexer 연결 설정 (취약점 탐지용)        -->
+  <!-- ======================================= -->
+  <indexer>
+    <enabled>yes</enabled>
+    <hosts>
+      <host>https://{{ wazuh_indexer_ip }}:9200</host>
+    </hosts>
+    <ssl>
+      <certificate_authorities>
+        <ca>/etc/filebeat/certs/root-ca.pem</ca>
+      </certificate_authorities>
+      <certificate>/etc/filebeat/certs/{{ wazuh_cert_name }}.pem</certificate>
+      <key>/etc/filebeat/certs/{{ wazuh_cert_name }}-key.pem</key>
+    </ssl>
+  </indexer>
 
 
 </ossec_config>

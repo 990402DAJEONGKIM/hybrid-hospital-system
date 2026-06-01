@@ -1,7 +1,5 @@
-
-#vector.toml.j2
 # =============================================================
-# Vector 설정 - Wazuh alerts.json → S3 백업
+# Vector 설정 - Wazuh alerts.json + archives.json → S3 백업
 # ISMS-P 2.9.1 로그 보존 목적
 # =============================================================
 
@@ -11,6 +9,8 @@ data_dir = "/var/lib/vector"
 enabled = true
 address = "127.0.0.1:8686"
 
+# ── alerts 소스 ───────────────────────────────────────────────
+# 룰 매칭된 보안 이벤트만 수집 (실시간)
 [sources.wazuh_alerts]
 type = "file"
 include = ["/var/ossec/logs/alerts/alerts.json"]
@@ -19,6 +19,17 @@ glob_minimum_cooldown_ms = 1000
 rotate_wait_secs = 5
 ignore_older_secs = 86400
 
+# ── archives 소스 ─────────────────────────────────────────────
+# 전체 수집 로그 원본 (ISMS-P 2.9.1 완전한 로그 보관)
+[sources.wazuh_archives]
+type = "file"
+include = ["/var/ossec/logs/archives/archives.json"]
+read_from = "beginning"
+glob_minimum_cooldown_ms = 1000
+rotate_wait_secs = 5
+ignore_older_secs = 86400
+
+# ── alerts S3 sink ────────────────────────────────────────────
 [sinks.s3_backup]
 type = "aws_s3"
 inputs = ["wazuh_alerts"]
@@ -38,6 +49,30 @@ timeout_secs = 300
 max_bytes = 10737418242
 
 [sinks.s3_backup.buffer]
+type = "disk"
+max_size = 1073741824
+when_full = "block"
+
+# ── archives S3 sink ──────────────────────────────────────────
+[sinks.s3_archives]
+type = "aws_s3"
+inputs = ["wazuh_archives"]
+bucket = "aws-k2p-storage-01"
+region = "ap-south-2"
+key_prefix = "wazuh/archives/%Y/%m/%d/"
+filename_time_format = "archives-%Y-%m-%d-%H-%M"
+filename_extension = "json"
+filename_append_uuid = false
+compression = "gzip"
+
+[sinks.s3_archives.encoding]
+codec = "text"
+
+[sinks.s3_archives.batch]
+timeout_secs = 300
+max_bytes = 10737418242
+
+[sinks.s3_archives.buffer]
 type = "disk"
 max_size = 1073741824
 when_full = "block"

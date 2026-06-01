@@ -1,0 +1,69 @@
+<group name="waf,aws,web,">
+
+  <!-- ──────────────────────────────────────── -->
+  <!-- WAF 기본 차단 이벤트 탐지 (부모 룰)       -->
+  <!-- S3 wodle로 수집된 Firehose 저장 로그      -->
+  <!-- ──────────────────────────────────────── -->
+  <rule id="100400" level="6">
+    <decoded_as>json</decoded_as>
+    <action>BLOCK</action>
+    <description>WAF 요청 차단 — IP: $(httpRequest.clientIp) 국가: $(httpRequest.country)</description>
+    <group>waf,block,</group>
+  </rule>
+
+  <!-- ──────────────────────────────────────── -->
+  <!-- IP 평판 목록 차단 — 알려진 악성 IP       -->
+  <!-- level 8: 대시보드 가시성, Slack 안 감     -->
+  <!-- ──────────────────────────────────────── -->
+  <rule id="100401" level="8">
+    <if_sid>100400</if_sid>
+    <field name="terminatingRuleId">AWSManagedRulesAmazonIpReputationList</field>
+    <description>WAF 악성 IP 차단 — IP: $(httpRequest.clientIp) 국가: $(httpRequest.country)</description>
+    <group>waf,block,ip_reputation,</group>
+  </rule>
+
+  <!-- ──────────────────────────────────────── -->
+  <!-- SQL Injection 차단                       -->
+  <!-- level 10: Slack 알림 (타겟 공격 가능성)  -->
+  <!-- ──────────────────────────────────────── -->
+  <rule id="100402" level="10">
+    <if_sid>100400</if_sid>
+    <field name="terminatingRuleId">AWSManagedRulesSQLiRuleSet</field>
+    <description>WAF SQL Injection 차단 — IP: $(httpRequest.clientIp) URI: $(httpRequest.uri)</description>
+    <group>waf,block,sql_injection,</group>
+  </rule>
+
+  <!-- ──────────────────────────────────────── -->
+  <!-- OWASP 공통 룰셋 차단                     -->
+  <!-- level 10: Slack 알림 (타겟 공격 가능성)  -->
+  <!-- ──────────────────────────────────────── -->
+  <rule id="100403" level="10">
+    <if_sid>100400</if_sid>
+    <field name="terminatingRuleId">AWSManagedRulesCommonRuleSet</field>
+    <description>WAF OWASP 공격 차단 — IP: $(httpRequest.clientIp) URI: $(httpRequest.uri)</description>
+    <group>waf,block,owasp,</group>
+  </rule>
+
+  <!-- ──────────────────────────────────────── -->
+  <!-- 알려진 악성 입력값 차단                   -->
+  <!-- level 10: Slack 알림                     -->
+  <!-- ──────────────────────────────────────── -->
+  <rule id="100404" level="10">
+    <if_sid>100400</if_sid>
+    <field name="terminatingRuleId">AWSManagedRulesKnownBadInputsRuleSet</field>
+    <description>WAF 악성 입력값 차단 — IP: $(httpRequest.clientIp) URI: $(httpRequest.uri)</description>
+    <group>waf,block,bad_input,</group>
+  </rule>
+
+  <!-- ──────────────────────────────────────── -->
+  <!-- Rate Limit 차단 — 브루트포스 의심         -->
+  <!-- level 12: Slack 알림 (즉각 대응 필요)    -->
+  <!-- ──────────────────────────────────────── -->
+  <rule id="100405" level="12">
+    <if_sid>100400</if_sid>
+    <field name="terminatingRuleId">RateLimitAuthEndpoint</field>
+    <description>WAF Rate Limit 차단 — 브루트포스 의심 IP: $(httpRequest.clientIp)</description>
+    <group>waf,block,bruteforce,</group>
+  </rule>
+
+</group>

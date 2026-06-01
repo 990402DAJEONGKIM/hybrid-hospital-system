@@ -61,6 +61,7 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
         Effect = "Allow"
         Action = [
           "s3:PutObject",
+          "s3:GetObject",
           "s3:ListBucket",
           "s3:GetBucketLocation"
         ]
@@ -87,7 +88,7 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
         Action = [
           "logs:GetLogEvents",
           "logs:DescribeLogStreams",
-          "logs:DescribeLogGroups"
+          
         ]
         Resource = [
           "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/cluster/aws-aurora-01/postgresql",
@@ -104,6 +105,8 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
           "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-patient-alb:*",
           "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-staff-alb",
           "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-staff-alb:*",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/proxy/aws-rds-proxy-01",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/proxy/aws-rds-proxy-01:*"
         ]
       },
       # aws-wazuh-s3 인라인 정책에 추가
@@ -113,6 +116,20 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
         Action = [
           "cloudwatch:PutMetricData"
         ]
+        Resource = "*"
+      },
+      # DescribeLogGroups는 AWS API 구조상 Resource * 필수
+      {
+        Sid    = "CloudWatchLogsDescribe"
+        Effect = "Allow"
+        Action = ["logs:DescribeLogGroups"]
+        Resource = "*"
+      },
+      # VPC Flow Log wodle 내부에서 ec2:DescribeFlowLogs 호출
+      {
+        Sid    = "EC2DescribeFlowLogs"
+        Effect = "Allow"
+        Action = ["ec2:DescribeFlowLogs"]
         Resource = "*"
       }
     ]
