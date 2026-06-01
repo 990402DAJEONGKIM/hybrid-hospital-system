@@ -143,6 +143,21 @@ locals {
             "aws:SourceArn"     = "arn:aws:guardduty:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:detector/${data.terraform_remote_state.security.outputs.guardduty_detector_id}"
         }
       }
+    },
+    {
+      Sid    = "AllowFlowLogsDelivery"
+      Effect = "Allow"
+      Principal = { Service = "delivery.logs.amazonaws.com" }
+      Action = [
+        "kms:GenerateDataKey",
+        "kms:Decrypt"
+      ]
+      Resource = "*"
+      Condition = {
+        StringEquals = {
+          "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+        }
+      }
     }]
     )
   })
