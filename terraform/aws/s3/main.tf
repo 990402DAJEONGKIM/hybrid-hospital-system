@@ -319,7 +319,30 @@ resource "aws_s3_bucket_policy" "storage" {
         Action = ["s3:PutObject", "s3:GetObject"]
         Resource = "${aws_s3_bucket.storage.arn}/github-backup/*"
       },
-
+      {
+        Sid    = "AllowFirehoseWAF"
+        Effect = "Allow"
+        Principal = { Service = "firehose.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/waf/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AllowFirehoseVPN"
+        Effect = "Allow"
+        Principal = { Service = "firehose.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/vpn/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
       {
         Sid       = "DenyNonSSL"
         Effect    = "Deny"
