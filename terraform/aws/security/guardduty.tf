@@ -6,6 +6,8 @@ import {
   id = "692bc5874baa41429fc7396c82c862c6"
 }
 
+
+
 resource "aws_guardduty_detector" "aws-gd" {
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
@@ -17,15 +19,21 @@ resource "aws_guardduty_detector" "aws-gd" {
 }
 
 
+# guardduty/ 폴더 사전 생성
+resource "aws_s3_object" "guardduty_prefix" {
+  bucket       = "aws-k2p-storage-01"
+  key          = "guardduty/"
+  content_type = "application/x-directory"
+}
+
 
 # GuardDuty → S3 직접 내보내기
 resource "aws_guardduty_publishing_destination" "aws-gd-s3" {
-  detector_id     = aws_guardduty_detector.aws-gd.id
-  destination_type = "S3"  
-  destination_arn  = "arn:aws:s3:::aws-k2p-storage-01"
-  kms_key_arn     =  data.terraform_remote_state.kms.outputs.s3_kms_key_arn
-
-
+  detector_id      = aws_guardduty_detector.aws-gd.id
+  destination_type = "S3"
+  destination_arn  = "arn:aws:s3:::aws-k2p-storage-01/guardduty/"
+  kms_key_arn      = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
+  depends_on       = [aws_s3_object.guardduty_prefix]
 }
 
 
