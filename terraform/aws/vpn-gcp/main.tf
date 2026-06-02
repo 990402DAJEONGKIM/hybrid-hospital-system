@@ -32,6 +32,8 @@ data "aws_route_table" "db" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 # ── Customer Gateway — GCP VPN IP 등록 ───────────────────────
 
 resource "aws_customer_gateway" "gcp" {
