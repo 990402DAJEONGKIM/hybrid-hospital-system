@@ -36,6 +36,8 @@ data "aws_route_table" "db" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 # ─────────────────────────────────────────────────────────
 # KMS 키 ARN 참조 (TC-aws-KMS 워크스페이스 output)
 # Firehose가 S3에 저장할 때 SSE-KMS 암호화에 필요
@@ -99,7 +101,7 @@ resource "aws_vpn_connection" "main" {
       log_output_format = "json"
     }
   }
-
+  depends_on = [aws_cloudwatch_log_resource_policy.aws-cwl-policy-vpn-onprem]
   tags = {
     Name = "aws-vpn-01"
   }
@@ -253,4 +255,37 @@ resource "aws_cloudwatch_log_subscription_filter" "aws-cwl-vpn-onprem-to-s3" {
   filter_pattern  = ""
   destination_arn = aws_kinesis_firehose_delivery_stream.aws-firehose-vpn-onprem-01.arn
   role_arn        = aws_iam_role.aws-cwl-firehose-vpn-role.arn
+}
+
+
+# VPN 로그 CloudWatch 전송용 리소스 정책
+# delivery.logs.amazonaws.com이 Log Group에 쓸 수 있도록 허용
+resource "aws_cloudwatch_log_resource_policy" "aws-cwl-policy-vpn-onprem" {
+  policy_name = "aws-cwl-policy-vpn-onprem"
+
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowVPNLogDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vendedlogs/vpn/aws-vpn-01:*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:vpn-connection/*"
+          }
+        }
+      }
+    ]
+  })
 }
