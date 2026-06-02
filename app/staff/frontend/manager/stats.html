@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<!-- by 김다정 — 운영관리자 운영 통계 페이지 (웹 구조도 반영) -->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>운영 통계 - 김이박 클리닉 운영관리자</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .page-wrap { max-width:1100px; margin:80px auto 40px; padding:0 16px; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
+        .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+        .toolbar input { padding:8px 10px; border:1px solid #cfd8dc; border-radius:6px; font-size:14px; }
+        .toolbar button { padding:8px 18px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
+        .stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; margin-bottom:28px; }
+        .stat-card { background:#fff; border-radius:12px; padding:20px 24px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+        .stat-card .num  { font-size:32px; font-weight:700; color:var(--primary); }
+        .stat-card .lbl  { font-size:13px; color:#78909c; margin-top:4px; }
+        .stat-card .diff { font-size:12px; margin-top:6px; }
+        .diff-up   { color:#2e7d32; } .diff-down { color:#c62828; }
+        .card { background:#fff; border-radius:12px; padding:24px; box-shadow:0 2px 12px rgba(0,0,0,.07); margin-bottom:24px; }
+        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table th { background:#eceff1; padding:10px 12px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
+        .data-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; text-align:right; }
+        .data-table td:first-child { text-align:left; font-weight:600; }
+        .notice-box { background:#f3e5f5; border-left:4px solid #7b1fa2; border-radius:6px; padding:10px 16px; font-size:13px; color:#4a148c; margin-bottom:20px; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <a class="back-link" href="../index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
+    <h2 style="margin-bottom:4px;">운영 통계</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:16px;">
+        진료 건수, 예약 현황 통계를 조회합니다.
+    </p>
+
+    <!-- by 김다정 — 통계 데이터는 집계값만 표시, 개인식별정보 미포함 -->
+    <div class="notice-box">
+        <i class="fas fa-shield-alt mr-1"></i>
+        통계 화면에는 <strong>집계 데이터만</strong> 표시됩니다. 개인 식별 정보(실명·연락처)는 포함되지 않습니다.
+    </div>
+
+    <div class="toolbar">
+        <label style="font-size:14px;font-weight:600;color:#546e7a;">기간</label>
+        <input type="date" id="startDate">
+        <span style="color:#78909c;">~</span>
+        <input type="date" id="endDate">
+        <button onclick="loadStats()"><i class="fas fa-chart-bar mr-1"></i> 통계 조회</button>
+    </div>
+
+    <!-- 요약 카드 -->
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="num" id="statTotal">-</div>
+            <div class="lbl">전체 진료 건수</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="statNew">-</div>
+            <div class="lbl">신규 예약</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="statCompleted">-</div>
+            <div class="lbl">진료 완료</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="statNoshow" style="color:#c62828;">-</div>
+            <div class="lbl">미내원</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="statCancelled" style="color:#f57f17;">-</div>
+            <div class="lbl">취소</div>
+        </div>
+    </div>
+
+    <!-- 진료과별 분류 -->
+    <div class="card">
+        <h3 style="margin:0 0 16px;font-size:16px;">진료과별 현황</h3>
+        <table class="data-table">
+            <thead>
+                <tr><th>진료과</th><th>예약</th><th>완료</th><th>취소</th><th>미내원</th></tr>
+            </thead>
+            <tbody id="deptStats">
+                <tr><td colspan="5" style="text-align:center;padding:24px;color:#90a4ae;">기간을 선택 후 조회하세요.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/script.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+    // by 김다정 — 운영 통계 페이지 초기화 (manager 역할 전용)
+    (async () => {
+        const me = await requireRole(['manager', 'admin']);
+        if (!me) return;
+        const today = new Date(); const d = new Date(today);
+        d.setDate(1);
+        document.getElementById('startDate').value = d.toISOString().split('T')[0];
+        document.getElementById('endDate').value   = today.toISOString().split('T')[0];
+        await loadStats();
+    })();
+
+    async function loadStats() {
+        const start = document.getElementById('startDate').value;
+        const end   = document.getElementById('endDate').value;
+        const res   = await apiCall(`/portal/doctor/stats/appointments?start_date=${start}&end_date=${end}`);
+
+        if (!res || !res.ok) {
+            ['statTotal','statNew','statCompleted','statNoshow','statCancelled'].forEach(id => {
+                document.getElementById(id).textContent = '-';
+            });
+            document.getElementById('deptStats').innerHTML =
+                '<tr><td colspan="5" style="text-align:center;padding:20px;color:#e53935;">데이터를 불러올 수 없습니다.</td></tr>';
+            return;
+        }
+        const data = await res.json();
+
+        document.getElementById('statTotal').textContent     = (data.summary?.total     ?? '-').toLocaleString();
+        document.getElementById('statNew').textContent       = (data.summary?.new_count ?? '-').toLocaleString();
+        document.getElementById('statCompleted').textContent = (data.summary?.completed ?? '-').toLocaleString();
+        document.getElementById('statNoshow').textContent    = (data.summary?.no_show   ?? '-').toLocaleString();
+        document.getElementById('statCancelled').textContent = (data.summary?.cancelled ?? '-').toLocaleString();
+
+        const tbody = document.getElementById('deptStats');
+        if (!data.by_department?.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#90a4ae;">진료과 데이터가 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.by_department.map(d => `
+            <tr>
+                <td>${d.department_name || d.department_code}</td>
+                <td>${d.total       ?? 0}</td>
+                <td>${d.completed   ?? 0}</td>
+                <td>${d.cancelled   ?? 0}</td>
+                <td>${d.no_show     ?? 0}</td>
+            </tr>`).join('');
+    }
+</script>
+</body>
+</html>

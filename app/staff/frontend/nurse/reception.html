@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<!-- by 김다정 — 간호사 오늘 접수 현황 페이지 (웹 구조도 반영) -->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>오늘 접수 현황 - 김이박 클리닉 간호사</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .page-wrap { max-width:1100px; margin:80px auto 40px; padding:0 16px; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
+        .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+        .toolbar button { padding:8px 18px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
+        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table th { background:#eceff1; padding:10px 12px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
+        .data-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+        .data-table tr:hover td { background:#f5f5f5; }
+        .status-badge { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+        .status-pending   { background:#fff8e1; color:#f57f17; }
+        .status-confirmed { background:#e8f5e9; color:#2e7d32; }
+        .status-completed { background:#e3f2fd; color:#1565c0; }
+        .status-no_show   { background:#f3e5f5; color:#6a1b9a; }
+        .status-cancelled { background:#ffebee; color:#c62828; }
+        .stat-cards { display:flex; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
+        .stat-card { background:#fff; border-radius:10px; padding:16px 20px; flex:1; min-width:130px;
+            box-shadow:0 2px 8px rgba(0,0,0,.06); text-align:center; }
+        .stat-card .num { font-size:28px; font-weight:700; }
+        .stat-card .lbl { font-size:12px; color:#78909c; margin-top:4px; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <a class="back-link" href="../index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
+    <h2 style="margin-bottom:4px;">오늘 접수 현황</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:20px;" id="dateLabel">오늘 날짜를 불러오는 중...</p>
+
+    <!-- 통계 카드 -->
+    <div class="stat-cards">
+        <div class="stat-card"><div class="num" id="cntTotal" style="color:#1565c0;">0</div><div class="lbl">전체</div></div>
+        <div class="stat-card"><div class="num" id="cntPending" style="color:#f57f17;">0</div><div class="lbl">대기</div></div>
+        <div class="stat-card"><div class="num" id="cntConfirmed" style="color:#2e7d32;">0</div><div class="lbl">확정</div></div>
+        <div class="stat-card"><div class="num" id="cntCompleted" style="color:#1565c0;">0</div><div class="lbl">완료</div></div>
+        <div class="stat-card"><div class="num" id="cntNoshow" style="color:#6a1b9a;">0</div><div class="lbl">미내원</div></div>
+    </div>
+
+    <div class="toolbar">
+        <button onclick="loadToday()"><i class="fas fa-sync-alt mr-1"></i> 새로고침</button>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>시간</th>
+                <th>환자 ID (Hash)</th>
+                <th>진료과</th>
+                <th>유형</th>
+                <th>상태</th>
+            </tr>
+        </thead>
+        <tbody id="receptionBody">
+            <tr><td colspan="5" style="text-align:center;padding:30px;color:#90a4ae;">불러오는 중...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/script.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+    // by 김다정 — 간호사 접수 현황 초기화 (nurse 역할 전용)
+    const STATUS_LABEL = { pending:'대기', confirmed:'확정', completed:'완료', no_show:'미내원', cancelled:'취소' };
+
+    (async () => {
+        const me = await requireRole(['nurse']);
+        if (!me) return;
+        const today = new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+        document.getElementById('dateLabel').textContent = today;
+        await loadToday();
+    })();
+
+    async function loadToday() {
+        const today = new Date().toISOString().split('T')[0];
+        const res   = await apiCall(`/portal/doctor/schedule?date=${today}`);
+        const tbody = document.getElementById('receptionBody');
+
+        if (!res || !res.ok) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#90a4ae;">데이터를 불러올 수 없습니다.</td></tr>';
+            return;
+        }
+
+        const list = await res.json();
+        const counts = { pending:0, confirmed:0, completed:0, no_show:0 };
+        list.forEach(a => { if (counts[a.status_code] !== undefined) counts[a.status_code]++; });
+
+        document.getElementById('cntTotal').textContent     = list.length;
+        document.getElementById('cntPending').textContent   = counts.pending;
+        document.getElementById('cntConfirmed').textContent = counts.confirmed;
+        document.getElementById('cntCompleted').textContent = counts.completed;
+        document.getElementById('cntNoshow').textContent    = counts.no_show;
+
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#90a4ae;">오늘 접수 내역이 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = list.map(a => `
+            <tr>
+                <td>${a.appointment_time || '-'}</td>
+                <td style="font-size:12px;font-family:monospace;">${a.patient_id_hash?.slice(0,8) || '-'}…</td>
+                <td>${a.department_code || '-'}</td>
+                <td>${a.visit_type_code || '-'}</td>
+                <td><span class="status-badge status-${a.status_code}">${STATUS_LABEL[a.status_code] || a.status_code}</span></td>
+            </tr>`).join('');
+    }
+</script>
+</body>
+</html>

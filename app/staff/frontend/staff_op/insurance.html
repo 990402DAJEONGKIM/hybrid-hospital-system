@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<!-- by 김다정 — 원무과 보험 청구 페이지 (웹 구조도 반영) -->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>보험 청구 - 김이박 클리닉 원무과</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .page-wrap { max-width:960px; margin:80px auto 40px; padding:0 16px; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
+        .card { background:#fff; border-radius:12px; padding:24px; box-shadow:0 2px 12px rgba(0,0,0,.07); margin-bottom:24px; }
+        .form-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+        .form-group { display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px; }
+        .form-group label { font-size:13px; font-weight:600; color:#546e7a; }
+        .form-group input, .form-group select {
+            padding:8px 10px; border:1px solid #cfd8dc; border-radius:6px; font-size:14px; outline:none;
+        }
+        .btn-primary { padding:9px 22px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
+        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table th { background:#eceff1; padding:10px 12px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
+        .data-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; }
+        .data-table tr:hover td { background:#f5f5f5; }
+        .badge { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+        .badge-submitted { background:#e3f2fd; color:#1565c0; }
+        .badge-pending   { background:#fff8e1; color:#f57f17; }
+        .badge-approved  { background:#e8f5e9; color:#2e7d32; }
+        .badge-rejected  { background:#ffebee; color:#c62828; }
+        #msg { font-size:13px; font-weight:600; min-height:18px; margin-top:8px; }
+        .msg-ok { color:#2e7d32; } .msg-err { color:#c62828; }
+        .notice-box { background:#e3f2fd; border-left:4px solid #1565c0; border-radius:6px; padding:12px 16px; font-size:13px; color:#0d47a1; margin-bottom:20px; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <a class="back-link" href="../index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
+    <h2 style="margin-bottom:4px;">보험 청구</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:16px;">
+        건강보험 청구 내역을 조회하고 처리합니다.
+        <!-- by 김다정 — audit_log INSURANCE_SUBMIT 기록, ICD코드 기반 청구 -->
+    </p>
+
+    <!-- by 김다정 — ICD/표준코드 기반 청구, 진단 원문 미사용 안내 -->
+    <div class="notice-box">
+        <i class="fas fa-info-circle mr-1"></i>
+        보험 청구는 <strong>ICD 표준 진단코드</strong> 기반으로 처리됩니다.
+        진단 원문(diagnosis_text)은 청구서에 포함되지 않습니다.
+    </div>
+
+    <div class="card">
+        <h3 style="margin:0 0 16px;font-size:16px;">청구 내역 조회</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>청구 기간 (시작)</label>
+                <input type="date" id="startDate">
+            </div>
+            <div class="form-group">
+                <label>청구 기간 (종료)</label>
+                <input type="date" id="endDate">
+            </div>
+            <div class="form-group">
+                <label>청구 상태</label>
+                <select id="statusFilter">
+                    <option value="">전체</option>
+                    <option value="pending">대기</option>
+                    <option value="submitted">제출완료</option>
+                    <option value="approved">승인</option>
+                    <option value="rejected">반려</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex:0;min-width:120px;justify-content:flex-end;">
+                <label>&nbsp;</label>
+                <button class="btn-primary" onclick="loadClaims()">조회</button>
+            </div>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr><th>진료일</th><th>환자 ID (Hash)</th><th>ICD코드</th><th>청구금액</th><th>상태</th><th>처리</th></tr>
+            </thead>
+            <tbody id="claimBody">
+                <tr><td colspan="6" style="text-align:center;padding:24px;color:#90a4ae;">기간을 선택 후 조회하세요.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3 style="margin:0 0 16px;font-size:16px;">신규 청구 등록</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>환자 ID (Hash)</label>
+                <input type="text" id="claimHash" placeholder="patient_id_hash">
+            </div>
+            <div class="form-group">
+                <label>진료일</label>
+                <input type="date" id="claimDate">
+            </div>
+            <div class="form-group">
+                <label>ICD 진단코드</label>
+                <input type="text" id="claimIcd" placeholder="예: J06.9">
+            </div>
+            <div class="form-group">
+                <label>청구금액 (원)</label>
+                <input type="number" id="claimAmount" placeholder="0" min="0">
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+            <button class="btn-primary" onclick="submitClaim()">청구 등록</button>
+            <span id="msg"></span>
+        </div>
+    </div>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/script.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+    // by 김다정 — 보험 청구 페이지 초기화 (staff_op 역할 전용)
+    const BADGE_MAP = {
+        pending: 'badge-pending', submitted: 'badge-submitted',
+        approved: 'badge-approved', rejected: 'badge-rejected',
+    };
+    const STATUS_KR = { pending:'대기', submitted:'제출완료', approved:'승인', rejected:'반려' };
+
+    (async () => {
+        const me = await requireRole(['staff_op']);
+        if (!me) return;
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('endDate').value   = today;
+        document.getElementById('claimDate').value = today;
+        const d = new Date(); d.setDate(1);
+        document.getElementById('startDate').value = d.toISOString().split('T')[0];
+    })();
+
+    async function loadClaims() {
+        const start  = document.getElementById('startDate').value;
+        const end    = document.getElementById('endDate').value;
+        const status = document.getElementById('statusFilter').value;
+        const params = new URLSearchParams({ start_date: start, end_date: end });
+        if (status) params.set('status', status);
+
+        const res   = await apiCall(`/portal/doctor/insurance-claims?${params}`);
+        const tbody = document.getElementById('claimBody');
+        if (!res || !res.ok) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#e53935;">데이터를 불러올 수 없습니다.</td></tr>';
+            return;
+        }
+        const list = await res.json();
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#90a4ae;">청구 내역이 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = list.map(c => `
+            <tr>
+                <td>${c.treatment_date}</td>
+                <td style="font-size:12px;font-family:monospace;">${c.patient_id_hash?.slice(0,8) || '-'}…</td>
+                <td>${c.icd_code}</td>
+                <td>${c.claim_amount?.toLocaleString() || 0}원</td>
+                <td><span class="badge ${BADGE_MAP[c.status] || ''}">${STATUS_KR[c.status] || c.status}</span></td>
+                <td>${c.status === 'pending'
+                    ? `<button style="padding:4px 10px;background:#e3f2fd;color:#1565c0;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;"
+                        onclick="submitExisting('${c.claim_id}', this)">제출</button>`
+                    : '-'}</td>
+            </tr>`).join('');
+    }
+
+    async function submitExisting(claimId, btn) {
+        const res = await apiCall(`/portal/doctor/insurance-claims/${claimId}/submit`, { method: 'PATCH' });
+        if (res && res.ok) {
+            btn.closest('tr').querySelector('.badge').outerHTML =
+                '<span class="badge badge-submitted">제출완료</span>';
+            btn.closest('td').innerHTML = '-';
+        } else {
+            alert('제출 처리 중 오류가 발생했습니다.');
+        }
+    }
+
+    async function submitClaim() {
+        const hash   = document.getElementById('claimHash').value.trim();
+        const date   = document.getElementById('claimDate').value;
+        const icd    = document.getElementById('claimIcd').value.trim();
+        const amount = parseInt(document.getElementById('claimAmount').value);
+        const msg    = document.getElementById('msg');
+
+        if (!hash || !date || !icd || !amount) {
+            msg.textContent = '모든 항목은 필수입니다.';
+            msg.className = 'msg-err';
+            return;
+        }
+        const res = await apiCall('/portal/doctor/insurance-claims', {
+            method: 'POST',
+            body: JSON.stringify({ patient_id_hash: hash, treatment_date: date, icd_code: icd, claim_amount: amount }),
+        });
+        if (res && res.ok) {
+            msg.textContent = '청구가 등록되었습니다.';
+            msg.className = 'msg-ok';
+        } else {
+            const data = await res?.json().catch(() => ({}));
+            msg.textContent = data.detail || '등록 중 오류가 발생했습니다.';
+            msg.className = 'msg-err';
+        }
+    }
+</script>
+</body>
+</html>

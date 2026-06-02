@@ -13,7 +13,13 @@ from core.database import get_db
 from core.middleware import AuditLogMiddleware, SessionExpiryMiddleware
 from routers import admin, auth, emr, portal
 
-app = FastAPI(title="김이박 병원 API — 통합 의료진 포털")
+# by 김다정 — 운영환경 Swagger/OpenAPI UI 비공개 (ISMS-P 7조항, 내부 API 구조 노출 방지)
+app = FastAPI(
+    title="김이박 병원 API — 통합 의료진 포털",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 # 요청 처리 순서: TrustedHost → SessionExpiry → AuditLog → GZip → CORS → App
 app.add_middleware(SessionExpiryMiddleware)
