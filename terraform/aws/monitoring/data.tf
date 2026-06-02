@@ -76,14 +76,17 @@ data "terraform_remote_state" "wazuh_indexer" {
 output "monitoring_instance_id" {
   description = "모니터링 EC2 인스턴스 ID (SSM 접속용)"
   value       = aws_instance.aws-monitoring-01.id
+  sensitive   = true
 }
 
 output "monitoring_private_ip" {
   description = "모니터링 EC2 Private IP"
   value       = aws_instance.aws-monitoring-01.private_ip
+  sensitive   = true
 }
 
 output "grafana_url" {
   description = "Grafana 접속 URL"
   value       = "https://grafana.${var.base_domain}"
+  sensitive   = true
 }
