@@ -8,7 +8,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from core.middleware import AuditLogMiddleware
 from routers import admin, auth, portal
 
-app = FastAPI(title="김이박 병원 API")
+# by 김다정 — 운영환경 Swagger/OpenAPI UI 비공개 (ISMS-P 7조항, 내부 API 구조 노출 방지)
+app = FastAPI(
+    title="김이박 병원 API",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 # 미들웨어 등록 순서: 마지막에 추가된 것이 가장 바깥(요청 최초 진입)
 # 요청 처리 순서: TrustedHost → AuditLog → GZip → CORS → App

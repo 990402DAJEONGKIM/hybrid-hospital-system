@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>환자 검색/조회 — 김이박 병원</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .page-wrap { max-width:1100px; margin:80px auto 40px; padding:0 16px; }
+        .search-bar { display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+        .search-bar input { flex:1; min-width:180px; padding:9px 12px; border:1px solid #cfd8dc; border-radius:6px; font-size:14px; }
+        .search-bar button { padding:9px 20px; background:var(--primary,#1e88e5); color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
+        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table th { background:#eceff1; padding:10px 12px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
+        .data-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+        .data-table tr:hover td { background:#f5f5f5; }
+        .btn-sm { padding:5px 12px; background:#e3f2fd; color:#1565c0; border:none; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; }
+        .btn-sm:hover { background:#bbdefb; }
+        .empty-msg { text-align:center; padding:40px; color:#90a4ae; }
+        .back-link { font-size:13px; color:var(--primary,#1e88e5); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
+        .isms-notice { background:#fff8e1; border:1px solid #f59e0b; border-radius:6px; padding:10px 16px; font-size:12px; color:#92400e; margin-bottom:18px; }
+        /* 환자 상세 모달 */
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; align-items:center; justify-content:center; }
+        .modal-overlay.open { display:flex; }
+        .modal-box { background:#fff; border-radius:12px; padding:28px 28px 24px; max-width:640px; width:100%; max-height:90vh; overflow-y:auto; position:relative; }
+        .modal-close { position:absolute; top:12px; right:16px; background:none; border:none; font-size:20px; cursor:pointer; color:#78909c; }
+        .detail-section { margin-top:16px; }
+        .detail-section h4 { font-size:13px; font-weight:700; color:#546e7a; margin:12px 0 6px; text-transform:uppercase; letter-spacing:.5px; }
+        .detail-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .detail-table th { width:120px; text-align:left; padding:6px 8px; color:#78909c; font-weight:600; background:#f9fafb; }
+        .detail-table td { padding:6px 8px; color:#374151; }
+        .detail-table tr { border-bottom:1px solid #f0f0f0; }
+        .sub-list { font-size:13px; }
+        .sub-list li { padding:4px 0; border-bottom:1px solid #f0f0f0; color:#374151; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
+    <h2 style="margin-bottom:4px;">환자 검색 / 조회</h2>
+    <p style="color:#78909c;font-size:13px;margin-bottom:14px;">온프레미스 EMR 데이터 — 1등급 개인정보 포함</p>
+
+    <div class="isms-notice">
+        <i class="fas fa-lock" style="margin-right:6px;"></i>
+        이 화면의 모든 조회는 <strong>감사 로그</strong>에 기록됩니다 (ISMS-P 2.9.1). 업무 목적 외 조회를 금합니다.
+    </div>
+
+    <div class="search-bar">
+        <input id="nameInput" type="text" placeholder="환자 이름" />
+        <input id="phoneInput" type="text" placeholder="전화번호 일부" />
+        <button onclick="doSearch()"><i class="fas fa-search" style="margin-right:5px;"></i>검색</button>
+    </div>
+
+    <div id="errMsg" style="color:#e53935;font-size:13px;margin-bottom:10px;min-height:18px;"></div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>환자명</th>
+                <th>생년월일</th>
+                <th>성별</th>
+                <th>전화번호</th>
+                <th>상세 조회</th>
+            </tr>
+        </thead>
+        <tbody id="patientBody">
+            <tr><td colspan="5" class="empty-msg">검색어를 입력하고 검색 버튼을 누르세요.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- 환자 상세 모달 -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+        <h3 id="modalTitle" style="margin:0 0 4px;font-size:18px;">환자 상세</h3>
+        <p style="font-size:12px;color:#78909c;margin:0 0 12px;">조회 시각: <span id="auditTs"></span></p>
+
+        <div class="detail-section">
+            <h4>기본 정보</h4>
+            <table class="detail-table">
+                <tr><th>환자명</th><td id="dName"></td></tr>
+                <tr><th>생년월일</th><td id="dBirth"></td></tr>
+                <tr><th>성별</th><td id="dGender"></td></tr>
+                <tr><th>전화번호</th><td id="dPhone"></td></tr>
+            </table>
+        </div>
+
+        <div class="detail-section">
+            <h4>내원 이력</h4>
+            <ul class="sub-list" id="dEncounters"><li>없음</li></ul>
+        </div>
+
+        <div class="detail-section">
+            <h4>알레르기</h4>
+            <ul class="sub-list" id="dAllergies"><li>없음</li></ul>
+        </div>
+
+        <div id="doctorSection" style="display:none;">
+            <div class="detail-section">
+                <h4>진단 (의사/관리자)</h4>
+                <ul class="sub-list" id="dDiagnoses"><li>없음</li></ul>
+            </div>
+            <div class="detail-section">
+                <h4>수술 이력 (의사/관리자)</h4>
+                <ul class="sub-list" id="dSurgeries"><li>없음</li></ul>
+            </div>
+        </div>
+
+        <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
+            <a id="newEncounterBtn" href="#" style="display:none;padding:8px 18px;background:#059669;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+                <i class="fas fa-plus" style="margin-right:5px;"></i>진료 등록
+            </a>
+            <button onclick="closeModal()" style="padding:8px 18px;background:#eceff1;color:#546e7a;border:none;border-radius:6px;font-size:14px;cursor:pointer;">닫기</button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    let currentRole = null;
+    const _patientMap = new Map();
+
+    function _esc(str) {
+        return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    async function init() {
+        const me = await requireLogin();
+        if (!me) return;
+        currentRole = me.role;
+        if (['doctor', 'admin'].includes(me.role)) {
+            document.getElementById('doctorSection').style.display = '';
+        }
+    }
+
+    async function doSearch() {
+        const name  = document.getElementById('nameInput').value.trim();
+        const phone = document.getElementById('phoneInput').value.trim();
+        const errEl = document.getElementById('errMsg');
+        errEl.textContent = '';
+
+        if (!name && !phone) {
+            errEl.textContent = '이름 또는 전화번호를 입력하세요.';
+            return;
+        }
+
+        const params = new URLSearchParams();
+        if (name)  params.append('name',  name);
+        if (phone) params.append('phone', phone);
+
+        const res = await apiCall(`/emr/patients?${params}`);
+        if (!res || !res.ok) {
+            errEl.textContent = res?.status === 503
+                ? '온프레미스 DB에 연결할 수 없습니다. VPN 연결을 확인하세요.'
+                : '조회 실패. 권한을 확인하거나 다시 시도하세요.';
+            return;
+        }
+        const data = await res.json();
+        renderList(data.items || []);
+    }
+
+    // by 김다정 — 1등급 개인정보 마스킹 함수 (ISMS-P 하드스톱 수정)
+    function _maskName(name) {
+        if (!name) return '-';
+        // 성(첫 글자)만 표시, 나머지 ● 처리
+        return name[0] + '●'.repeat(Math.max(name.length - 1, 1));
+    }
+    function _maskPhone(phone) {
+        if (!phone) return '-';
+        // 중간 4자리 마스킹: 010-1234-5678 → 010-****-5678
+        return phone.replace(/(\d{3})-?(\d{3,4})-?(\d{4})/, '$1-****-$3');
+    }
+
+    function renderList(items) {
+        const GENDER = { M: '남', F: '여' };
+        const tbody = document.getElementById('patientBody');
+        _patientMap.clear();
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">검색 결과가 없습니다.</td></tr>';
+            return;
+        }
+        items.forEach(p => _patientMap.set(p.patient_id, p));
+        tbody.innerHTML = items.map(p => `
+            <tr>
+                <td style="font-weight:600;">${_esc(_maskName(p.patient_name))}</td>
+                <td>${_esc(p.birth_date ? p.birth_date.slice(0,4) + '년생' : '-')}</td>
+                <td>${GENDER[p.gender_code] || _esc(p.gender_code) || '-'}</td>
+                <td>${_esc(_maskPhone(p.phone_number))}</td>
+                <td>
+                    <button class="btn-sm" data-pid="${_esc(p.patient_id)}" onclick="openDetail(this.dataset.pid)">
+                        <i class="fas fa-folder-open" style="margin-right:4px;"></i>상세
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function openDetail(patientId) {
+        // 기본 정보
+        const res = await apiCall(`/emr/patients/${patientId}`);
+        if (!res || !res.ok) { alert('상세 정보를 불러올 수 없습니다.'); return; }
+        const p = await res.json();
+
+        // by 김다정 — 모달에서도 실명·전화번호 마스킹 적용 (ISMS-P 하드스톱 수정)
+        document.getElementById('modalTitle').textContent  = `환자 상세 — ${_maskName(p.patient_name)}`;
+        document.getElementById('auditTs').textContent     = new Date().toLocaleString('ko-KR');
+        document.getElementById('dName').textContent       = _maskName(p.patient_name);
+        document.getElementById('dBirth').textContent      = p.birth_date ? p.birth_date.slice(0,4) + '년생' : '-';
+        document.getElementById('dGender').textContent     = p.gender_code === 'M' ? '남' : p.gender_code === 'F' ? '여' : '-';
+        document.getElementById('dPhone').textContent      = _maskPhone(p.phone_number);
+
+        // 내원 이력
+        const encRes = await apiCall(`/emr/patients/${patientId}/encounters`);
+        const encList = encRes?.ok ? await encRes.json() : [];
+        document.getElementById('dEncounters').innerHTML = encList.length
+            ? encList.map(e => `<li>${_esc(e.visit_datetime?.slice(0,10) || '-')} · ${_esc(e.department_code || '-')} · ${_esc(e.encounter_type || '-')} · <span style="color:#546e7a">${_esc(e.status_code)}</span></li>`).join('')
+            : '<li>없음</li>';
+
+        // 알레르기
+        const algRes = await apiCall(`/emr/patients/${patientId}/allergies`);
+        const algList = algRes?.ok ? await algRes.json() : [];
+        document.getElementById('dAllergies').innerHTML = algList.length
+            ? algList.map(a => `<li>${_esc(a.allergy_name || '-')} (${_esc(a.severity_code || '-')})</li>`).join('')
+            : '<li>없음</li>';
+
+        // by 김다정 — 진단 원문(diagnosis_text) 제거, ICD 코드만 표시 (ISMS-P 하드스톱 수정)
+        if (['doctor', 'admin'].includes(currentRole)) {
+            const diagRes = await apiCall(`/emr/patients/${patientId}/diagnoses`);
+            const diagList = diagRes?.ok ? await diagRes.json() : [];
+            document.getElementById('dDiagnoses').innerHTML = diagList.length
+                ? diagList.map(d => `<li>${_esc(d.diagnosis_code)}${d.is_primary ? ' <strong>(주진단)</strong>' : ''}</li>`).join('')
+                : '<li>없음</li>';
+
+            const surgRes = await apiCall(`/emr/patients/${patientId}/surgery-histories`);
+            const surgList = surgRes?.ok ? await surgRes.json() : [];
+            document.getElementById('dSurgeries').innerHTML = surgList.length
+                ? surgList.map(s => `<li>${_esc(s.surgery_date || '-')} · ${_esc(s.surgery_name || '-')}</li>`).join('')
+                : '<li>없음</li>';
+        }
+
+        // by 김다정 — URL에서 pname(실명) 파라미터 제거 (ISMS-P 하드스톱 수정)
+        const encBtn = document.getElementById('newEncounterBtn');
+        if (['nurse', 'admin'].includes(currentRole)) {
+            encBtn.href  = `/encounter-new.html?pid=${patientId}`;
+            encBtn.style.display = '';
+        } else {
+            encBtn.style.display = 'none';
+        }
+
+        document.getElementById('detailModal').classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        document.getElementById('detailModal').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+
+    document.getElementById('nameInput').addEventListener('keypress', e => { if (e.key === 'Enter') doSearch(); });
+    document.getElementById('phoneInput').addEventListener('keypress', e => { if (e.key === 'Enter') doSearch(); });
+
+    init();
+</script>
+</body>
+</html>

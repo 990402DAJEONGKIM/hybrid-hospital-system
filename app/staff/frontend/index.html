@@ -89,7 +89,8 @@
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
 <script>
-    const ROLE_LABELS = { nurse:'원무과', doctor:'의사', admin:'관리자' };
+    // by 김다정 — staff_op(원무과), manager(운영관리자) 역할 레이블 추가
+    const ROLE_LABELS = { nurse:'간호사', doctor:'의사', admin:'관리자', staff_op:'원무과', manager:'운영관리자' };
     const MENU_DESC = {
         NURSE_DASHBOARD:  '날짜·상태별 예약 목록 및 처리',
         NURSE_APPT_NEW:   '방문 환자 직접 예약 등록',
@@ -102,6 +103,15 @@
         ADMIN_LOGS:       '전체 사용자 활동 감사 로그',
         ADMIN_LOGIN_HIST: '로그인 성공·실패·잠금 이력',
         CHANGE_PW:        '비밀번호 주기적 변경',
+        // by 김다정 — staff_op, manager 메뉴 설명 추가
+        RECEPTION:        '방문 환자 접수 등록',
+        PAYMENT:          '진료비 수납 처리',
+        INSURANCE:        '건강보험 청구 처리',
+        MGR_STATS:        '진료 건수·예약 현황 통계',
+        MGR_REVENUE:      '수납·청구 매출 집계',
+        MGR_STAFF:        '의료진 스케줄 및 인력 현황',
+        DOCTOR_PRESCRIPTION: '처방전 작성 및 조회',
+        NURSE_MEDICATION: '투약 내역 기록 및 확인',
     };
 
     async function init() {
@@ -156,6 +166,19 @@
                 {url:'/admin-logs.html',            icon:'clipboard-list', name:'감사 로그',      desc:'전체 사용자 활동 감사 로그'},
                 {url:'/admin-login-history.html',   icon:'history',        name:'로그인 이력',    desc:'로그인 성공·실패·잠금 이력'},
                 {url:'/change-password.html',       icon:'key',            name:'비밀번호 변경',  desc:'비밀번호 주기적 변경'},
+            ],
+            // by 김다정 — 원무과(staff_op), 운영관리자(manager) 기본 메뉴 추가
+            staff_op: [
+                {url:'/staff_op/reception.html',  icon:'clipboard-check', name:'환자 접수',     desc:'방문 환자 접수 등록'},
+                {url:'/staff_op/payment.html',    icon:'dollar-sign',     name:'수납 처리',     desc:'진료비 수납 처리'},
+                {url:'/staff_op/insurance.html',  icon:'file-medical',    name:'보험 청구',     desc:'건강보험 청구 처리'},
+                {url:'/change-password.html',     icon:'key',             name:'비밀번호 변경', desc:'비밀번호 주기적 변경'},
+            ],
+            manager: [
+                {url:'/manager/stats.html',   icon:'chart-bar',    name:'운영 통계',     desc:'진료 건수·예약 현황 통계'},
+                {url:'/manager/revenue.html', icon:'chart-line',   name:'매출 현황',     desc:'수납·청구 매출 집계'},
+                {url:'/manager/staff.html',   icon:'users-cog',    name:'인력 현황',     desc:'의료진 스케줄 및 인력 현황'},
+                {url:'/change-password.html', icon:'key',          name:'비밀번호 변경', desc:'비밀번호 주기적 변경'},
             ],
         };
         const grid = document.getElementById('menuGrid');

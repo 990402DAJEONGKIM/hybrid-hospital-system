@@ -70,7 +70,10 @@ async function requireLogin() {
     const res = await apiCall('/auth/me');
     if (!res || !res.ok) { window.location.href = 'login.html'; return null; }
     const me = await res.json();
-    if (!['doctor', 'nurse', 'admin'].includes(me.role)) { window.location.href = 'login.html'; return null; }
+    // by 김다정 — staff_op(원무과), manager(운영관리자) 역할 추가 (웹 구조도 반영)
+    if (!['doctor', 'nurse', 'admin', 'staff_op', 'manager'].includes(me.role)) {
+        window.location.href = 'login.html'; return null;
+    }
     if (me.password_expired) { window.location.href = 'change-password.html'; return null; }
     return me;
 }
