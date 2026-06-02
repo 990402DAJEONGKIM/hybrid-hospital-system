@@ -63,6 +63,33 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue"]
         Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:aws-grafana-admin-password*"
+      },
+      {
+        # Secrets Manager KMS 복호화 권한
+        Sid    = "KMSDecrypt"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.${data.aws_region.current.name}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Sid    = "ResourceRead"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeTags",
+          "ec2:DescribeInstances",
+          "ec2:DescribeRegions",
+          "ec2:DescribeAvailabilityZones",  # ← 추가
+          "tag:GetResources"
+        ]
+        Resource = "*"
       }
     ]
   })
