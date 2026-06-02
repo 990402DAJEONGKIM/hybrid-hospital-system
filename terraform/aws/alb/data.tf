@@ -93,3 +93,23 @@ data "terraform_remote_state" "s3" {
     workspaces = { name = "TC-aws-S3" }
   }
 }
+
+
+
+# Grafana ACM 인증서 — staff-alb SNI 추가용
+# TC-aws-ACM에서 grafana 인증서 발급 후 사용 가능
+data "aws_acm_certificate" "grafana" {
+  domain      = "grafana.${var.base_domain}"
+  statuses    = ["ISSUED"]
+  most_recent = true
+}
+
+# monitoring EC2 Private IP 참조
+# TC-aws-monitoring output에서 가져옴
+data "terraform_remote_state" "monitoring" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-aws-monitoring" }
+  }
+}
