@@ -68,6 +68,13 @@ data "terraform_remote_state" "wazuh_indexer" {
     workspaces = { name = "TC-aws-wazuh-indexer" }
   }
 }
+data "terraform_remote_state" "kms" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-aws-KMS" }
+  }
+}
 
 
 

@@ -62,7 +62,7 @@ resource "aws_instance" "aws-monitoring-01" {
   iam_instance_profile   = aws_iam_instance_profile.aws-monitoring-profile.name
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
-    aws_region             = data.aws_region.current.name
+    aws_region             = data.aws_region.current.region
     base_domain            = var.base_domain
     wazuh_manager_ip       = data.terraform_remote_state.wazuh.outputs.wazuh_private_ip
     wazuh_indexer_ip       = data.terraform_remote_state.wazuh_indexer.outputs.indexer_private_ip
