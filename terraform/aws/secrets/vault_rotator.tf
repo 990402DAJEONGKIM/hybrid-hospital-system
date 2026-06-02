@@ -58,15 +58,22 @@ resource "aws_iam_role_policy" "vault_rotator_secrets" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = ["secretsmanager:GetSecretValue"]
-      Resource = [
-        aws_secretsmanager_secret.vault_lambda_approle_v2.arn,
-        "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:rds!cluster-1073d242*",
-        aws_secretsmanager_secret.jwt_secret_v2.arn,
-      ]
-    }]
+    Statement = [
+  {
+    Effect = "Allow"
+    Action = ["secretsmanager:GetSecretValue"]
+    Resource = [
+      aws_secretsmanager_secret.vault_lambda_approle_v2.arn,
+      "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:rds!cluster-1073d242*",
+      aws_secretsmanager_secret.jwt_secret_v2.arn,
+    ]
+  },
+  {
+    Effect = "Allow"
+    Action = ["kms:Decrypt"]
+    Resource = [data.aws_kms_key.secretsmanager.arn]
+  }
+]
   })
 }
 
