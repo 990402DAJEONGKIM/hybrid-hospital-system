@@ -10,8 +10,8 @@ apt-get update -y
 apt-get install -y wget curl apt-transport-https software-properties-common gpg
 
 
-# ── AWS CLI 설치 ──────────────────────────────────────────
-curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+# ── AWS CLI v2 설치 (AWS 공식문서 기준) ──────────────────
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
 unzip -q /tmp/awscliv2.zip -d /tmp/
 /tmp/aws/install
 rm -rf /tmp/aws /tmp/awscliv2.zip
