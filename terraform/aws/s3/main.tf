@@ -356,7 +356,7 @@ resource "aws_s3_bucket_policy" "storage" {
 # ISMS-P 2.9.1: 1년 보존
 # ─────────────────────────────────────────────────────────
 resource "aws_s3_bucket" "aws-alb-logs-01" {
-  bucket = "aws-alb-logs-${data.aws_caller_identity.current.account_id}"
+  bucket = "aws-k2p-alb-01"
 
   tags = merge(local.common_tags, {
     Name    = "aws-alb-logs-01"
