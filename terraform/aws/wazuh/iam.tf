@@ -68,8 +68,8 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
         Resource = [
           "arn:aws:s3:::aws-k2p-storage-01",
           "arn:aws:s3:::aws-k2p-storage-01/*",
-          "arn:aws:s3:::aws-alb-logs-${data.aws_caller_identity.current.account_id}",
-          "arn:aws:s3:::aws-alb-logs-${data.aws_caller_identity.current.account_id}/*"
+          "arn:aws:s3:::aws-k2p-alb-01",
+          "arn:aws:s3:::aws-k2p-alb-01/*"
         ]
       },
       # aws-k2p-storage-01 버킷 SSE-KMS 암호화/복호화용 KMS 키
