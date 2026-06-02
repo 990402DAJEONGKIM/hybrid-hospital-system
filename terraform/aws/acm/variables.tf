@@ -27,3 +27,10 @@ variable "wazuh_subdomain" {
   type        = string
   default     = "wazuh"
 }
+
+# 2026-06-02 Grafana 서브도메인 추가 - 김강환
+variable "grafana_subdomain" {
+  description = "Grafana 대시보드 서브도메인 prefix"
+  type        = string
+  default     = "grafana"
+}
