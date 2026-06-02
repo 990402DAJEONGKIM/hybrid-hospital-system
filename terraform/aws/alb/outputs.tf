@@ -32,3 +32,9 @@ output "wazuh_tg_arn" {
   description = "Wazuh 대시보드 Target Group ARN"
   value       = aws_lb_target_group.wazuh.arn
 }
+
+
+output "grafana_tg_arn" {
+  description = "Grafana Target Group ARN"
+  value       = aws_lb_target_group.aws-grafana-tg.arn
+}
