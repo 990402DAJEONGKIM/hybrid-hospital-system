@@ -30,3 +30,9 @@ data "terraform_remote_state" "security" {
     }
   }
 }
+
+
+output "alb_logs_bucket_name" {
+  description = "ALB 액세스 로그 버킷 이름 (TC-aws-ALB에서 참조)"
+  value       = aws_s3_bucket.aws-alb-logs-01.bucket
+}

@@ -270,32 +270,6 @@ resource "aws_s3_bucket_policy" "storage" {
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.storage.arn
       },
-      ## ALB 로그 권한 예시 (20260530, by 김강환) - ALB → S3 로그 전달용
-      # {
-      #   Sid    = "ALBLogDelivery"
-      #   Effect = "Allow"
-      #   Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
-      #   Action   = "s3:PutObject"
-      #   Resource = "${aws_s3_bucket.storage.arn}/alb/*"
-      #   Condition = {
-      #     StringEquals = {
-      #       "s3:x-amz-acl"     = "bucket-owner-full-control"
-      #       "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-      #     }
-      #   }
-      # },
-      # {
-      #   Sid    = "ALBLogAclCheck"
-      #   Effect = "Allow"
-      #   Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
-      #   Action   = "s3:GetBucketAcl"
-      #   Resource = aws_s3_bucket.storage.arn
-      #   Condition = {
-      #     StringEquals = {
-      #       "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-      #     }
-      #   }
-      # },
 
       # 추가: GitHub Actions 백업 권한 (20260530, by 김다정)
       {
@@ -369,4 +343,119 @@ resource "aws_s3_bucket_policy" "storage" {
   })
 
   depends_on = [aws_s3_bucket_public_access_block.storage]
+}
+
+
+
+
+
+# ─────────────────────────────────────────────────────────
+# ALB 액세스 로그 전용 버킷
+# ALB 로그는 SSE-KMS 미지원 → SSE-S3만 가능 (AWS 제약)
+# 공식문서: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html
+# ISMS-P 2.9.1: 1년 보존
+# ─────────────────────────────────────────────────────────
+resource "aws_s3_bucket" "aws-alb-logs-01" {
+  bucket = "aws-alb-logs-${data.aws_caller_identity.current.account_id}"
+
+  tags = merge(local.common_tags, {
+    Name    = "aws-alb-logs-01"
+    Purpose = "ALB-access-log-retention-ISMS-P-2.9.1"
+  })
+}
+
+resource "aws_s3_bucket_public_access_block" "aws-alb-logs-01" {
+  bucket = aws_s3_bucket.aws-alb-logs-01.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# ALB 로그는 SSE-KMS 미지원 — SSE-S3 필수
+resource "aws_s3_bucket_server_side_encryption_configuration" "aws-alb-logs-01" {
+  bucket = aws_s3_bucket.aws-alb-logs-01.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "aws-alb-logs-01" {
+  bucket = aws_s3_bucket.aws-alb-logs-01.id
+
+  rule {
+    id     = "alb-log-lifecycle"
+    status = "Enabled"
+    filter {}
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER_IR"
+    }
+
+    expiration {
+      days = 365
+    }
+  }
+}
+
+# ALB 로그 전달 허용 버킷 정책
+# logdelivery.elasticloadbalancing.amazonaws.com 서비스 주체 필요
+# 공식문서 기준: Resource에 계정 ID 포함 필수
+
+resource "aws_s3_bucket_policy" "aws-alb-logs-01" {
+  bucket = aws_s3_bucket.aws-alb-logs-01.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ALBLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.aws-alb-logs-01.arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "ALBLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.aws-alb-logs-01.arn
+      },
+      {
+        Sid       = "DenyNonSSL"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.aws-alb-logs-01.arn,
+          "${aws_s3_bucket.aws-alb-logs-01.arn}/*"
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+          StringNotEqualsIfExists = {
+            "aws:PrincipalServiceNamesList" = [
+              "logdelivery.elasticloadbalancing.amazonaws.com"
+            ]
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.aws-alb-logs-01]
 }
