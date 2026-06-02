@@ -202,9 +202,10 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
   }
 
   # 2026-05-20 김강환 pgaudit 추가(누가 언제 어떤 데이터를 조회/수정/삭제했는지 기록)
+  # 2026-06-02 pgaudit 설정: read 추가
   parameter {
     name         = "pgaudit.log"
-    value        = "write,ddl,role"
+    value        = "read,write,ddl,role"
     apply_method = "pending-reboot"
   }
 

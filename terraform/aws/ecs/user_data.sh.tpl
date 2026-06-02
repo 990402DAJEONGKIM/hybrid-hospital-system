@@ -59,6 +59,7 @@ TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
 AGENT_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
   http://169.254.169.254/latest/meta-data/local-ipv4 | tr '.' '-')
 sed -i "s|AGENT_IP_PLACEHOLDER|$AGENT_IP|" /var/ossec/etc/ossec.conf
+usermod -aG docker wazuh 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl start wazuh-agent || true
