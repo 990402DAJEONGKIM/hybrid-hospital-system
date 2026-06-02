@@ -754,6 +754,17 @@
         mode: '0600'
       tags: config
 
+    - name: remoted.guess_agent_group 설정
+      lineinfile:
+        path: /var/ossec/etc/local_internal_options.conf
+        regexp: '^remoted.guess_agent_group='
+        line: 'remoted.guess_agent_group=1'
+        create: yes
+        owner: root
+        group: wazuh
+        mode: '0640'
+      tags: config
+
 
     - name: 1단계 - Wazuh Manager 재시작
       systemd:

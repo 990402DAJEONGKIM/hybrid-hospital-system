@@ -67,7 +67,9 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
         ]
         Resource = [
           "arn:aws:s3:::aws-k2p-storage-01",
-          "arn:aws:s3:::aws-k2p-storage-01/*"
+          "arn:aws:s3:::aws-k2p-storage-01/*",
+          "arn:aws:s3:::aws-alb-logs-${data.aws_caller_identity.current.account_id}",
+          "arn:aws:s3:::aws-alb-logs-${data.aws_caller_identity.current.account_id}/*"
         ]
       },
       # aws-k2p-storage-01 버킷 SSE-KMS 암호화/복호화용 KMS 키
@@ -106,7 +108,7 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
           "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-staff-alb",
           "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-staff-alb:*",
           "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/proxy/aws-rds-proxy-01",
-          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/proxy/aws-rds-proxy-01:*"
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/proxy/aws-rds-proxy-01:*",
         ]
       },
       # aws-wazuh-s3 인라인 정책에 추가
