@@ -15,18 +15,6 @@ variable "base_domain" {
   default     = "mzclinic.cloud"
 }
 
-variable "grafana_admin_password" {
-  description = "Grafana admin 비밀번호 — TFC sensitive 변수로 관리"
-  type        = string
-  sensitive   = true
-}
-
-variable "onprem_ip" {
-  description = "온프레미스 서버 IP (Prometheus scrape용)"
-  type        = string
-}
-
-
 
 
 

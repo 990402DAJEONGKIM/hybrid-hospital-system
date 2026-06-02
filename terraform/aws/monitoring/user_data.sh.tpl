@@ -59,7 +59,7 @@ scrape_configs:
   # 온프레미스 서버
   - job_name: 'onprem'
     static_configs:
-      - targets: ['${onprem_ip}:9100']
+      - targets: ['172.30.1.76:9100']
         labels:
           instance: 'onprem-mspserver'
 
@@ -117,6 +117,14 @@ echo "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stab
 apt-get update -y
 apt-get install -y grafana
 
+
+# ── Secrets Manager에서 Grafana 비밀번호 가져오기 ─────────
+GRAFANA_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
+  --secret-id "aws-grafana-admin-password" \
+  --region ${aws_region} \
+  --query SecretString \
+  --output text)
+
 # ── Grafana 설정 ─────────────────────────────────────────
 cat > /etc/grafana/grafana.ini <<GRAFANAEOF
 [server]
@@ -125,7 +133,7 @@ root_url = https://grafana.${base_domain}
 
 [security]
 admin_user = admin
-admin_password = ${grafana_admin_password}
+admin_password = $GRAFANA_ADMIN_PASSWORD
 disable_gravatar = true
 
 [auth.anonymous]
