@@ -85,3 +85,11 @@ data "aws_instance" "wazuh2" {
     values = ["running", "stopped"]
   }
 }
+
+data "terraform_remote_state" "s3" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-aws-S3" }
+  }
+}
