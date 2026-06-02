@@ -8,6 +8,7 @@ set -e
 # ── 기본 패키지 ──────────────────────────────────────────
 apt-get update -y
 apt-get install -y wget curl apt-transport-https software-properties-common gpg
+apt-get install -y unzip 
 
 
 # ── AWS CLI v2 설치 (AWS 공식문서 기준) ──────────────────
