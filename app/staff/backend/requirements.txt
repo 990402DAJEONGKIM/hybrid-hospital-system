@@ -10,3 +10,4 @@ pydantic[email]
 boto3
 pyotp
 qrcode[pil]
+httpx
