@@ -161,6 +161,28 @@ locals {
     }]
     )
   })
+  sm_key_policy = jsonencode({
+  Version = "2012-10-17"
+  Statement = concat(
+    jsondecode(local.key_policy).Statement,
+    [
+      {
+        # monitoring EC2 — Grafana 비밀번호 복호화 전용
+        # sm 키에만 적용, 다른 키(rds/ebs/s3/ecr)에는 접근 불가
+        Sid    = "AllowMonitoringEC2"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-monitoring-role"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  )
+})
 }
 
 
@@ -250,7 +272,7 @@ resource "aws_kms_key" "secretsmanager" {
   enable_key_rotation     = true
   rotation_period_in_days = var.key_rotation_period_days
   deletion_window_in_days = var.deletion_window_days
-  policy                  = local.key_policy
+  policy                  = local.sm_key_policy
 
   tags = {
     Name    = "aws-kms-sm-01"
