@@ -288,3 +288,37 @@ resource "aws_cloudwatch_log_subscription_filter" "aws-cwl-vpn-gcp-to-s3" {
   destination_arn = aws_kinesis_firehose_delivery_stream.aws-firehose-vpn-gcp-01.arn
   role_arn        = aws_iam_role.aws-cwl-firehose-vpn-gcp-role.arn
 }
+
+
+
+# VPN 로그 CloudWatch 전송용 리소스 정책
+# delivery.logs.amazonaws.com이 Log Group에 쓸 수 있도록 허용
+resource "aws_cloudwatch_log_resource_policy" "aws-cwl-policy-vpn-gcp" {
+  policy_name = "aws-cwl-policy-vpn-gcp"
+
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowVPNLogDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vendedlogs/vpn/aws-vpn-gcp:*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:vpn-connection/*"
+          }
+        }
+      }
+    ]
+  })
+}
