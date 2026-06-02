@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<!-- by 김다정 — 간호사 투약 관리 페이지 (웹 구조도 반영) -->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>투약 관리 - 김이박 클리닉 간호사</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .page-wrap { max-width:1100px; margin:80px auto 40px; padding:0 16px; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
+        .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+        .toolbar input { padding:8px 10px; border:1px solid #cfd8dc; border-radius:6px; font-size:14px; }
+        .toolbar button { padding:8px 18px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
+        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table th { background:#eceff1; padding:10px 12px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
+        .data-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+        .data-table tr:hover td { background:#f5f5f5; }
+        .given-badge  { background:#e8f5e9; color:#2e7d32; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+        .pending-badge { background:#fff8e1; color:#f57f17; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+        .btn-give { padding:5px 12px; background:#e3f2fd; color:#1565c0; border:none; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; }
+        .btn-give:hover { background:#bbdefb; }
+        .notice-box { background:#fff3e0; border-left:4px solid #f57f17; border-radius:6px; padding:12px 16px; font-size:13px; color:#e65100; margin-bottom:20px; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <a class="back-link" href="../index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
+    <h2 style="margin-bottom:4px;">투약 관리</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:16px;">처방전 기반 투약 내역을 기록하고 확인합니다.</p>
+
+    <!-- by 김다정 — 투약 기록 시 patient_id_hash 기반으로만 조회, audit_log MEDICATION_UPDATE 기록 안내 -->
+    <div class="notice-box">
+        <i class="fas fa-info-circle mr-1"></i>
+        투약 기록 시 <strong>환자 ID(Hash)</strong>와 <strong>약품명</strong>만 저장됩니다.
+        실명·연락처는 표시되지 않습니다. 모든 투약 기록은 감사로그(MEDICATION_UPDATE)에 남습니다.
+    </div>
+
+    <div class="toolbar">
+        <input type="date" id="searchDate">
+        <input type="text" id="searchHash" placeholder="환자 ID (Hash)" style="max-width:200px;">
+        <button onclick="loadMedications()">조회</button>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>처방일</th>
+                <th>환자 ID (Hash)</th>
+                <th>약품명</th>
+                <th>용량/횟수/일수</th>
+                <th>투약 여부</th>
+                <th>처리</th>
+            </tr>
+        </thead>
+        <tbody id="medBody">
+            <tr><td colspan="6" style="text-align:center;padding:30px;color:#90a4ae;">날짜 또는 환자 ID로 조회하세요.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/script.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+    // by 김다정 — 투약 관리 페이지 초기화 (nurse 역할 전용)
+    (async () => {
+        const me = await requireRole(['nurse']);
+        if (!me) return;
+        document.getElementById('searchDate').value = new Date().toISOString().split('T')[0];
+    })();
+
+    async function loadMedications() {
+        const date = document.getElementById('searchDate').value;
+        const hash = document.getElementById('searchHash').value.trim();
+        const params = new URLSearchParams();
+        if (date) params.set('date', date);
+        if (hash) params.set('patient_id_hash', hash);
+
+        const res   = await apiCall(`/emr/medications?${params}`);
+        const tbody = document.getElementById('medBody');
+
+        if (!res || !res.ok) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#90a4ae;">데이터를 불러올 수 없습니다.</td></tr>';
+            return;
+        }
+        const list = await res.json();
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#90a4ae;">해당 조건의 투약 내역이 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = list.map(m => `
+            <tr>
+                <td>${m.presc_date}</td>
+                <td style="font-size:12px;font-family:monospace;">${m.patient_id_hash?.slice(0,8) || '-'}…</td>
+                <td>${m.drug_name}</td>
+                <td>${m.dosage || '-'} / ${m.frequency || '-'} / ${m.days ?? '-'}일</td>
+                <td>${m.is_given
+                    ? '<span class="given-badge">완료</span>'
+                    : '<span class="pending-badge">미투약</span>'}</td>
+                <td>${!m.is_given
+                    ? `<button class="btn-give" onclick="markGiven('${m.med_id}', this)">투약 완료</button>`
+                    : '-'}</td>
+            </tr>`).join('');
+    }
+
+    async function markGiven(medId, btn) {
+        const res = await apiCall(`/emr/medications/${medId}/given`, { method: 'PATCH' });
+        if (res && res.ok) {
+            btn.closest('tr').querySelector('.pending-badge').outerHTML = '<span class="given-badge">완료</span>';
+            btn.closest('td').innerHTML = '-';
+        } else {
+            alert('투약 처리 중 오류가 발생했습니다.');
+        }
+    }
+</script>
+</body>
+</html>

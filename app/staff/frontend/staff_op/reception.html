@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<!-- by 김다정 — 원무과 환자 접수 페이지 (웹 구조도 반영) -->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>환자 접수 - 김이박 클리닉 원무과</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .page-wrap { max-width:960px; margin:80px auto 40px; padding:0 16px; }
+        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
+        .back-link:hover { text-decoration:underline; }
+        .card { background:#fff; border-radius:12px; padding:24px; box-shadow:0 2px 12px rgba(0,0,0,.07); margin-bottom:24px; }
+        .form-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+        .form-group { display:flex; flex-direction:column; gap:4px; flex:1; min-width:180px; }
+        .form-group label { font-size:13px; font-weight:600; color:#546e7a; }
+        .form-group input, .form-group select {
+            padding:8px 10px; border:1px solid #cfd8dc; border-radius:6px; font-size:14px; outline:none;
+        }
+        .form-group input:focus, .form-group select:focus { border-color:var(--primary); }
+        .btn-primary { padding:9px 22px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
+        .btn-primary:hover { opacity:.9; }
+        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table th { background:#eceff1; padding:10px 12px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
+        .data-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; }
+        .data-table tr:hover td { background:#f5f5f5; }
+        .status-badge { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+        .status-pending   { background:#fff8e1; color:#f57f17; }
+        .status-confirmed { background:#e8f5e9; color:#2e7d32; }
+        #msg { font-size:13px; font-weight:600; min-height:18px; margin-top:8px; }
+        .msg-ok  { color:#2e7d32; }
+        .msg-err { color:#c62828; }
+    </style>
+</head>
+<body style="background:#f5f7fa;min-height:100vh;">
+<div class="page-wrap">
+    <a class="back-link" href="../index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
+    <h2 style="margin-bottom:4px;">환자 접수</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:20px;">
+        방문 환자의 예약을 확인하고 접수 처리합니다.
+        <!-- by 김다정 — audit_log RECEPTION_CREATE 기록, patient_id_hash 기반 조회 -->
+    </p>
+
+    <!-- 예약 조회 -->
+    <div class="card">
+        <h3 style="margin:0 0 16px;font-size:16px;">예약 조회</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>환자 ID (Hash)</label>
+                <!-- by 김다정 — 실명 대신 patient_id_hash로 조회 -->
+                <input type="text" id="searchHash" placeholder="patient_id_hash 입력">
+            </div>
+            <div class="form-group" style="flex:0;min-width:140px;justify-content:flex-end;">
+                <label>&nbsp;</label>
+                <button class="btn-primary" onclick="searchAppointments()">
+                    <i class="fas fa-search mr-1"></i> 조회
+                </button>
+            </div>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr><th>예약일</th><th>진료과</th><th>유형</th><th>상태</th><th>처리</th></tr>
+            </thead>
+            <tbody id="searchResult">
+                <tr><td colspan="5" style="text-align:center;padding:24px;color:#90a4ae;">환자 ID를 입력 후 조회하세요.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 수동 접수 등록 -->
+    <div class="card">
+        <h3 style="margin:0 0 16px;font-size:16px;">수동 접수 등록</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>환자 ID (Hash)</label>
+                <input type="text" id="regHash" placeholder="patient_id_hash">
+            </div>
+            <div class="form-group">
+                <label>진료과</label>
+                <select id="regDept"><option value="">선택</option></select>
+            </div>
+            <div class="form-group">
+                <label>예약일</label>
+                <input type="date" id="regDate">
+            </div>
+            <div class="form-group">
+                <label>방문 유형</label>
+                <select id="regType">
+                    <option value="outpatient">외래</option>
+                    <option value="inpatient">입원</option>
+                    <option value="surgery">수술</option>
+                    <option value="return">재진</option>
+                </select>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+            <button class="btn-primary" onclick="registerReception()">접수 등록</button>
+            <span id="msg"></span>
+        </div>
+    </div>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/script.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+    // by 김다정 — 원무과 접수 페이지 초기화 (staff_op 역할 전용)
+    const STATUS_LABEL = { pending:'대기', confirmed:'확정', completed:'완료', no_show:'미내원', cancelled:'취소' };
+
+    (async () => {
+        const me = await requireRole(['staff_op']);
+        if (!me) return;
+        document.getElementById('regDate').value = new Date().toISOString().split('T')[0];
+        await loadDepartments();
+    })();
+
+    async function loadDepartments() {
+        const res = await apiCall('/portal/doctor/staff/departments');
+        if (!res || !res.ok) return;
+        const list = await res.json();
+        const sel  = document.getElementById('regDept');
+        list.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value       = d.department_code;
+            opt.textContent = d.department_name;
+            sel.appendChild(opt);
+        });
+    }
+
+    async function searchAppointments() {
+        const hash  = document.getElementById('searchHash').value.trim();
+        if (!hash) { alert('환자 ID를 입력해주세요.'); return; }
+        const res   = await apiCall(`/portal/doctor/appointments?patient_id_hash=${encodeURIComponent(hash)}`);
+        const tbody = document.getElementById('searchResult');
+        if (!res || !res.ok) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#e53935;">데이터를 불러올 수 없습니다.</td></tr>';
+            return;
+        }
+        const list = await res.json();
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#90a4ae;">예약 내역이 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = list.map(a => `
+            <tr>
+                <td>${a.appointment_date}</td>
+                <td>${a.department_code}</td>
+                <td>${a.visit_type_code || '-'}</td>
+                <td><span class="status-badge status-${a.status_code}">${STATUS_LABEL[a.status_code] || a.status_code}</span></td>
+                <td>${a.status_code === 'pending'
+                    ? `<button style="padding:4px 10px;background:#e8f5e9;color:#2e7d32;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;"
+                        onclick="confirmAppointment('${a.appointment_id}', this)">확정</button>`
+                    : '-'}</td>
+            </tr>`).join('');
+    }
+
+    async function confirmAppointment(apptId, btn) {
+        const res = await apiCall(`/portal/doctor/appointments/${apptId}/confirm`, { method: 'PATCH' });
+        if (res && res.ok) {
+            btn.closest('tr').querySelector('.status-badge').outerHTML =
+                '<span class="status-badge status-confirmed">확정</span>';
+            btn.closest('td').innerHTML = '-';
+        } else {
+            alert('처리 중 오류가 발생했습니다.');
+        }
+    }
+
+    async function registerReception() {
+        const hash = document.getElementById('regHash').value.trim();
+        const dept = document.getElementById('regDept').value;
+        const date = document.getElementById('regDate').value;
+        const type = document.getElementById('regType').value;
+        const msg  = document.getElementById('msg');
+
+        if (!hash || !dept || !date) {
+            msg.textContent = '환자 ID, 진료과, 예약일은 필수입니다.';
+            msg.className = 'msg-err';
+            return;
+        }
+        const res = await apiCall('/portal/doctor/appointments', {
+            method: 'POST',
+            body: JSON.stringify({ patient_id_hash: hash, department_code: dept, appointment_date: date, visit_type_code: type }),
+        });
+        if (res && res.ok) {
+            msg.textContent = '접수가 등록되었습니다.';
+            msg.className = 'msg-ok';
+        } else {
+            const data = await res?.json().catch(() => ({}));
+            msg.textContent = data.detail || '등록 중 오류가 발생했습니다.';
+            msg.className = 'msg-err';
+        }
+    }
+</script>
+</body>
+</html>

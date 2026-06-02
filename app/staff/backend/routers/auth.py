@@ -98,9 +98,10 @@ def register(
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="관리자만 스태프 계정을 생성할 수 있습니다.")
 
-    ALLOWED_ROLES = {"doctor", "nurse", "admin"}
+    # by 김다정 — staff_op(원무과), manager(운영관리자) 역할 추가 (웹 구조도 반영)
+    ALLOWED_ROLES = {"doctor", "nurse", "admin", "staff_op", "manager"}
     if body.role_code not in ALLOWED_ROLES:
-        raise HTTPException(status_code=400, detail=f"허용된 역할: {', '.join(ALLOWED_ROLES)}")
+        raise HTTPException(status_code=400, detail=f"허용된 역할: {', '.join(sorted(ALLOWED_ROLES))}")
 
     pw_error = validate_password(body.password)
     if pw_error:
