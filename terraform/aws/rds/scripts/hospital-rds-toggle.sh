@@ -402,6 +402,28 @@ start_cmd() {
       --output text 2>/dev/null)
     [ -n "$re" ] && [ "$re" != "None" ] && echo -e "  Proxy Reader: ${GREEN}$re${NC}"
   fi
+    # Vault DB config 자동 동기화
+  echo -e "${YELLOW}  Vault DB config 동기화 중...${NC}"
+  aws lambda invoke \
+    --region "$REGION" \
+    --function-name aws-lambda-vault-rotator \
+    --payload '{
+      "detail": {
+        "eventName": "RotationSucceeded",
+        "additionalEventData": {
+          "SecretId": "'"$MASTER_SECRET_ARN"'"
+        }
+      }
+    }' \
+    --cli-binary-format raw-in-base64-out \
+    /tmp/vault-rotator-response.json > /dev/null
+
+  local result=$(cat /tmp/vault-rotator-response.json)
+  if echo "$result" | grep -q 'statusCode'; then
+    echo -e "${GREEN}  Vault 동기화 완료${NC}"
+  else
+    echo -e "${RED}  Vault 동기화 실패: $result${NC}"
+  fi
   echo ""
 }
 
