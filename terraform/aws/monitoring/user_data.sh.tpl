@@ -108,22 +108,22 @@ cat > /etc/alloy/config.alloy <<'ALLOYEOF'
 prometheus.exporter.unix "local" {
   include_exporter_metrics = true
 }
-
-// ── 메트릭 scrape ────────────────────────────────────────
+discovery.relabel "local" {
+  targets = prometheus.exporter.unix.local.targets
+  rule {
+    target_label = "instance"
+    replacement  = "monitoring"
+  }
+}
 prometheus.scrape "local" {
-  targets         = prometheus.exporter.unix.local.targets
+  targets         = discovery.relabel.local.output
   forward_to      = [prometheus.remote_write.prometheus.receiver]
   scrape_interval = "15s"
 }
-
-// ── Prometheus로 remote write ─────────────────────────────
-// WAL 설정 — Prometheus 다운 시 최대 8시간 버퍼링
-// 복구 후 자동 재전송 → 공백 없음
 prometheus.remote_write "prometheus" {
   endpoint {
     url = "http://localhost:9090/api/v1/write"
   }
-
   wal {
     truncate_frequency = "2h"
     min_keepalive_time = "5m"
