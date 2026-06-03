@@ -70,26 +70,24 @@ systemctl start wazuh-agent || true
 # 공식문서: https://grafana.com/docs/alloy/latest/set-up/install/linux/
 curl -fsSL https://rpm.grafana.com/gpg.key | rpm --import -
 
-cat > /etc/yum.repos.d/grafana.repo << 'GRAFEOF'
-[grafana]
-name=grafana
-baseurl=https://rpm.grafana.com
-repo_gpgcheck=1
-enabled=1
-gpgcheck=1
-gpgkey=https://rpm.grafana.com/gpg.key
-sslverify=1
-sslcacert=/etc/pki/tls/certs/ca-bundle.crt
-GRAFEOF
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/local-ipv4)
 
-dnf install -y alloy
-
-cat > /etc/alloy/config.alloy << 'ALLOYEOF'
+cat > /etc/alloy/config.alloy << ALLOYEOF
 prometheus.exporter.unix "local" {
   include_exporter_metrics = true
 }
+discovery.relabel "local" {
+  targets = prometheus.exporter.unix.local.targets
+  rule {
+    target_label = "instance"
+    replacement  = "ecs-ec2-$PRIVATE_IP"
+  }
+}
 prometheus.scrape "local" {
-  targets         = prometheus.exporter.unix.local.targets
+  targets         = discovery.relabel.local.output
   forward_to      = [prometheus.remote_write.prometheus.receiver]
   scrape_interval = "15s"
 }
