@@ -288,8 +288,8 @@ WAZUH_EOF
     sed -i "s/^deb/#deb/" /etc/apt/sources.list.d/wazuh.list
     apt-get update -y
 
-# ── Grafana Alloy 설치 — Prometheus 메트릭 push 방식 ─────
-    # 공식문서: https://grafana.com/docs/alloy/latest/set-up/install/linux/
+    # ── Grafana Alloy 설치 — Prometheus 메트릭 push 방식 ─────
+
     mkdir -p /etc/apt/keyrings
     wget -O /etc/apt/keyrings/grafana.asc https://apt.grafana.com/gpg-full.key
     chmod 644 /etc/apt/keyrings/grafana.asc
@@ -298,12 +298,22 @@ WAZUH_EOF
     apt-get update -y
     apt-get install -y alloy
 
+    PRIVATE_IP=$(curl -s -H "Metadata-Flavor: Google" \
+      http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)
+
     cat > /etc/alloy/config.alloy << ALLOYEOF
 prometheus.exporter.unix "local" {
   include_exporter_metrics = true
 }
+discovery.relabel "local" {
+  targets = prometheus.exporter.unix.local.targets
+  rule {
+    target_label = "instance"
+    replacement  = "gcp-proxy-$PRIVATE_IP"
+  }
+}
 prometheus.scrape "local" {
-  targets         = prometheus.exporter.unix.local.targets
+  targets         = discovery.relabel.local.output
   forward_to      = [prometheus.remote_write.prometheus.receiver]
   scrape_interval = "15s"
 }
@@ -322,6 +332,7 @@ ALLOYEOF
     systemctl daemon-reload
     systemctl enable alloy
     systemctl start alloy
+
 
 
 
