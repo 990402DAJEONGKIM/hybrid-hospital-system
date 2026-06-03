@@ -235,6 +235,101 @@ VALUES
 ON CONFLICT (member_number) DO NOTHING;
 
 
+-- ── 9. 오늘 예약 (테스트: 2026-06-03 기준) ──────────────────────
+-- dr-INTERNAL-1 (김철수 / 내과): 오늘 3건
+INSERT INTO appointments
+    (appointment_id, patient_user_id, patient_id_hash,
+     type_id, status_id, department_code, doctor_id,
+     appointment_date, appointment_time, notes)
+VALUES
+    -- 김민준 09:00 재진 확정
+    ('f1000000-0000-0000-0000-000000000001',
+     (SELECT user_id FROM users WHERE member_number = '21870195'),
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
+     'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
+     '2026-06-03', '09:00', '고혈압 경과 관찰'),
+
+    -- 이지은 10:30 초진 대기
+    ('f1000000-0000-0000-0000-000000000002',
+     (SELECT user_id FROM users WHERE member_number = '72897828'),
+     'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
+     (SELECT type_id FROM appointment_types WHERE type_code = 'initial'),
+     (SELECT status_id FROM appointment_statuses WHERE status_code = 'pending'),
+     'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
+     '2026-06-03', '10:30', '두통 및 소화불량 호소'),
+
+    -- 박성호 14:00 재진 확정
+    ('f1000000-0000-0000-0000-000000000003',
+     (SELECT user_id FROM users WHERE member_number = '78124857'),
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
+     'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
+     '2026-06-03', '14:00', '우측 무릎 경과 관찰')
+ON CONFLICT (appointment_id) DO NOTHING;
+
+-- dr-CARDIO-1 (이영희 / 심장내과): 오늘 2건
+INSERT INTO appointments
+    (appointment_id, patient_user_id, patient_id_hash,
+     type_id, status_id, department_code, doctor_id,
+     appointment_date, appointment_time, notes)
+VALUES
+    -- 김민준 09:30 재진 확정
+    ('f1000000-0000-0000-0000-000000000004',
+     (SELECT user_id FROM users WHERE member_number = '21870195'),
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
+     'CARDIO', 'a1000000-0000-0000-0000-000000000002',
+     '2026-06-03', '09:30', '부정맥 추적 관찰'),
+
+    -- 이지은 11:00 재진 대기
+    ('f1000000-0000-0000-0000-000000000005',
+     (SELECT user_id FROM users WHERE member_number = '72897828'),
+     'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
+     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT status_id FROM appointment_statuses WHERE status_code = 'pending'),
+     'CARDIO', 'a1000000-0000-0000-0000-000000000002',
+     '2026-06-03', '11:00', '심장초음파 결과 확인')
+ON CONFLICT (appointment_id) DO NOTHING;
+
+-- 향후 7일 예약 (week 탭 테스트: 2026-06-04 ~ 2026-06-10)
+INSERT INTO appointments
+    (appointment_id, patient_user_id, patient_id_hash,
+     type_id, status_id, department_code, doctor_id,
+     appointment_date, appointment_time, notes)
+VALUES
+    -- 김민준 2026-06-05 09:00 재진 대기 (내과/김철수)
+    ('f1000000-0000-0000-0000-000000000006',
+     (SELECT user_id FROM users WHERE member_number = '21870195'),
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT status_id FROM appointment_statuses WHERE status_code = 'pending'),
+     'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
+     '2026-06-05', '09:00', '혈압약 처방 갱신'),
+
+    -- 박성호 2026-06-06 14:00 입원 확정 (내과/김철수)
+    ('f1000000-0000-0000-0000-000000000007',
+     (SELECT user_id FROM users WHERE member_number = '78124857'),
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     (SELECT type_id FROM appointment_types WHERE type_code = 'inpatient'),
+     (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
+     'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
+     '2026-06-06', '14:00', '수술 전 입원 예약'),
+
+    -- 이지은 2026-06-07 10:30 재진 확정 (심장내과/이영희)
+    ('f1000000-0000-0000-0000-000000000008',
+     (SELECT user_id FROM users WHERE member_number = '72897828'),
+     'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
+     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
+     'CARDIO', 'a1000000-0000-0000-0000-000000000002',
+     '2026-06-07', '10:30', '심전도 검사 결과 확인')
+ON CONFLICT (appointment_id) DO NOTHING;
+
+
 -- ── 확인 쿼리 ────────────────────────────────────────────────
 SELECT tbl, cnt FROM (
     SELECT 'roles'               AS tbl, count(*) AS cnt FROM roles
@@ -245,4 +340,5 @@ SELECT tbl, cnt FROM (
     UNION ALL SELECT 'sync_wards',              count(*) FROM sync_wards
     UNION ALL SELECT 'appointment_types',       count(*) FROM appointment_types
     UNION ALL SELECT 'appointment_statuses',    count(*) FROM appointment_statuses
+    UNION ALL SELECT 'appointments',            count(*) FROM appointments
 ) t ORDER BY tbl;

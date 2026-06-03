@@ -182,18 +182,6 @@ CREATE TABLE IF NOT EXISTS password_policy (
     synced_at         TIMESTAMPTZ
 );
 
--- ── MFA ──────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS user_mfa (
-    mfa_id      UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID         NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    mfa_type    VARCHAR(10)  NOT NULL DEFAULT 'totp',
-    secret      VARCHAR(64)  NOT NULL,
-    is_active   BOOLEAN      NOT NULL DEFAULT FALSE,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    verified_at TIMESTAMPTZ,
-    synced_at   TIMESTAMPTZ
-);
-
 -- ── 감사 로그 (ISMS-P 2.9.1) ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_logs (
     audit_log_id UUID         PRIMARY KEY DEFAULT gen_random_uuid(),

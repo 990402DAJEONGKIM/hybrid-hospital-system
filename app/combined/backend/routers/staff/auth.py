@@ -392,6 +392,7 @@ _ROLE_MENUS = {
         {"menu_code": "CHANGE_PW",          "menu_name": "비밀번호 변경",   "menu_url": "/change-password.html",       "icon": "key"},
     ],
     "admin": [
+        {"menu_code": "ADMIN_DASHBOARD",    "menu_name": "운영 대시보드",   "menu_url": "/admin-dashboard.html",       "icon": "tachometer-alt"},
         {"menu_code": "ADMIN_USERS",        "menu_name": "사용자 관리",     "menu_url": "/admin-users.html",           "icon": "users"},
         {"menu_code": "ADMIN_ROLES",        "menu_name": "역할/권한 관리",  "menu_url": "/admin-roles.html",           "icon": "shield-alt"},
         {"menu_code": "ADMIN_POLICY",       "menu_name": "보안 정책",       "menu_url": "/admin-policy.html",          "icon": "lock"},

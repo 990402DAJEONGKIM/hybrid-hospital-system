@@ -384,19 +384,6 @@ class PasswordPolicy(Base):
     synced_at         = Column(DateTime(timezone=True))
 
 
-class UserMFA(Base):
-    __tablename__ = "user_mfa"
-
-    mfa_id      = Column(Uuid,       primary_key=True, default=uuid.uuid4)
-    user_id     = Column(Uuid,       ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    mfa_type    = Column(String(10), nullable=False, default="totp")
-    secret      = Column(String(64), nullable=False)
-    is_active   = Column(Boolean,    nullable=False, default=False)
-    created_at  = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    verified_at = Column(DateTime(timezone=True))
-    synced_at   = Column(DateTime(timezone=True))
-
-
 # ============================================================
 # 감사 로그 (ISMS-P 2.9.1)
 # ============================================================
