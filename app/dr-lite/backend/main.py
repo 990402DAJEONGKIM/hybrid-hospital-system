@@ -185,6 +185,17 @@ class Appointment(Base):
     doctor_ref = relationship("SyncDoctor", foreign_keys=[doctor_id])
 
 
+class DrNotice(Base):
+    __tablename__ = "dr_notices"
+
+    notice_id  = Column(Integer, primary_key=True, autoincrement=True)
+    title      = Column(String(200), nullable=False)
+    content    = Column(Text, nullable=False)
+    is_active  = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_by = Column(Uuid)
+
+
 class AppointmentHistory(Base):
     __tablename__ = "appointment_history"
 
@@ -685,6 +696,24 @@ def create_appointment(
     if not pending:
         raise HTTPException(status_code=500, detail="예약 대기 상태 설정이 없습니다.")
 
+    # 동시 요청 중복 예약 방지 (PER-003) — 같은 의사·날짜·시간 행 잠금 후 재검증
+    conflict_q = (
+        db.query(Appointment)
+        .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
+        .filter(
+            Appointment.appointment_date == appt_date,
+            Appointment.appointment_time == appt_time,
+            ~AppointmentStatus.status_code.in_(["cancelled", "no_show"]),
+        )
+        .with_for_update(nowait=False)
+    )
+    if doctor_uuid:
+        conflict_q = conflict_q.filter(Appointment.doctor_id == doctor_uuid)
+    else:
+        conflict_q = conflict_q.filter(Appointment.department_code == body.department_code)
+    if conflict_q.first():
+        raise HTTPException(status_code=409, detail="선택한 시간대에 이미 예약이 있습니다. 다른 시간을 선택해주세요.")
+
     patient_user_id = uuid.UUID(current_user["sub"])
     appt = Appointment(
         patient_user_id=patient_user_id,
@@ -777,3 +806,83 @@ def cancel_appointment(
     db.commit()
     db.refresh(appt)
     return _appointment_out(appt)
+
+
+# ── 긴급 공지 (SFR-009) ────────────────────────────────────────────
+
+class NoticeCreateRequest(BaseModel):
+    title:   str
+    content: str
+
+
+@app.get("/notices")
+def list_notices(db: Session = Depends(get_db)):
+    """활성 긴급 공지 목록 — 인증 없이 공개."""
+    rows = (
+        db.query(DrNotice)
+        .filter(DrNotice.is_active == True)
+        .order_by(DrNotice.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "notice_id":  row.notice_id,
+            "title":      row.title,
+            "content":    row.content,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
+
+
+@app.post("/notices", status_code=201)
+def create_notice(
+    body:         NoticeCreateRequest,
+    request:      Request,
+    current_user: dict    = Depends(get_current_user),
+    db:           Session = Depends(get_db),
+):
+    """긴급 공지 등록 — doctor/admin 역할만 가능."""
+    if current_user.get("role") not in ("doctor", "admin"):
+        raise HTTPException(status_code=403, detail="공지 등록 권한이 없습니다.")
+
+    notice = DrNotice(
+        title      = body.title,
+        content    = body.content,
+        created_by = uuid.UUID(current_user["sub"]),
+    )
+    db.add(notice)
+    _record_audit(
+        db, "CREATE_NOTICE", "201",
+        user_id=uuid.UUID(current_user["sub"]),
+        target_table="dr_notices",
+        source_ip=get_client_ip(request),
+    )
+    db.commit()
+    db.refresh(notice)
+    return {"notice_id": notice.notice_id, "title": notice.title}
+
+
+@app.delete("/notices/{notice_id}", status_code=204)
+def delete_notice(
+    notice_id:    int,
+    request:      Request,
+    current_user: dict    = Depends(get_current_user),
+    db:           Session = Depends(get_db),
+):
+    """긴급 공지 비활성화 — doctor/admin 역할만 가능."""
+    if current_user.get("role") not in ("doctor", "admin"):
+        raise HTTPException(status_code=403, detail="공지 삭제 권한이 없습니다.")
+
+    notice = db.query(DrNotice).filter(DrNotice.notice_id == notice_id).first()
+    if not notice:
+        raise HTTPException(status_code=404, detail="공지를 찾을 수 없습니다.")
+
+    notice.is_active = False
+    _record_audit(
+        db, "DELETE_NOTICE", "204",
+        user_id=uuid.UUID(current_user["sub"]),
+        target_table="dr_notices",
+        source_ip=get_client_ip(request),
+    )
+    db.commit()

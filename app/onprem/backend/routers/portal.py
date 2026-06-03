@@ -1,5 +1,6 @@
+import random
 import uuid
-from datetime import datetime, timezone
+from datetime import date as date_type, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,11 +9,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db
-from core.security import get_current_user, record_audit, require_roles
+from core.security import get_current_user, hash_password, record_audit, require_roles
 from models.db import (
     Allergy, ClinicalNote, Department, Diagnosis,
-    Doctor, Encounter, Patient, SurgeryHistory,
-    Ward, WardAssignment,
+    Doctor, Encounter, Patient, Role, User,
+    SurgeryHistory, Ward, WardAssignment,
 )
 
 router = APIRouter(prefix="/portal", tags=["portal"])
@@ -37,6 +38,28 @@ class WardAssignRequest(BaseModel):
     patient_id: str
     ward_id:    str
     notes:      Optional[str] = None
+
+class DiagnosisCreate(BaseModel):
+    encounter_id:   str
+    patient_id:     str
+    diagnosis_code: str
+    diagnosis_text: str
+    is_primary:     bool = False
+
+class AllergyCreate(BaseModel):
+    patient_id:    str
+    allergy_name:  str
+    allergy_code:  Optional[str] = None  # 미입력 시 allergy_name 기반 자동 생성
+    severity_code: str  # LOW / MEDIUM / HIGH
+
+class PatientRegister(BaseModel):
+    patient_name:          str
+    birth_date:            str             # YYYY-MM-DD
+    gender_code:           str             # M / F
+    phone_number:          str
+    email:                 Optional[str] = None
+    national_id_encrypted: Optional[str] = None
+    address:               Optional[str] = None
 
 
 # ── 공통 헬퍼 ─────────────────────────────────────────────────
@@ -95,6 +118,9 @@ def search_patients(
 
     total = q.count()
     patients = q.order_by(Patient.created_at.desc()).offset(offset).limit(limit).all()
+
+    record_audit(db, "SEARCH_PATIENTS", "200", user_id=current_user["sub"])
+    db.commit()
 
     return {
         "total": total,
@@ -206,7 +232,7 @@ def get_patient_clinical_notes(
         {
             "note_id":      str(n.note_id),
             "encounter_id": str(n.encounter_id) if n.encounter_id else None,
-            "note_content": n.note_content,
+            "note_content": n.note_text,
             "created_at":   n.created_at.isoformat() if n.created_at else None,
         }
         for n in notes
@@ -435,6 +461,9 @@ def my_encounters(
         .all()
     )
 
+    record_audit(db, "VIEW_MY_PATIENTS", "200", user_id=current_user["sub"])
+    db.commit()
+
     return [
         {
             "encounter_id":    str(e.encounter_id),
@@ -447,3 +476,229 @@ def my_encounters(
         }
         for e in encs
     ]
+
+
+# ============================================================
+# 진단 입력 (doctor, admin)
+# ============================================================
+
+@router.post("/patients/{patient_id}/diagnoses", status_code=201)
+def create_diagnosis(
+    patient_id:   str,
+    body:         DiagnosisCreate,
+    current_user: dict = Depends(require_roles("doctor", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    _patient_or_404(patient_id, db)
+
+    diag = Diagnosis(
+        encounter_id   = uuid.UUID(body.encounter_id),
+        patient_id     = uuid.UUID(patient_id),
+        diagnosis_code = body.diagnosis_code,
+        diagnosis_text = body.diagnosis_text,
+        is_primary     = body.is_primary,
+    )
+    db.add(diag)
+    record_audit(db, "CREATE_DIAGNOSIS", "201",
+                 user_id=current_user["sub"], patient_id=uuid.UUID(patient_id),
+                 target_table="diagnoses")
+    db.commit()
+    db.refresh(diag)
+
+    return {"diagnosis_id": str(diag.diagnosis_id)}
+
+
+# ============================================================
+# 알레르기 입력 (nurse, doctor, admin)
+# ============================================================
+
+@router.post("/patients/{patient_id}/allergies", status_code=201)
+def create_allergy(
+    patient_id:   str,
+    body:         AllergyCreate,
+    current_user: dict = Depends(require_roles("nurse", "doctor", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    _patient_or_404(patient_id, db)
+
+    allergy_code = body.allergy_code or body.allergy_name.upper().replace(" ", "_")
+    allergy = Allergy(
+        patient_id    = uuid.UUID(patient_id),
+        allergy_name  = body.allergy_name,
+        allergy_code  = allergy_code,
+        severity_code = body.severity_code,
+    )
+    db.add(allergy)
+    record_audit(db, "CREATE_ALLERGY", "201",
+                 user_id=current_user["sub"], patient_id=uuid.UUID(patient_id),
+                 target_table="allergies")
+    db.commit()
+    db.refresh(allergy)
+
+    return {"allergy_id": str(allergy.allergy_id)}
+
+
+# ============================================================
+# 환자 전체 상세 — 1등급 통합 조회 (doctor, admin)
+# ============================================================
+
+@router.get("/patients/{patient_id}/full")
+def get_patient_full(
+    patient_id:   str,
+    current_user: dict = Depends(require_roles("doctor", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """진료기록·진단·알레르기·수술·노트 한번에 조회. 1등급 데이터 포함."""
+    p = _patient_or_404(patient_id, db)
+    record_audit(db, "VIEW_PATIENT_FULL", "200",
+                 user_id=current_user["sub"], patient_id=p.patient_id,
+                 target_table="patients")
+    db.commit()
+
+    encounters = (
+        db.query(Encounter)
+        .filter(Encounter.patient_id == patient_id)
+        .order_by(Encounter.visit_datetime.desc())
+        .all()
+    )
+    diagnoses = db.query(Diagnosis).filter(Diagnosis.patient_id == patient_id).all()
+    allergies = db.query(Allergy).filter(Allergy.patient_id == patient_id).all()
+    surgeries = db.query(SurgeryHistory).filter(SurgeryHistory.patient_id == patient_id).all()
+    notes = (
+        db.query(ClinicalNote)
+        .join(Encounter, ClinicalNote.encounter_id == Encounter.encounter_id)
+        .filter(Encounter.patient_id == patient_id)
+        .order_by(ClinicalNote.created_at.desc())
+        .all()
+    )
+
+    return {
+        "patient": {
+            "patient_id":   str(p.patient_id),
+            "patient_name": p.patient_name,
+            "birth_date":   p.birth_date.isoformat() if p.birth_date else None,
+            "gender_code":  p.gender_code,
+            "phone_number": p.phone_number,
+        },
+        "encounters": [
+            {
+                "encounter_id":    str(e.encounter_id),
+                "visit_datetime":  e.visit_datetime.isoformat() if e.visit_datetime else None,
+                "doctor_name":     e.doctor.doctor_name if e.doctor else None,
+                "department_code": e.department_code,
+                "chief_complaint": e.chief_complaint,
+                "status_code":     e.status_code,
+            }
+            for e in encounters
+        ],
+        "diagnoses": [
+            {
+                "diagnosis_id":   str(d.diagnosis_id),
+                "encounter_id":   str(d.encounter_id) if d.encounter_id else None,
+                "diagnosis_code": d.diagnosis_code,
+                "diagnosis_text": d.diagnosis_text,
+                "is_primary":     d.is_primary,
+                "visit_datetime": d.encounter.visit_datetime.isoformat() if d.encounter and d.encounter.visit_datetime else None,
+            }
+            for d in diagnoses
+        ],
+        "allergies": [
+            {
+                "allergy_id":    str(a.allergy_id),
+                "allergy_name":  a.allergy_name,
+                "severity_code": a.severity_code,
+                "is_active":     True,
+            }
+            for a in allergies
+        ],
+        "surgeries": [
+            {
+                "surgery_name": s.surgery_name,
+                "surgery_date": s.surgery_date.isoformat() if s.surgery_date else None,
+                "note":         s.note,
+            }
+            for s in surgeries
+        ],
+        "clinical_notes": [
+            {
+                "note_id":        str(n.note_id),
+                "encounter_id":   str(n.encounter_id) if n.encounter_id else None,
+                "note_text":      n.note_text,
+                "visit_datetime": n.encounter.visit_datetime.isoformat() if n.encounter and n.encounter.visit_datetime else None,
+                "note_type":      "진료노트",
+                "author_type":    "의사",
+            }
+            for n in notes
+        ],
+    }
+
+
+# ============================================================
+# 환자 등록 (nurse, admin)
+# ============================================================
+
+def _generate_member_number(db: DbSession) -> str:
+    """8자리 랜덤 숫자 — patients, users 양쪽 모두 중복 체크."""
+    while True:
+        mn = str(random.randint(10000000, 99999999))
+        if (
+            not db.query(Patient).filter(Patient.member_number == mn).first()
+            and not db.query(User).filter(User.member_number == mn).first()
+        ):
+            return mn
+
+
+@router.post("/patients", status_code=201)
+def register_patient(
+    body:         PatientRegister,
+    current_user: dict = Depends(require_roles("nurse", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """원무과/관리자가 환자를 등록. member_number 자동 부여, 초기 비밀번호 = 생년월일."""
+    try:
+        birth = date_type.fromisoformat(body.birth_date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="birth_date 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+
+    year     = str(date_type.today().year)
+    cnt      = db.query(Patient).filter(Patient.internal_seq.like(f"{year}-%")).count()
+    internal_seq  = f"{year}-{cnt + 1}"
+    member_number = _generate_member_number(db)
+
+    patient = Patient(
+        patient_name          = body.patient_name,
+        birth_date            = birth,
+        gender_code           = body.gender_code,
+        phone_number          = body.phone_number,
+        national_id_encrypted = body.national_id_encrypted or "",
+        member_number         = member_number,
+        internal_seq          = internal_seq,
+    )
+    db.add(patient)
+    db.flush()  # patient_id 생성
+
+    birth_str    = body.birth_date.replace("-", "")
+    patient_role = db.query(Role).filter(Role.role_code == "patient").first()
+    user = User(
+        member_number        = member_number,
+        email                = body.email or None,
+        password_hash        = hash_password(birth_str),
+        role_id              = patient_role.role_id if patient_role else None,
+        patient_id           = patient.patient_id,
+        must_change_password = True,
+        is_active            = True,
+    )
+    db.add(user)
+
+    record_audit(db, "REGISTER_PATIENT", "201",
+                 user_id=current_user["sub"], patient_id=patient.patient_id,
+                 target_table="patients")
+    db.commit()
+    db.refresh(patient)
+
+    return {
+        "patient_id":       str(patient.patient_id),
+        "member_number":    member_number,
+        "internal_seq":     internal_seq,
+        "initial_password": birth_str,
+    }

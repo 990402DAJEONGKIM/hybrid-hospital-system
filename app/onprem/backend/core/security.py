@@ -6,7 +6,7 @@ from typing import Optional
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Cookie, HTTPException, Depends
+from fastapi import Cookie, HTTPException, Depends, Request
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,16 @@ _DEFAULT_LOCKOUT_MIN    = 30
 _DEFAULT_PW_EXPIRE_DAYS = 90
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def get_client_ip(request: Request) -> Optional[str]:
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else None
 
 
 def hash_password(password: str) -> str:
@@ -55,9 +65,21 @@ def decode_access_token(token: str) -> dict:
             continue
     raise HTTPException(status_code=401, detail="유효하지 않은 인증입니다. 다시 로그인하세요.")
 
+_SERVICE_KEY = os.getenv("API_KEY", "")
+
+
 def get_current_user(
+    request:      Request,
     access_token: str | None = Cookie(default=None),
 ) -> dict:
+    # AWS BFF → 온프레미스 서비스 간 호출 (X-Service-Key + X-User-Id + X-User-Role)
+    svc_key = request.headers.get("X-Service-Key", "")
+    if svc_key and _SERVICE_KEY and svc_key == _SERVICE_KEY:
+        user_id   = request.headers.get("X-User-Id", "")
+        user_role = request.headers.get("X-User-Role", "")
+        if user_id and user_role:
+            return {"sub": user_id, "role": user_role, "service_call": True}
+
     if not access_token:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     return decode_access_token(access_token)

@@ -11,7 +11,7 @@ from core.security import (
     get_current_user, hash_password, record_audit,
     require_roles,
 )
-from models.db import AuditLog, LoginHistory, User
+from models.db import AuditLog, LoginHistory, Role, User
 from routers.auth import validate_password
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -22,10 +22,11 @@ ALLOWED_ROLES = {"doctor", "nurse", "admin"}
 # ── Pydantic 스키마 ─────────────────────────────────────────
 
 class UserCreate(BaseModel):
-    email:     str
-    password:  str
-    role:      str
-    doctor_id: Optional[str] = None
+    member_number: str
+    email:         Optional[str] = None
+    password:      str
+    role:          str
+    doctor_id:     Optional[str] = None
 
 class UserUpdate(BaseModel):
     email:     Optional[str]  = None
@@ -45,9 +46,9 @@ def list_users(
     current_user: dict = Depends(require_roles("admin")),
     db: DbSession = Depends(get_db),
 ):
-    q = db.query(User)
+    q = db.query(User).join(User.role_rel, isouter=True)
     if role:
-        q = q.filter(User.role == role)
+        q = q.filter(Role.role_code == role)
     if is_active is not None:
         q = q.filter(User.is_active == is_active)
 
@@ -59,6 +60,7 @@ def list_users(
         "items": [
             {
                 "user_id":       str(u.user_id),
+                "member_number": u.member_number,
                 "email":         u.email,
                 "role":          u.role,
                 "is_active":     u.is_active,
@@ -85,21 +87,27 @@ def create_user(
     if pw_error:
         raise HTTPException(status_code=400, detail=pw_error)
 
-    if db.query(User).filter(User.email == body.email).first():
-        raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
+    if db.query(User).filter(User.member_number == body.member_number).first():
+        raise HTTPException(status_code=400, detail="이미 사용 중인 회원번호입니다.")
+
+    role_obj = db.query(Role).filter(Role.role_code == body.role).first()
+    if not role_obj:
+        raise HTTPException(status_code=400, detail=f"역할을 찾을 수 없습니다: {body.role}")
 
     user = User(
-        email         = body.email,
-        password_hash = hash_password(body.password),
-        role          = body.role,
-        doctor_id     = uuid.UUID(body.doctor_id) if body.doctor_id else None,
+        member_number        = body.member_number,
+        email                = body.email,
+        password_hash        = hash_password(body.password),
+        role_id              = role_obj.role_id,
+        doctor_id            = uuid.UUID(body.doctor_id) if body.doctor_id else None,
+        must_change_password = True,
     )
     db.add(user)
     record_audit(db, "CREATE_USER", "201", user_id=current_user["sub"], target_table="users")
     db.commit()
     db.refresh(user)
 
-    return {"user_id": str(user.user_id), "email": user.email, "role": user.role}
+    return {"user_id": str(user.user_id), "member_number": user.member_number, "role": user.role}
 
 
 @router.patch("/users/{user_id}")
@@ -202,6 +210,10 @@ def list_audit_logs(
 
     total = q.count()
     logs  = q.order_by(AuditLog.event_at.desc()).offset(offset).limit(limit).all()
+
+    record_audit(db, "VIEW_AUDIT_LOGS", "200",
+                 user_id=current_user["sub"], target_table="audit_logs")
+    db.commit()
 
     return {
         "total": total,

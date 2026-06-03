@@ -1,7 +1,7 @@
 // by 김다정 — JWT 관리 및 역할 체크 공통 모듈 (웹 구조도 반영)
 // script.js의 apiCall/logout을 의존하므로 반드시 script.js 이후에 로드할 것
 
-const STAFF_ROLES = ['doctor', 'nurse', 'admin', 'staff_op', 'manager'];
+const STAFF_ROLES = ['doctor', 'nurse', 'admin'];
 
 // 현재 로그인 사용자 정보를 반환. 미인증 시 login.html 리다이렉트.
 async function getMyInfo() {

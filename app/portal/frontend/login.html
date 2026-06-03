@@ -16,8 +16,8 @@
 
         <form id="loginForm" class="space-y-4">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-                <input type="email" id="loginEmail" required placeholder="example@email.com"
+                <label class="block text-sm font-medium text-gray-700 mb-1">회원번호</label>
+                <input type="text" id="loginMemberNumber" required placeholder="회원번호 입력"
                     class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
             <div>
@@ -46,8 +46,8 @@
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const email = document.getElementById('loginEmail').value.trim();
-            const pw    = document.getElementById('loginPw').value;
+            const memberNumber = document.getElementById('loginMemberNumber').value.trim();
+            const pw           = document.getElementById('loginPw').value;
             const apiErrorEl = document.getElementById('apiError');
             const submitBtn  = document.getElementById('submitBtn');
 
@@ -60,7 +60,7 @@
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-                    body: JSON.stringify({ email, password: pw }),
+                    body: JSON.stringify({ member_number: memberNumber, password: pw }),
                 });
 
                 const data = await res.json();
