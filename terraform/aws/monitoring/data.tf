@@ -34,49 +34,7 @@ data "aws_security_group" "staff_alb" {
   }
 }
 
-# ECS EC2 보안그룹 참조 (node exporter 9100 허용용)
-data "aws_security_group" "ecs_ec2" {
-  filter {
-    name   = "tag:Name"
-    values = ["aws-ecs-ec2-sg"]
-  }
-}
 
-# Wazuh-01 보안그룹 참조
-data "aws_security_group" "wazuh" {
-  filter {
-    name   = "tag:Name"
-    values = ["aws-wazuh-sg"]
-  }
-}
-
-# Wazuh Indexer 보안그룹 참조
-data "aws_security_group" "wazuh_indexer" {
-  filter {
-    name   = "tag:Name"
-    values = ["aws-wazuh-indexer-sg"]
-  }
-}
-
-
-
-# Wazuh Manager IP — TC-aws-wazuh output에서 참조
-data "terraform_remote_state" "wazuh" {
-  backend = "remote"
-  config = {
-    organization = "k2p"
-    workspaces = { name = "TC-aws-wazuh" }
-  }
-}
-
-# Wazuh Indexer IP — TC-aws-wazuh-indexer output에서 참조
-data "terraform_remote_state" "wazuh_indexer" {
-  backend = "remote"
-  config = {
-    organization = "k2p"
-    workspaces = { name = "TC-aws-wazuh-indexer" }
-  }
-}
 data "terraform_remote_state" "kms" {
   backend = "remote"
   config = {
@@ -84,19 +42,6 @@ data "terraform_remote_state" "kms" {
     workspaces = { name = "TC-aws-KMS" }
   }
 }
-
-# GCP HAProxy IP — TC-gcp-proxy output에서 참조
-data "terraform_remote_state" "gcp_proxy" {
-  backend = "remote"
-  config = {
-    organization = "k2p"
-    workspaces = { name = "TC-gcp-proxy" }
-  }
-}
-
-
-
-
 
 
 # 단일 EC2 instance ID output — SSM 접속용
