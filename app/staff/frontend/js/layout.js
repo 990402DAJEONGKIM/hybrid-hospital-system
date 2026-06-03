@@ -10,23 +10,20 @@ const _ROLE_BG     = { doctor: '#ede9fe', nurse: '#d1fae5', admin: '#fee2e2' };
 const _SHORTCUTS = {
     nurse: [
         { url:'/nurse-dashboard.html',      icon:'calendar-alt',   color:'#0ea5e9', label:'예약 현황',    desc:'날짜·상태별 예약 목록' },
-        { url:'/nurse-appointment-new.html', icon:'plus-circle',    color:'#10b981', label:'수동 예약',    desc:'방문 환자 직접 등록' },
+        { url:'/nurse-appointment-new.html', icon:'plus-circle',    color:'#10b981', label:'진료 등록',    desc:'방문 환자 직접 등록' },
         { url:'/patient-register.html',      icon:'user-plus',      color:'#6366f1', label:'환자 등록',    desc:'신규 환자 등록·회원번호 발급' },
         { url:'/patient-search.html',        icon:'search',         color:'#f59e0b', label:'환자 검색',    desc:'이름·회원번호로 조회' },
         { url:'/ward-status.html',           icon:'hospital',       color:'#ec4899', label:'병동 현황',    desc:'병동별 가용 병상' },
-        { url:'/encounter-new.html',         icon:'notes-medical',  color:'#8b5cf6', label:'진료 등록',    desc:'외래·입원 진료 접수' },
     ],
     doctor: [
         { url:'/doctor-schedule.html',  icon:'stethoscope',   color:'#0ea5e9', label:'오늘 진료',    desc:'확정된 진료 일정 확인' },
         { url:'/my-patients.html',      icon:'user-injured',  color:'#6366f1', label:'내 환자 목록', desc:'담당 환자 목록 · EMR · 진료 기록' },
     ],
     admin: [
-        { url:'/admin-dashboard.html',     icon:'tachometer-alt', color:'#1d4ed8', label:'운영 대시보드',  desc:'예약·보안·알림·시스템 현황' },
-        { url:'/admin-users.html',         icon:'users',          color:'#0ea5e9', label:'사용자 관리',   desc:'계정 생성·수정·잠금·삭제' },
-        { url:'/admin-roles.html',         icon:'shield-alt',     color:'#10b981', label:'역할/권한 관리', desc:'역할 추가 및 권한 할당' },
-        { url:'/admin-policy.html',        icon:'lock',           color:'#6366f1', label:'보안 정책',     desc:'비밀번호 복잡도·만료 설정' },
-        { url:'/admin-logs.html',          icon:'clipboard-list', color:'#f59e0b', label:'감사 로그',     desc:'전체 사용자 활동 이력' },
-        { url:'/admin-login-history.html', icon:'history',        color:'#ec4899', label:'로그인 이력',   desc:'로그인 성공·실패·잠금' },
+        { url:'/admin-users.html',  icon:'users',        color:'#0ea5e9', label:'사용자 관리',   desc:'계정 생성·수정·잠금·비활성화' },
+        { url:'/admin-roles.html',  icon:'shield-alt',   color:'#10b981', label:'역할/권한 관리', desc:'역할 추가 및 권한 할당' },
+        { url:'/admin-policy.html', icon:'lock',         color:'#6366f1', label:'보안 정책',     desc:'비밀번호 복잡도·만료 설정' },
+        { url:'/admin-wazuh.html',  icon:'shield-virus', color:'#dc2626', label:'Wazuh',         desc:'보안 이벤트 모니터링 대시보드' },
     ],
 };
 
@@ -52,10 +49,10 @@ async function initLayout() {
 
     // 사이드바 — 홈 고정 항목 + 역할별 바로가기 카드
     const isDashboard = currentPage === '/index.html' || currentPage === '/';
-    const homeItem = `<a href="/index.html" class="sidebar-item${isDashboard ? ' sidebar-item--active' : ''}">
+    const homeItem = me.role !== 'nurse' ? `<a href="/index.html" class="sidebar-item${isDashboard ? ' sidebar-item--active' : ''}">
         <i class="fas fa-th-large"></i>
         <span>홈</span>
-    </a>`;
+    </a>` : '';
 
     const shortcuts = _SHORTCUTS[me.role] || [];
     const sidebarNav = homeItem + shortcuts.map(s => {

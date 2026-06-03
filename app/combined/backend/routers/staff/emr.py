@@ -29,7 +29,7 @@ from core.onprem_client import OnpremClient
 from core.security import get_client_ip, get_current_user
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus,
-    SyncDiagnosis, SyncEncounter, User,
+    SyncDiagnosis, SyncEncounter, SyncPatient, SyncWard, User,
 )
 
 logger = logging.getLogger(__name__)
@@ -314,12 +314,45 @@ class PatientCreateRequest(BaseModel):
 def create_patient(
     body:         PatientCreateRequest,
     request:      Request,
-    current_user: dict = Depends(_require_roles("nurse", "admin")),
+    current_user: dict      = Depends(_require_roles("nurse", "admin")),
+    db:           DbSession = Depends(get_db),
 ):
-    """온프레미스 EMR에 신규 환자 등록 (1등급 데이터 — 온프레미스 전용)."""
-    return _client(current_user, request).post(
+    """온프레미스 EMR에 신규 환자 등록 후 AWS sync_patients 동기화 (SFR-025).
+
+    실명·주민번호·전화번호는 AWS로 전송하지 않음.
+    patient_id_hash, birth_year, gender_code만 동기화.
+    """
+    result = _client(current_user, request).post(
         "/portal/patients", body.model_dump()
     )
+
+    pid_hash = result.get("patient_id_hash")
+    if pid_hash:
+        try:
+            from datetime import datetime as dt_
+            birth_year = result.get("birth_year")
+            if not birth_year and body.birth_date:
+                birth_year = int(body.birth_date[:4])
+
+            existing = db.query(SyncPatient).filter(
+                SyncPatient.patient_id_hash == pid_hash
+            ).first()
+            if not existing:
+                db.add(SyncPatient(
+                    patient_id_hash = pid_hash,
+                    birth_year      = birth_year,
+                    gender_code     = result.get("gender_code") or body.gender_code,
+                    synced_at       = dt_.now(),
+                ))
+                db.commit()
+        except Exception as exc:
+            logger.warning("sync_patients 동기화 실패 (hash=%s): %s", pid_hash, exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    return result
 
 
 # ============================================================
@@ -665,4 +698,171 @@ def doctor_get_latest_encounter(
     return _client(current_user, request).get(
         f"/portal/doctor/patients/{patient_id}/encounters/latest"
     )
+
+
+# ============================================================
+# SFR-022/026/028 — 간호사 전용 프록시
+# ============================================================
+
+class _HashListBody(BaseModel):
+    hashes: list[str]
+
+
+@router.post("/nurse/patients/names-by-hashes")
+def nurse_names_by_hashes(
+    body:         _HashListBody,
+    request:      Request,
+    current_user: dict = Depends(_require_roles("nurse", "doctor", "admin")),
+):
+    """hash 배열 → {hash: patient_name} 맵 (목록 실명 표시용, 온프레미스 VPN 경유)."""
+    return _client(current_user, request).post(
+        "/portal/patients/names-by-hashes", {"hashes": body.hashes}
+    )
+
+
+@router.get("/nurse/waiting-count")
+def nurse_waiting_count(
+    request:      Request,
+    current_user: dict = Depends(_require_roles("nurse", "admin")),
+):
+    """SFR-022 — 진료 대기 환자 수 (온프레미스 VPN 경유)."""
+    return _client(current_user, request).get("/portal/encounters/waiting-count")
+
+
+@router.get("/nurse/patients/search")
+def nurse_search_patients(
+    request:      Request,
+    q:            str = Query(..., min_length=1),
+    limit:        int = Query(default=20, le=100),
+    offset:       int = Query(default=0),
+    current_user: dict = Depends(_require_roles("nurse", "admin")),
+):
+    """SFR-026 — 간호사 전체 환자 검색 (이름 또는 회원번호)."""
+    return _client(current_user, request).get(
+        "/portal/nurse/patients/search", q=q, limit=limit, offset=offset
+    )
+
+
+@router.get("/nurse/patients/{patient_id_hash}/verify")
+def nurse_verify_patient(
+    patient_id_hash: str,
+    request:         Request,
+    current_user:    dict = Depends(_require_roles("nurse", "admin")),
+):
+    """SFR-024 — patient_id_hash 기반 환자 최소 정보 확인 (member_number, birth_date, gender_code)."""
+    return _client(current_user, request).get(
+        f"/portal/patients/{patient_id_hash}/verify"
+    )
+
+
+class NurseCheckinRequest(BaseModel):
+    patient_id:      str
+    doctor_id:       str
+    department_code: str
+    appointment_id:  Optional[str] = None
+    chief_complaint: Optional[str] = None
+
+
+class NurseAdmitRequest(BaseModel):
+    patient_id:      str
+    doctor_id:       str
+    department_code: str
+    ward_id:         Optional[str] = None
+    appointment_id:  Optional[str] = None
+    chief_complaint: Optional[str] = None
+
+
+@router.patch("/nurse/encounters/{encounter_id}/discharge")
+def nurse_encounter_discharge(
+    encounter_id: str,
+    request:      Request,
+    current_user: dict      = Depends(_require_roles("nurse", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-027 — 퇴원 처리: 온프레미스 encounter 'discharged' + AWS sync_wards.available_beds +1.
+    두 작업 중 하나라도 실패 시 최선 롤백.
+    """
+    # 1단계: 온프레미스 encounter 상태 업데이트
+    result = _client(current_user, request).patch(
+        f"/portal/encounters/{encounter_id}/discharge", {}
+    )
+
+    # 2단계: AWS sync_wards.available_beds +1
+    ward_id_str = result.get("ward_id")
+    if ward_id_str:
+        try:
+            ward = db.query(SyncWard).filter(
+                SyncWard.ward_id == uuid.UUID(ward_id_str)
+            ).first()
+            if ward and (ward.available_beds or 0) < (ward.total_beds or 0):
+                ward.available_beds = (ward.available_beds or 0) + 1
+                db.commit()
+        except Exception as exc:
+            logger.warning("sync_wards 업데이트 실패 (ward_id=%s): %s", ward_id_str, exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    # sync_encounters 상태 동기화
+    try:
+        existing = db.query(SyncEncounter).filter(
+            SyncEncounter.encounter_id == encounter_id
+        ).first()
+        if existing:
+            existing.status_code = "discharged"
+            db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return result
+
+
+@router.post("/nurse/encounters/checkin", status_code=201)
+def nurse_encounter_checkin(
+    body:         NurseCheckinRequest,
+    request:      Request,
+    current_user: dict      = Depends(_require_roles("nurse", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-028 — 외래 접수 (status='waiting') + AWS sync_encounters 동기화."""
+    result = _client(current_user, request).post(
+        "/portal/encounters/checkin", body.model_dump(exclude_none=True)
+    )
+    _sync_encounter_to_aws(db, result)
+    return result
+
+
+@router.post("/nurse/encounters/admit", status_code=201)
+def nurse_encounter_admit(
+    body:         NurseAdmitRequest,
+    request:      Request,
+    current_user: dict      = Depends(_require_roles("nurse", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-028 — 입원 접수 (status='admitted') + AWS sync_encounters 동기화 + sync_wards.available_beds 감소."""
+    result = _client(current_user, request).post(
+        "/portal/encounters/admit", body.model_dump(exclude_none=True)
+    )
+    _sync_encounter_to_aws(db, result)
+
+    if result.get("ward_id"):
+        try:
+            ward = db.query(SyncWard).filter(
+                SyncWard.ward_id == uuid.UUID(result["ward_id"])
+            ).first()
+            if ward and (ward.available_beds or 0) > 0:
+                ward.available_beds -= 1
+                db.commit()
+        except Exception as exc:
+            logger.warning("sync_wards 업데이트 실패: %s", exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    return result
 

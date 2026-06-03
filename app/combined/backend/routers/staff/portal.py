@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db, get_read_db
@@ -465,7 +466,7 @@ def update_appointment_status(
 
     _record_audit(
         db, current_user["sub"],
-        f"APPT_STATUS_{body.status_code.upper()}", "200",
+        "APPOINTMENT_STATUS_CHANGE", "200",
         request, appointment_id,
     )
 
@@ -503,6 +504,7 @@ def get_ward_status(
             "room_type":      w.room_type,
             "total_beds":     w.total_beds,
             "available_beds": w.available_beds,
+            "synced_at":      w.synced_at.isoformat() if w.synced_at else None,
         }
         for w in wards
     ]
@@ -640,9 +642,153 @@ def create_manual_appointment(
     ))
 
     _record_audit(
-        db, current_user["sub"], "CREATE_APPOINTMENT_MANUAL", "201",
+        db, current_user["sub"], "APPOINTMENT_CREATE", "201",
         request, appt.appointment_id,
     )
+
+    # 예약 완료 알림 생성
+    try:
+        patient_user = db.query(User).filter(
+            User.patient_id_hash == body.patient_id_hash
+        ).first()
+        if patient_user:
+            db.add(Notification(
+                user_id        = patient_user.user_id,
+                appointment_id = appt.appointment_id,
+                channel        = "email",
+                status         = "pending",
+            ))
+    except Exception:
+        pass
+
     db.commit()
     db.refresh(appt)
     return _appt_out(appt)
+
+
+# ── 간호사 대시보드 요약 (SFR-022) ─────────────────────────────
+
+@router.get("/nurse/dashboard")
+def nurse_dashboard_summary(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """당일 예약 집계·가용 병상·미확인 알림 카운트 — AWS RDS 전용 (환자 실명 없음)."""
+    _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
+
+    today = date_type.today()
+
+    appts = (
+        db.query(Appointment, AppointmentStatus.status_code)
+        .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
+        .filter(Appointment.appointment_date == today)
+        .all()
+    )
+    counts = {"total": len(appts), "pending": 0, "completed": 0, "cancelled": 0, "confirmed": 0}
+    for _, sc in appts:
+        if sc in counts:
+            counts[sc] += 1
+
+    total_beds = db.query(func.sum(SyncWard.available_beds)).scalar() or 0
+
+    user_id = uuid.UUID(current_user["sub"])
+    notif_count = (
+        db.query(func.count(Notification.notification_id))
+        .filter(Notification.user_id == user_id, Notification.status == "pending")
+        .scalar()
+    ) or 0
+
+    synced_at = None
+    ward = db.query(SyncWard).order_by(SyncWard.synced_at.desc()).first()
+    if ward and ward.synced_at:
+        synced_at = ward.synced_at.isoformat()
+
+    return {
+        "today_appointments": counts,
+        "available_beds":     int(total_beds),
+        "pending_notifications": notif_count,
+        "ward_synced_at":     synced_at,
+    }
+
+
+# ── 예약 변경 이력 조회 (SFR-023) ────────────────────────────────
+
+@router.get("/staff/appointments/{appointment_id}/history")
+def get_appointment_history(
+    appointment_id: uuid.UUID,
+    current_user:   dict     = Depends(get_current_user),
+    db:             DbSession = Depends(get_read_db),
+):
+    """예약 변경 이력 목록 — appointment_history 테이블 조회."""
+    _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
+
+    appt = db.query(Appointment).filter(
+        Appointment.appointment_id == appointment_id
+    ).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    history = sorted(
+        appt.history,
+        key=lambda h: h.changed_at or datetime.min.replace(tzinfo=timezone.utc),
+    )
+
+    def _status_name(status_id):
+        if not status_id:
+            return None
+        s = db.query(AppointmentStatus).filter(
+            AppointmentStatus.status_id == status_id
+        ).first()
+        return s.status_name if s else str(status_id)
+
+    return [
+        {
+            "history_id":    str(h.history_id),
+            "changed_at":    h.changed_at.isoformat() if h.changed_at else None,
+            "changed_by":    str(h.changed_by) if h.changed_by else None,
+            "prev_status":   _status_name(h.prev_status_id),
+            "new_status":    _status_name(h.new_status_id),
+            "prev_date":     str(h.prev_date) if h.prev_date else None,
+            "new_date":      str(h.new_date) if h.new_date else None,
+            "prev_time":     h.prev_time.strftime("%H:%M") if h.prev_time else None,
+            "new_time":      h.new_time.strftime("%H:%M") if h.new_time else None,
+            "change_reason": h.change_reason,
+        }
+        for h in history
+    ]
+
+
+# ── 병동 퇴원 처리 (SFR-027) ────────────────────────────────────
+
+@router.patch("/staff/wards/{ward_id}/discharge")
+def ward_discharge(
+    ward_id:      uuid.UUID,
+    request:      Request,
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """AWS sync_wards.available_beds += 1 (퇴원 처리 후 병상 반환)."""
+    _verify(current_user, db, "MANAGE_APPOINTMENTS")
+
+    ward = db.query(SyncWard).filter(SyncWard.ward_id == ward_id).first()
+    if not ward:
+        raise HTTPException(status_code=404, detail="병동을 찾을 수 없습니다.")
+
+    if ward.available_beds >= ward.total_beds:
+        raise HTTPException(status_code=400, detail="이미 병상이 모두 비어 있습니다.")
+
+    ward.available_beds = (ward.available_beds or 0) + 1
+
+    _record_audit(
+        db, current_user["sub"], "ENCOUNTER_DISCHARGE", "200",
+        request, ward_id,
+    )
+    db.commit()
+    db.refresh(ward)
+
+    return {
+        "ward_id":        str(ward.ward_id),
+        "ward_name":      ward.ward_name,
+        "available_beds": ward.available_beds,
+        "total_beds":     ward.total_beds,
+    }

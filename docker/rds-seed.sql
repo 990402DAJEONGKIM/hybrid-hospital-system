@@ -296,44 +296,44 @@ ON CONFLICT (ward_id) DO NOTHING;
 
 
 -- ── 9. 테스트 계정 ────────────────────────────────────────────
--- bcrypt(Test1234!, cost=12) = $2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO
+-- bcrypt(Test1234!, cost=12) = $2b$12$IvdN1DyXYuPeFxMLr8t2DeYPc6BLrhgnSaIy9w6Cc9rvYmf19lqA2
 -- user_id는 온프레미스 DB와 동일 (JWT sub 공유를 위해 고정)
 INSERT INTO users
     (user_id, member_number, password_hash, role_id, doctor_id, is_active, must_change_password)
 VALUES
     ('c1000000-0000-0000-0000-000000000001',
      'admin-1',
-     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
+     '$2b$12$IvdN1DyXYuPeFxMLr8t2DeYPc6BLrhgnSaIy9w6Cc9rvYmf19lqA2',
      1, NULL, TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000002',
      'dr-INTERNAL-1',
-     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
+     '$2b$12$IvdN1DyXYuPeFxMLr8t2DeYPc6BLrhgnSaIy9w6Cc9rvYmf19lqA2',
      2, 'a1000000-0000-0000-0000-000000000001', TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000003',
      'dr-CARDIO-1',
-     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
+     '$2b$12$IvdN1DyXYuPeFxMLr8t2DeYPc6BLrhgnSaIy9w6Cc9rvYmf19lqA2',
      2, 'a1000000-0000-0000-0000-000000000002', TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000004',
      'dr-NEURO-1',
-     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
+     '$2b$12$IvdN1DyXYuPeFxMLr8t2DeYPc6BLrhgnSaIy9w6Cc9rvYmf19lqA2',
      2, 'a1000000-0000-0000-0000-000000000003', TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000005',
      'dr-ORTHO-1',
-     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
+     '$2b$12$IvdN1DyXYuPeFxMLr8t2DeYPc6BLrhgnSaIy9w6Cc9rvYmf19lqA2',
      2, 'a1000000-0000-0000-0000-000000000004', TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000006',
      'nurse-1',
-     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
+     '$2b$12$IvdN1DyXYuPeFxMLr8t2DeYPc6BLrhgnSaIy9w6Cc9rvYmf19lqA2',
      3, NULL, TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000007',
      'nurse-2',
-     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
+     '$2b$12$IvdN1DyXYuPeFxMLr8t2DeYPc6BLrhgnSaIy9w6Cc9rvYmf19lqA2',
      3, NULL, TRUE, FALSE)
 ON CONFLICT (member_number) DO NOTHING;
 

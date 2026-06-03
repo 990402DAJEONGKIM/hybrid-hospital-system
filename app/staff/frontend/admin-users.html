@@ -8,44 +8,46 @@
     <style>
         .page-wrap { max-width:1200px; margin:80px auto 40px; padding:0 16px; }
         .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
-        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table { width:100%; border-collapse:collapse; font-size:13px; }
         .data-table th { background:#eceff1; padding:10px 12px; text-align:left; font-weight:600; color:#546e7a; border-bottom:2px solid #cfd8dc; }
-        .data-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
-        .badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+        .data-table td { padding:9px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+        .data-table tr:hover td { background:#f8fafc; }
+        .badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; }
         .badge-active   { background:#e8f5e9; color:#2e7d32; }
         .badge-locked   { background:#ffebee; color:#c62828; }
-        .btn-primary  { padding:9px 18px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
-        .btn-sm { padding:5px 12px; border:none; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; }
-        .btn-lock   { background:#fff8e1; color:#e65100; }
-        .btn-unlock { background:#e8f5e9; color:#2e7d32; }
-        .btn-edit   { background:#e3f2fd; color:#1565c0; }
-        .btn-delete { background:#ffebee; color:#c62828; }
-        .action-cell { display:flex; gap:5px; flex-wrap:wrap; }
+        .badge-inactive { background:#f1f5f9; color:#64748b; }
+        .btn-primary { padding:9px 18px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
+        .btn-sm { padding:4px 10px; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; }
+        .btn-lock     { background:#fff8e1; color:#e65100; }
+        .btn-unlock   { background:#e8f5e9; color:#2e7d32; }
+        .btn-edit     { background:#e3f2fd; color:#1565c0; }
+        .btn-delete   { background:#ffebee; color:#c62828; }
+        .btn-resetpw  { background:#f3e5f5; color:#6a1b9a; }
+        .action-cell  { display:flex; gap:4px; flex-wrap:wrap; }
 
-        /* 모달 */
         .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:center; justify-content:center; }
         .modal-overlay.open { display:flex; }
-        .modal-box { background:#fff; border-radius:10px; padding:28px; width:420px; max-width:95vw; }
+        .modal-box { background:#fff; border-radius:10px; padding:28px; width:440px; max-width:95vw; max-height:90vh; overflow-y:auto; }
         .modal-box h3 { margin-bottom:20px; font-size:17px; }
-        .form-group { margin-bottom:16px; }
-        .form-group label { display:block; font-size:13px; font-weight:600; color:#546e7a; margin-bottom:5px; }
-        .form-group input, .form-group select { width:100%; padding:9px 11px; border:1px solid #cfd8dc; border-radius:6px; font-size:14px; box-sizing:border-box; }
+        .form-group { margin-bottom:14px; }
+        .form-group label { display:block; font-size:12px; font-weight:600; color:#546e7a; margin-bottom:4px; }
+        .form-group input, .form-group select { width:100%; padding:9px 11px; border:1px solid #cfd8dc; border-radius:6px; font-size:13px; box-sizing:border-box; }
         .modal-footer { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
-        .btn-cancel-modal { padding:9px 18px; background:#eceff1; color:#546e7a; border:none; border-radius:6px; font-size:14px; cursor:pointer; }
-        #errMsg { color:#e53935; font-size:13px; margin-top:6px; min-height:16px; }
-        #editErrMsg { color:#e53935; font-size:13px; margin-top:6px; min-height:16px; }
-        .back-link { font-size:13px; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-bottom:16px; }
-        .back-link:hover { text-decoration:underline; }
+        .btn-cancel-m { padding:9px 18px; background:#eceff1; color:#546e7a; border:none; border-radius:6px; font-size:14px; cursor:pointer; }
+        .err-msg { color:#e53935; font-size:12px; margin-top:5px; min-height:16px; }
+        .hint { font-size:11px; color:#94a3b8; margin-top:3px; }
+        .role-tab { display:flex; gap:0; margin-bottom:14px; border-radius:6px; overflow:hidden; border:1px solid #e2e8f0; }
+        .role-tab button { flex:1; padding:8px; font-size:12px; font-weight:600; border:none; background:#f8fafc; color:#94a3b8; cursor:pointer; }
+        .role-tab button.active { background:#1d4ed8; color:#fff; }
     </style>
 </head>
 <body>
 <div id="page-content">
 <div class="page-wrap">
-    <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <div class="toolbar">
         <div>
             <h2 style="margin-bottom:4px;">사용자 계정 관리</h2>
-            <p style="color:#78909c;font-size:13px;margin:0;">ISMS-P 2.5.1 — 계정 생성·수정·잠금·삭제</p>
+            <p style="color:#78909c;font-size:13px;margin:0;">ISMS-P 2.5.1 — 계정 생성·수정·잠금·비활성화</p>
         </div>
         <button class="btn-primary" onclick="openCreateModal()">+ 신규 계정 생성</button>
     </div>
@@ -53,9 +55,10 @@
     <table class="data-table" id="userTable">
         <thead>
             <tr>
-                <th>이메일</th>
+                <th>식별자</th>
                 <th>역할</th>
                 <th>상태</th>
+                <th>잠금 만료</th>
                 <th>마지막 로그인</th>
                 <th>생성일</th>
                 <th>관리</th>
@@ -68,31 +71,56 @@
 <!-- 신규 계정 생성 모달 -->
 <div class="modal-overlay" id="createModal">
     <div class="modal-box">
-        <h3>신규 계정 생성</h3>
-        <div class="form-group">
-            <label>이메일 *</label>
-            <input type="email" id="newEmail" placeholder="user@example.com">
+        <h3><i class="fas fa-user-plus" style="margin-right:8px;color:#1d4ed8;"></i>신규 계정 생성</h3>
+        <div class="role-tab">
+            <button id="tabStaff" class="active" onclick="setAccountType('staff')">직원/의사</button>
+            <button id="tabPatient" onclick="setAccountType('patient')">환자</button>
         </div>
+
+        <!-- 직원 필드 -->
+        <div id="staffFields">
+            <div class="form-group">
+                <label>이메일 *</label>
+                <input type="email" id="newEmail" placeholder="user@hospital.com">
+            </div>
+            <div class="form-group">
+                <label>회원번호 (선택)</label>
+                <input type="text" id="newMemberNumberStaff" placeholder="staff-001">
+                <div class="hint">미입력 시 자동 미부여</div>
+            </div>
+        </div>
+
+        <!-- 환자 필드 -->
+        <div id="patientFields" style="display:none;">
+            <div class="form-group">
+                <label>회원번호 *</label>
+                <input type="text" id="newMemberNumber" placeholder="8자리 숫자">
+            </div>
+        </div>
+
         <div class="form-group">
-            <label>비밀번호 *</label>
+            <label>임시 비밀번호 *</label>
             <input type="password" id="newPassword" placeholder="8자 이상, 대·소문자·숫자·특수문자">
+            <div class="hint">첫 로그인 시 변경 강제</div>
         </div>
         <div class="form-group">
             <label>역할 *</label>
-            <select id="newRole">
+            <select id="newRole" onchange="onRoleChange()">
                 <option value="doctor">의사</option>
                 <option value="nurse">간호사 / 원무과</option>
                 <option value="admin">관리자</option>
+                <option value="patient" id="patientOption">환자</option>
             </select>
         </div>
         <div class="form-group" id="doctorIdGroup">
-            <label>Doctor ID (UUID, 의사 계정 시 선택)</label>
+            <label>Doctor ID (UUID)</label>
             <input type="text" id="newDoctorId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            <div class="hint">온프레미스 doctors 테이블의 doctor_id</div>
         </div>
-        <div id="errMsg"></div>
+        <div class="err-msg" id="createErrMsg"></div>
         <div class="modal-footer">
-            <button class="btn-cancel-modal" onclick="closeModal()">취소</button>
-            <button class="btn-primary" onclick="createUser()">생성</button>
+            <button class="btn-cancel-m" onclick="closeCreateModal()">취소</button>
+            <button class="btn-primary" onclick="createUser()">계정 생성</button>
         </div>
     </div>
 </div>
@@ -100,23 +128,43 @@
 <!-- 역할 변경 모달 -->
 <div class="modal-overlay" id="editModal">
     <div class="modal-box">
-        <h3>역할 / 상태 변경</h3>
+        <h3><i class="fas fa-user-edit" style="margin-right:8px;color:#1565c0;"></i>계정 수정</h3>
         <div class="form-group">
             <label>역할</label>
-            <select id="editRole">
+            <select id="editRole" onchange="onEditRoleChange()">
                 <option value="doctor">의사</option>
                 <option value="nurse">간호사 / 원무과</option>
                 <option value="admin">관리자</option>
+                <option value="patient">환자</option>
             </select>
         </div>
-        <div class="form-group">
-            <label>Doctor ID (UUID, 의사 역할 변경 시 선택)</label>
+        <div class="form-group" id="editDoctorGroup">
+            <label>Doctor ID</label>
             <input type="text" id="editDoctorId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
         </div>
-        <div id="editErrMsg"></div>
+        <div class="err-msg" id="editErrMsg"></div>
         <div class="modal-footer">
-            <button class="btn-cancel-modal" onclick="closeEditModal()">취소</button>
+            <button class="btn-cancel-m" onclick="closeEditModal()">취소</button>
             <button class="btn-primary" onclick="saveEdit()">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 비밀번호 초기화 모달 -->
+<div class="modal-overlay" id="resetPwModal">
+    <div class="modal-box">
+        <h3><i class="fas fa-key" style="margin-right:8px;color:#6a1b9a;"></i>임시 비밀번호 발급</h3>
+        <p style="font-size:13px;color:#374151;margin-bottom:16px;">
+            새 임시 비밀번호를 설정합니다. 다음 로그인 시 비밀번호 변경이 강제됩니다.
+        </p>
+        <div class="form-group">
+            <label>새 임시 비밀번호 *</label>
+            <input type="password" id="resetPwValue" placeholder="8자 이상, 대·소문자·숫자·특수문자">
+        </div>
+        <div class="err-msg" id="resetPwErrMsg"></div>
+        <div class="modal-footer">
+            <button class="btn-cancel-m" onclick="closeResetPwModal()">취소</button>
+            <button class="btn-primary" onclick="doResetPassword()">발급</button>
         </div>
     </div>
 </div>
@@ -127,14 +175,12 @@
 <script src="/js/layout.js"></script>
 <script src="/js/router.js"></script>
 <script>
+    const ROLE_LABEL = { doctor:'의사', nurse:'간호사/원무과', admin:'관리자', patient:'환자' };
+
     async function init() {
         const me = await initLayout();
         if (!me) return;
-        if (me.role !== 'admin') {
-            alert('관리자 권한이 필요합니다.');
-            location.href = 'index.html';
-            return;
-        }
+        if (me.role !== 'admin') { alert('관리자 권한이 필요합니다.'); location.href = '/index.html'; return; }
         await loadUsers();
     }
 
@@ -142,37 +188,47 @@
         const res = await apiCall('/admin/users');
         if (!res || !res.ok) {
             document.getElementById('userBody').innerHTML =
-                `<tr><td colspan="6" style="text-align:center;padding:30px;color:#90a4ae;">사용자 목록을 불러오지 못했습니다.</td></tr>`;
+                '<tr><td colspan="7" style="text-align:center;padding:30px;color:#90a4ae;">사용자 목록을 불러오지 못했습니다.</td></tr>';
             return;
         }
         const users = await res.json();
-        const ROLE_LABEL = { doctor: '의사', nurse: '간호사/원무과', admin: '관리자', patient: '환자' };
+        const now   = new Date();
         document.getElementById('userBody').innerHTML = users.map(u => {
-            const isActive  = u.is_active;
-            const statusLbl = isActive ? '활성' : '잠금';
-            const badgeCls  = isActive ? 'badge-active' : 'badge-locked';
-            const loginAt   = u.last_login_at ? u.last_login_at.replace('T', ' ').slice(0, 16) : '-';
-            const createdAt = u.created_at    ? u.created_at.replace('T', ' ').slice(0, 10)    : '-';
+            const isLocked   = u.is_locked;
+            const isInactive = !u.is_active;
+            const statusLbl  = isInactive ? '비활성' : isLocked ? '잠금' : '활성';
+            const badgeCls   = isInactive ? 'badge-inactive' : isLocked ? 'badge-locked' : 'badge-active';
+            const identifier = u.email || u.member_number || '-';
+            const memberNum  = u.member_number || '-';
+            const loginAt    = u.last_login_at ? u.last_login_at.replace('T',' ').slice(0,16) : '-';
+            const createdAt  = u.created_at ? u.created_at.slice(0,10) : '-';
+            const lockedUntil = u.locked_until ? u.locked_until.replace('T',' ').slice(0,16) : '-';
             return `
             <tr>
-                <td>${u.email}</td>
-                <td>${ROLE_LABEL[u.role_code] || u.role_name || u.role_code}</td>
+                <td>
+                    <div style="font-weight:600;font-size:13px;">${_esc(identifier)}</div>
+                    ${u.member_number && u.email ? `<div style="font-size:11px;color:#94a3b8;">${_esc(memberNum)}</div>` : ''}
+                </td>
+                <td>${_esc(ROLE_LABEL[u.role_code] || u.role_name || u.role_code || '-')}</td>
                 <td><span class="badge ${badgeCls}">${statusLbl}</span></td>
-                <td>${loginAt}</td>
-                <td>${createdAt}</td>
+                <td style="font-size:12px;color:${isLocked ? '#c62828' : '#94a3b8'};">${isLocked ? lockedUntil : '-'}</td>
+                <td style="font-size:12px;color:#64748b;">${loginAt}</td>
+                <td style="font-size:12px;color:#64748b;">${createdAt}</td>
                 <td>
                     <div class="action-cell">
-                        <button class="btn-sm ${isActive ? 'btn-lock' : 'btn-unlock'}"
-                            onclick="toggleLock('${u.user_id}', ${isActive})">
-                            ${isActive ? '잠금' : '해제'}
-                        </button>
-                        <button class="btn-sm btn-edit"
-                            onclick="openEditModal('${u.user_id}', '${u.role_code || ''}', ${isActive})">
-                            역할 변경
-                        </button>
+                        ${!isInactive ? `
+                            <button class="btn-sm ${isLocked ? 'btn-unlock' : 'btn-lock'}"
+                                onclick="${isLocked ? `unlockUser('${u.user_id}')` : `lockUser('${u.user_id}')`}">
+                                ${isLocked ? '잠금해제' : '잠금'}
+                            </button>
+                            <button class="btn-sm btn-edit"
+                                onclick="openEditModal('${u.user_id}','${u.role_code||''}')">역할변경</button>
+                            <button class="btn-sm btn-resetpw"
+                                onclick="openResetPwModal('${u.user_id}')">비번초기화</button>
+                        ` : ''}
                         <button class="btn-sm btn-delete"
-                            onclick="deleteUser('${u.user_id}', '${u.email}')">
-                            삭제
+                            onclick="${isInactive ? `reactivate('${u.user_id}')` : `deleteUser('${u.user_id}','${_esc(identifier)}')`}">
+                            ${isInactive ? '재활성' : '비활성화'}
                         </button>
                     </div>
                 </td>
@@ -180,114 +236,178 @@
         }).join('');
     }
 
-    let editingUserId = null;
+    function _esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-    function openEditModal(userId, roleCode, isActive) {
-        editingUserId = userId;
-        document.getElementById('editRole').value    = roleCode || 'doctor';
+    // ── 잠금 / 해제 ────────────────────────────────────────────
+
+    async function lockUser(id) {
+        if (!confirm('해당 계정을 24시간 잠금 처리하시겠습니까?')) return;
+        const res = await apiCall(`/admin/users/${id}/lock`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lock: true, hours: 24 }),
+        });
+        if (res && res.ok) await loadUsers();
+        else alert((await res?.json().catch(()=>({}))).detail || '잠금 처리 중 오류');
+    }
+
+    async function unlockUser(id) {
+        if (!confirm('계정 잠금을 해제하시겠습니까? (실패 횟수도 초기화됩니다)')) return;
+        const res = await apiCall(`/admin/users/${id}/lock`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lock: false }),
+        });
+        if (res && res.ok) await loadUsers();
+        else alert((await res?.json().catch(()=>({}))).detail || '잠금 해제 중 오류');
+    }
+
+    // ── 역할 변경 ──────────────────────────────────────────────
+
+    let _editUserId = null;
+    function openEditModal(userId, roleCode) {
+        _editUserId = userId;
+        document.getElementById('editRole').value = roleCode || 'doctor';
         document.getElementById('editDoctorId').value = '';
         document.getElementById('editErrMsg').textContent = '';
+        onEditRoleChange();
         document.getElementById('editModal').classList.add('open');
     }
-
-    function closeEditModal() {
-        document.getElementById('editModal').classList.remove('open');
-        editingUserId = null;
+    function closeEditModal() { document.getElementById('editModal').classList.remove('open'); _editUserId = null; }
+    function onEditRoleChange() {
+        document.getElementById('editDoctorGroup').style.display =
+            document.getElementById('editRole').value === 'doctor' ? '' : 'none';
     }
-
     async function saveEdit() {
         const roleCode = document.getElementById('editRole').value;
         const doctorId = document.getElementById('editDoctorId').value.trim();
         const errEl    = document.getElementById('editErrMsg');
-        if (!editingUserId) return;
-
+        if (!_editUserId) return;
         const body = { role_code: roleCode };
         if (doctorId) body.doctor_id = doctorId;
-
-        const res = await apiCall(`/admin/users/${editingUserId}`, {
-            method: 'PATCH',
-            body:   JSON.stringify(body),
+        const res = await apiCall(`/admin/users/${_editUserId}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
         });
-        if (res && res.ok) {
-            closeEditModal();
-            await loadUsers();
-        } else {
-            const err = await res?.json().catch(() => ({}));
-            errEl.textContent = err.detail || '변경 중 오류가 발생했습니다.';
-        }
+        if (res && res.ok) { closeEditModal(); await loadUsers(); }
+        else errEl.textContent = (await res?.json().catch(()=>({}))).detail || '변경 중 오류';
     }
 
-    async function deleteUser(id, email) {
-        if (!confirm(`"${email}" 계정을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    // ── 비밀번호 초기화 ─────────────────────────────────────────
+
+    let _resetPwUserId = null;
+    function openResetPwModal(userId) {
+        _resetPwUserId = userId;
+        document.getElementById('resetPwValue').value = '';
+        document.getElementById('resetPwErrMsg').textContent = '';
+        document.getElementById('resetPwModal').classList.add('open');
+    }
+    function closeResetPwModal() { document.getElementById('resetPwModal').classList.remove('open'); _resetPwUserId = null; }
+    async function doResetPassword() {
+        const pw    = document.getElementById('resetPwValue').value;
+        const errEl = document.getElementById('resetPwErrMsg');
+        if (!pw) { errEl.textContent = '비밀번호를 입력하세요.'; return; }
+        const res = await apiCall(`/admin/users/${_resetPwUserId}/reset-password`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_password: pw }),
+        });
+        if (res && res.ok) { alert('임시 비밀번호가 발급되었습니다.'); closeResetPwModal(); }
+        else errEl.textContent = (await res?.json().catch(()=>({}))).detail || '초기화 중 오류';
+    }
+
+    // ── 비활성화 / 재활성 ──────────────────────────────────────
+
+    async function deleteUser(id, identifier) {
+        if (!confirm(`"${identifier}" 계정을 비활성화하시겠습니까?\n(물리 삭제가 아닌 비활성 처리이며, 재활성 가능합니다)`)) return;
         const res = await apiCall(`/admin/users/${id}`, { method: 'DELETE' });
-        if (res && (res.ok || res.status === 204)) {
-            await loadUsers();
-        } else {
-            const err = await res?.json().catch(() => ({}));
-            alert(err.detail || '삭제 중 오류가 발생했습니다.');
-        }
+        if (res && res.ok) await loadUsers();
+        else alert((await res?.json().catch(()=>({}))).detail || '비활성화 중 오류');
     }
 
-    async function toggleLock(id, currentActive) {
-        const action = currentActive ? '잠금' : '해제';
-        if (!confirm(`해당 계정을 ${action}하시겠습니까?`)) return;
-        const res = await apiCall(`/admin/users/${id}/lock`, { method: 'PATCH' });
-        if (res && res.ok) {
-            await loadUsers();
+    async function reactivate(id) {
+        if (!confirm('계정을 다시 활성화하시겠습니까?')) return;
+        const res = await apiCall(`/admin/users/${id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: true }),
+        });
+        if (res && res.ok) await loadUsers();
+        else alert((await res?.json().catch(()=>({}))).detail || '재활성 중 오류');
+    }
+
+    // ── 계정 생성 ──────────────────────────────────────────────
+
+    let _accountType = 'staff';
+
+    function setAccountType(type) {
+        _accountType = type;
+        document.getElementById('tabStaff').className    = type === 'staff' ? 'active' : '';
+        document.getElementById('tabPatient').className  = type === 'patient' ? 'active' : '';
+        document.getElementById('staffFields').style.display   = type === 'staff' ? '' : 'none';
+        document.getElementById('patientFields').style.display = type === 'patient' ? '' : 'none';
+        const roleEl = document.getElementById('newRole');
+        if (type === 'patient') {
+            roleEl.value = 'patient';
+            roleEl.disabled = true;
         } else {
-            const err = await res?.json().catch(() => ({}));
-            alert(err.detail || `${action} 처리 중 오류가 발생했습니다.`);
+            if (roleEl.value === 'patient') roleEl.value = 'doctor';
+            roleEl.disabled = false;
         }
+        onRoleChange();
+    }
+
+    function onRoleChange() {
+        const role = document.getElementById('newRole').value;
+        document.getElementById('doctorIdGroup').style.display = role === 'doctor' ? '' : 'none';
     }
 
     function openCreateModal() {
-        document.getElementById('newEmail').value     = '';
-        document.getElementById('newPassword').value  = '';
-        document.getElementById('newDoctorId').value  = '';
-        document.getElementById('errMsg').textContent = '';
+        _accountType = 'staff';
+        document.getElementById('newEmail').value            = '';
+        document.getElementById('newMemberNumberStaff').value = '';
+        document.getElementById('newMemberNumber').value     = '';
+        document.getElementById('newPassword').value         = '';
+        document.getElementById('newDoctorId').value         = '';
+        document.getElementById('newRole').value             = 'doctor';
+        document.getElementById('newRole').disabled          = false;
+        document.getElementById('createErrMsg').textContent  = '';
+        setAccountType('staff');
         document.getElementById('createModal').classList.add('open');
     }
-
-    function closeModal() {
-        document.getElementById('createModal').classList.remove('open');
-    }
-
-    document.getElementById('newRole').addEventListener('change', (e) => {
-        document.getElementById('doctorIdGroup').style.display = e.target.value === 'doctor' ? 'block' : 'none';
-    });
-    document.getElementById('doctorIdGroup').style.display = 'block';
-
-    document.getElementById('editRole').addEventListener('change', (e) => {
-        document.getElementById('editDoctorId').parentElement.style.display =
-            e.target.value === 'doctor' ? 'block' : 'none';
-    });
+    function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
 
     async function createUser() {
-        const email    = document.getElementById('newEmail').value.trim();
         const password = document.getElementById('newPassword').value;
         const roleCode = document.getElementById('newRole').value;
         const doctorId = document.getElementById('newDoctorId').value.trim();
+        const errEl    = document.getElementById('createErrMsg');
+        errEl.textContent = '';
 
-        if (!email || !password) {
-            document.getElementById('errMsg').textContent = '이메일과 비밀번호를 입력해주세요.';
-            return;
+        const body = { role_code: roleCode, password };
+
+        if (_accountType === 'patient') {
+            const mn = document.getElementById('newMemberNumber').value.trim();
+            if (!mn) { errEl.textContent = '환자 계정은 회원번호가 필수입니다.'; return; }
+            body.member_number = mn;
+        } else {
+            const email = document.getElementById('newEmail').value.trim();
+            const mn    = document.getElementById('newMemberNumberStaff').value.trim();
+            if (!email) { errEl.textContent = '직원 계정은 이메일이 필수입니다.'; return; }
+            body.email = email;
+            if (mn) body.member_number = mn;
         }
-
-        const body = { email, password, role_code: roleCode };
         if (doctorId) body.doctor_id = doctorId;
+        if (!password) { errEl.textContent = '비밀번호를 입력하세요.'; return; }
 
         const res = await apiCall('/admin/users', {
-            method: 'POST',
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
-
         if (res && res.ok) {
-            alert('계정이 생성되었습니다.');
-            closeModal();
+            alert('계정이 생성되었습니다. (첫 로그인 시 비밀번호 변경 필요)');
+            closeCreateModal();
             await loadUsers();
         } else {
-            const err = await res?.json().catch(() => ({}));
-            document.getElementById('errMsg').textContent = err.detail || '계정 생성 중 오류가 발생했습니다.';
+            errEl.textContent = (await res?.json().catch(()=>({}))).detail || '계정 생성 중 오류';
         }
     }
 
