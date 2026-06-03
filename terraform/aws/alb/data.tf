@@ -54,6 +54,17 @@ data "aws_acm_certificate" "wazuh" {
   most_recent = true
 }
 
+# Grafana ACM 인증서 — staff-alb SNI 추가용
+# TC-aws-ACM에서 grafana 인증서 발급 후 사용 가능
+data "aws_acm_certificate" "grafana" {
+  domain      = "grafana.${var.base_domain}"
+  statuses    = ["ISSUED"]
+  most_recent = true
+}
+
+
+
+
 # ECS EC2 보안그룹 (ALB → ECS 트래픽 허용 규칙 추가용)
 data "aws_security_group" "ecs_ec2" {
   filter {
@@ -75,16 +86,6 @@ data "aws_instance" "wazuh" {
 }
 
 
-data "aws_instance" "wazuh2" {
-  filter {
-    name   = "tag:Name"
-    values = ["aws-wazuh-02"]
-  }
-  filter {
-    name   = "instance-state-name"
-    values = ["running", "stopped"]
-  }
-}
 
 data "terraform_remote_state" "s3" {
   backend = "remote"
@@ -96,13 +97,6 @@ data "terraform_remote_state" "s3" {
 
 
 
-# Grafana ACM 인증서 — staff-alb SNI 추가용
-# TC-aws-ACM에서 grafana 인증서 발급 후 사용 가능
-data "aws_acm_certificate" "grafana" {
-  domain      = "grafana.${var.base_domain}"
-  statuses    = ["ISSUED"]
-  most_recent = true
-}
 
 # monitoring EC2 Private IP 참조
 # TC-aws-monitoring output에서 가져옴
