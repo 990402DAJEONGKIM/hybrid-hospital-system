@@ -1,15 +1,15 @@
 #!/bin/bash
-# Prometheus + Grafana EC2 초기화 스크립트
+# Prometheus + Alloy + Grafana EC2 초기화 스크립트
 # 공식문서:
 #   Prometheus: https://prometheus.io/docs/prometheus/latest/installation/
+#   Grafana Alloy: https://grafana.com/docs/alloy/latest/set-up/install/linux/
 #   Grafana: https://grafana.com/docs/grafana/latest/setup-grafana/installation/debian/
 set -e
 
 # ── 기본 패키지 ──────────────────────────────────────────
 apt-get update -y
 apt-get install -y wget curl apt-transport-https software-properties-common gpg
-apt-get install -y unzip 
-
+apt-get install -y unzip
 
 # ── AWS CLI v2 설치 (AWS 공식문서 기준) ──────────────────
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
@@ -39,63 +39,27 @@ chown prometheus:prometheus /usr/local/bin/prometheus /usr/local/bin/promtool
 rm -rf /tmp/prometheus*
 
 # ── Prometheus 설정 파일 ─────────────────────────────────
+# Alloy push 방식으로 전환 — scrape 설정 불필요
+# prometheus 자체 메트릭만 scrape
 cat > /etc/prometheus/prometheus.yml <<'PROMEOF'
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
 scrape_configs:
-  # Prometheus 자체 메트릭
+  # Prometheus 자체 메트릭만 scrape
+  # 나머지 서버는 Alloy가 push 방식으로 전송
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
-
-  # ECS EC2 node exporter — EC2 Service Discovery (ASG 자동 탐지)
-  - job_name: 'ecs-ec2'
-    ec2_sd_configs:
-      - region: ${aws_region}
-        filters:
-          - name: "tag:aws:ecs:cluster-name"
-            values: ["aws-ecs-cluster-01"]
-    relabel_configs:
-      - source_labels: [__meta_ec2_private_ip]
-        target_label: __address__
-        replacement: '$1:9100'
-      - source_labels: [__meta_ec2_tag_Name]
-        target_label: instance
-
-  # 온프레미스 서버
-  - job_name: 'onprem'
-    static_configs:
-      - targets: ['172.30.1.76:9100']
-        labels:
-          instance: 'onprem-mspserver'
-
-  # Wazuh Manager
-  - job_name: 'wazuh-manager'
-    static_configs:
-      - targets: ['${wazuh_manager_ip}:9100']
-        labels:
-          instance: 'wazuh-manager-01'
-
-  # Wazuh Indexer
-  - job_name: 'wazuh-indexer'
-    static_configs:
-      - targets: ['${wazuh_indexer_ip}:9100']
-        labels:
-          instance: 'wazuh-indexer-01'
-
-  # GCP RDS Proxy
-  - job_name: 'gcp-haproxy'
-    static_configs:
-      - targets: ['${gcp_proxy_ip}:9100']
-        labels:
-          instance: 'gcp-rds-proxy-01'
 PROMEOF
 
 chown prometheus:prometheus /etc/prometheus/prometheus.yml
 
 # ── Prometheus systemd 서비스 ─────────────────────────────
+# --web.enable-remote-write-receiver: Alloy push 받기 위해 필수
+# --web.listen-address=0.0.0.0:9090: Alloy가 push하려면 외부 접근 가능해야 함
+# 공식문서: https://prometheus.io/docs/prometheus/2.55/feature_flags/
 cat > /etc/systemd/system/prometheus.service <<'SVCEOF'
 [Unit]
 Description=Prometheus Monitoring
@@ -110,8 +74,9 @@ ExecStart=/usr/local/bin/prometheus \
   --config.file=/etc/prometheus/prometheus.yml \
   --storage.tsdb.path=/var/lib/prometheus \
   --storage.tsdb.retention.time=15d \
-  --web.listen-address=127.0.0.1:9090 \
-  --web.enable-lifecycle
+  --web.listen-address=0.0.0.0:9090 \
+  --web.enable-lifecycle \
+  --web.enable-remote-write-receiver
 Restart=always
 RestartSec=5
 
@@ -119,9 +84,8 @@ RestartSec=5
 WantedBy=multi-user.target
 SVCEOF
 
-# Prometheus는 127.0.0.1에서만 리슨 (외부 직접 접근 차단)
-
-# ── Grafana 설치 (공식 APT 레포지토리) ───────────────────
+# ── Grafana Alloy 설치 (공식 APT 레포지토리) ─────────────
+# 공식문서: https://grafana.com/docs/alloy/latest/set-up/install/linux/
 mkdir -p /etc/apt/keyrings
 wget -q -O /etc/apt/keyrings/grafana.asc https://apt.grafana.com/gpg-full.key
 chmod 644 /etc/apt/keyrings/grafana.asc
@@ -130,7 +94,43 @@ echo "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stab
   | tee /etc/apt/sources.list.d/grafana.list
 
 apt-get update -y
-apt-get install -y grafana
+apt-get install -y alloy grafana
+
+
+
+# ── Alloy 설정 파일 ──────────────────────────────────────
+# prometheus.exporter.unix: node exporter 내장 기능으로 시스템 메트릭 수집
+# prometheus.remote_write: WAL 버퍼링 후 Prometheus로 push
+# 공식문서: https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.exporter.unix/
+cat > /etc/alloy/config.alloy <<'ALLOYEOF'
+// ── monitoring EC2 자체 시스템 메트릭 수집 ───────────────
+// node exporter 내장 — 별도 설치 불필요
+prometheus.exporter.unix "local" {
+  include_exporter_metrics = true
+}
+
+// ── 메트릭 scrape ────────────────────────────────────────
+prometheus.scrape "local" {
+  targets         = prometheus.exporter.unix.local.targets
+  forward_to      = [prometheus.remote_write.prometheus.receiver]
+  scrape_interval = "15s"
+}
+
+// ── Prometheus로 remote write ─────────────────────────────
+// WAL 설정 — Prometheus 다운 시 최대 8시간 버퍼링
+// 복구 후 자동 재전송 → 공백 없음
+prometheus.remote_write "prometheus" {
+  endpoint {
+    url = "http://localhost:9090/api/v1/write"
+  }
+
+  wal {
+    truncate_frequency = "2h"
+    min_keepalive_time = "5m"
+    max_keepalive_time = "8h"
+  }
+}
+ALLOYEOF
 
 
 # ── Secrets Manager에서 Grafana 비밀번호 가져오기 ─────────
@@ -163,12 +163,11 @@ mode = console
 level = warn
 GRAFANAEOF
 
-
-
-# ── Grafana Provisioning — Data Sources ──────────────
+# ── Grafana Provisioning — Data Sources ──────────────────
+# EC2 재생성해도 자동으로 Data Source 설정
 mkdir -p /etc/grafana/provisioning/datasources
 
-# Prometheus Data Source
+# Prometheus Data Source — Alloy가 push한 메트릭 조회
 cat > /etc/grafana/provisioning/datasources/prometheus.yaml <<'EOF'
 apiVersion: 1
 datasources:
@@ -180,7 +179,8 @@ datasources:
     editable: false
 EOF
 
-# CloudWatch Data Source
+# CloudWatch Data Source — RDS/ALB/ECS AWS 인프라 메트릭
+# IAM Role 기반 인증 (EC2 Instance Profile)
 cat > /etc/grafana/provisioning/datasources/cloudwatch.yaml <<'EOF'
 apiVersion: 1
 datasources:
@@ -193,11 +193,15 @@ datasources:
     editable: false
 EOF
 
-
 # ── 서비스 활성화 및 시작 ─────────────────────────────────
 systemctl daemon-reload
+
 systemctl enable prometheus
 systemctl start prometheus
+
+# Alloy는 Prometheus 시작 후 실행 — remote write 연결 보장
+systemctl enable alloy
+systemctl start alloy
 
 systemctl enable grafana-server
 systemctl start grafana-server

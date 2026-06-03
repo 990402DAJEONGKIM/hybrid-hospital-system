@@ -1,4 +1,3 @@
-#variables.tf
 variable "aws_region" {
   default = "ap-south-2"
 }
@@ -15,11 +14,8 @@ variable "base_domain" {
   default     = "mzclinic.cloud"
 }
 
-
-
-
 variable "ami_id" {
-  description = "Ubuntu 22.04 LTS AMI ID (ap-south-2) — ubuntu-jammy-22.04-amd64-server-20260521, Canonical 공식. 새 버전 출시 시 수동 업데이트 필요"
+  description = "Ubuntu 22.04 LTS AMI ID (ap-south-2)"
   type        = string
   default     = "ami-0eab39170eb2844c5"
 }
