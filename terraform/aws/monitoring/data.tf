@@ -7,19 +7,6 @@ data "aws_vpc" "main" {
   }
 }
 
-# app subnet 참조
-data "aws_subnets" "app" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.main.id]
-  }
-  filter {
-    name   = "tag:Name"
-    values = ["aws-app-sub-*"]
-  }
-}
-
-
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
