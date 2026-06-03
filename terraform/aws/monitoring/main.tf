@@ -66,6 +66,7 @@ resource "aws_instance" "aws-monitoring-01" {
     base_domain            = var.base_domain
     wazuh_manager_ip       = data.terraform_remote_state.wazuh.outputs.wazuh_private_ip
     wazuh_indexer_ip       = data.terraform_remote_state.wazuh_indexer.outputs.indexer_private_ip
+    gcp_proxy_ip = data.terraform_remote_state.gcp_proxy.outputs.proxy_internal_ip
   }))
 
   root_block_device {
