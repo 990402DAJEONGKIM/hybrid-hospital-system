@@ -85,3 +85,12 @@ data "aws_lb_target_group" "patient" {
 data "aws_lb_target_group" "staff" {
   name = "aws-staff-tg"
 }
+
+# monitoring EC2 Private IP — Alloy remote write 대상
+data "terraform_remote_state" "monitoring" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-aws-monitoring" }
+  }
+}

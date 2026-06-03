@@ -56,3 +56,4 @@ variable "wazuh_manager_ip" {
   description = "Wazuh Manager Private IP"
   type        = string
 }
+

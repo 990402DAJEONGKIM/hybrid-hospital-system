@@ -66,37 +66,48 @@ systemctl start wazuh-agent || true
 %{ endif }
 
 
-# ── Node Exporter 설치 — Prometheus 메트릭 수집용 ────────
-# 공식문서: https://prometheus.io/docs/guides/node-exporter/
-NODE_EXPORTER_VERSION="1.8.1"
-cd /tmp
-curl -sLO "https://github.com/prometheus/node_exporter/releases/download/v$${NODE_EXPORTER_VERSION}/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" || true
-if [ -f /tmp/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz ]; then
-  tar -xzf node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
-  cp node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/
-  rm -rf /tmp/node_exporter*
-  useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
-  cat > /etc/systemd/system/node_exporter.service << 'NODEEOF'
-[Unit]
-Description=Node Exporter
-Wants=network-online.target
-After=network-online.target
+# ── Grafana Alloy 설치 — AL2023 RPM 방식 ─────────────────
+# 공식문서: https://grafana.com/docs/alloy/latest/set-up/install/linux/
+curl -fsSL https://rpm.grafana.com/gpg.key | rpm --import -
 
-[Service]
-User=node_exporter
-Group=node_exporter
-Type=simple
-ExecStart=/usr/local/bin/node_exporter
-Restart=always
-RestartSec=5
+cat > /etc/yum.repos.d/grafana.repo << 'GRAFEOF'
+[grafana]
+name=grafana
+baseurl=https://rpm.grafana.com
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+GRAFEOF
 
-[Install]
-WantedBy=multi-user.target
-NODEEOF
-  systemctl daemon-reload
-  systemctl enable node_exporter
-  systemctl start node_exporter || true
-fi
+dnf install -y alloy
+
+cat > /etc/alloy/config.alloy << 'ALLOYEOF'
+prometheus.exporter.unix "local" {
+  include_exporter_metrics = true
+}
+prometheus.scrape "local" {
+  targets         = prometheus.exporter.unix.local.targets
+  forward_to      = [prometheus.remote_write.prometheus.receiver]
+  scrape_interval = "15s"
+}
+prometheus.remote_write "prometheus" {
+  endpoint {
+    url = "http://${monitoring_ip}:9090/api/v1/write"
+  }
+  wal {
+    truncate_frequency = "2h"
+    min_keepalive_time = "5m"
+    max_keepalive_time = "8h"
+  }
+}
+ALLOYEOF
+
+systemctl daemon-reload
+systemctl enable alloy
+systemctl start alloy || true
 
 # 260601 박경수  Wazuh 안정화 대기 후 ECS agent 시작
 

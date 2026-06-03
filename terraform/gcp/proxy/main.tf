@@ -26,6 +26,15 @@ data "google_service_account" "proxy" {
   account_id = "tc-st1-account"
 }
 
+
+data "terraform_remote_state" "monitoring" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-aws-monitoring" }
+  }
+}
+
 # ── Cloud SQL 감사 로그 → Cloud Logging 활성화 ───────────────
 # Cloud SQL 접근 로그(접속/쿼리)를 Cloud Logging으로 내보내기
 # audit collector가 이 로그를 polling하여 cloudsql_audit_logs에 저장
@@ -297,6 +306,45 @@ WAZUH_EOF
 
     sed -i "s/^deb/#deb/" /etc/apt/sources.list.d/wazuh.list
     apt-get update -y
+
+# ── Grafana Alloy 설치 — Prometheus 메트릭 push 방식 ─────
+    # 공식문서: https://grafana.com/docs/alloy/latest/set-up/install/linux/
+    mkdir -p /etc/apt/keyrings
+    wget -O /etc/apt/keyrings/grafana.asc https://apt.grafana.com/gpg-full.key
+    chmod 644 /etc/apt/keyrings/grafana.asc
+    echo "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main" \
+      | tee /etc/apt/sources.list.d/grafana.list
+    apt-get update -y
+    apt-get install -y alloy
+
+    cat > /etc/alloy/config.alloy << 'ALLOYEOF'
+prometheus.exporter.unix "local" {
+  include_exporter_metrics = true
+}
+prometheus.scrape "local" {
+  targets         = prometheus.exporter.unix.local.targets
+  forward_to      = [prometheus.remote_write.prometheus.receiver]
+  scrape_interval = "15s"
+}
+prometheus.remote_write "prometheus" {
+  endpoint {
+    url = "http://${data.terraform_remote_state.monitoring.outputs.monitoring_private_ip}:9090/api/v1/write"
+  }
+  wal {
+    truncate_frequency = "2h"
+    min_keepalive_time = "5m"
+    max_keepalive_time = "8h"
+  }
+}
+ALLOYEOF
+
+    systemctl daemon-reload
+    systemctl enable alloy
+    systemctl start alloy
+
+
+
+
 
 
   SCRIPT
