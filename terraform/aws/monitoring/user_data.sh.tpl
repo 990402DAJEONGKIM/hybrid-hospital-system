@@ -163,6 +163,37 @@ mode = console
 level = warn
 GRAFANAEOF
 
+
+
+# ── Grafana Provisioning — Data Sources ──────────────
+mkdir -p /etc/grafana/provisioning/datasources
+
+# Prometheus Data Source
+cat > /etc/grafana/provisioning/datasources/prometheus.yaml <<'EOF'
+apiVersion: 1
+datasources:
+  - name: prometheus
+    type: prometheus
+    access: proxy
+    url: http://localhost:9090
+    isDefault: true
+    editable: false
+EOF
+
+# CloudWatch Data Source
+cat > /etc/grafana/provisioning/datasources/cloudwatch.yaml <<'EOF'
+apiVersion: 1
+datasources:
+  - name: CloudWatch
+    type: cloudwatch
+    access: proxy
+    jsonData:
+      authType: default
+      defaultRegion: ap-south-2
+    editable: false
+EOF
+
+
 # ── 서비스 활성화 및 시작 ─────────────────────────────────
 systemctl daemon-reload
 systemctl enable prometheus
