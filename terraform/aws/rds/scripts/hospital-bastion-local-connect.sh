@@ -138,11 +138,25 @@ connect_cmd() {
   echo -e "  Port:     ${GREEN}$LOCAL_PORT${NC}"
   echo -e "\n${YELLOW}종료하려면 Ctrl+C 를 누르세요.${NC}\n"
 
+  # Ctrl+C 시 SSM 프로세스도 같이 종료
+  trap 'echo -e "\n${RED}터널 종료 중...${NC}"; kill $SSM_PID 2>/dev/null; exit 0' INT TERM
+
   aws ssm start-session \
     --target "$instance_id" \
     --document-name AWS-StartPortForwardingSessionToRemoteHost \
     --parameters "{\"host\":[\"$rds_endpoint\"],\"portNumber\":[\"$RDS_PORT\"],\"localPortNumber\":[\"$LOCAL_PORT\"]}" \
-    --region "$REGION"
+    --region "$REGION" &
+
+  SSM_PID=$!
+  echo -e "${CYAN}SSM PID: $SSM_PID${NC}"
+
+  # 30초마다 keepalive (idle 타임아웃 방지)
+  while kill -0 $SSM_PID 2>/dev/null; do
+    sleep 30
+    echo -e "${CYAN}[keepalive] $(date '+%Y-%m-%d %H:%M:%S') — 연결 유지 중...${NC}"
+  done
+
+  echo -e "${RED}SSM 세션이 종료되었습니다.${NC}"
 }
 
 # ── 메인 ─────────────────────────────────────────────────────
