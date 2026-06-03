@@ -17,7 +17,7 @@ from core.security import (
     verify_api_key, verify_password,
 )
 from core.ses import send_lockout_alert
-from models.db import AuditLog, LoginHistory, Menu, Role, RoleMenu, Session as SessionModel, User
+from models.db import AuditLog, LoginHistory, Menu, Role, RoleMenu, Session as SessionModel, SyncDepartment, SyncDoctor, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -338,6 +338,15 @@ def me(
     }
     if user.patient_id_hash:
         result["patient_id_hash"] = user.patient_id_hash
+    if user.doctor_id:
+        doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
+        if doctor:
+            result["department_code"] = doctor.department_code
+            result["doctor_name"]     = doctor.doctor_name
+            dept = db.query(SyncDepartment).filter(
+                SyncDepartment.department_code == doctor.department_code
+            ).first()
+            result["department_name"] = dept.department_name if dept else doctor.department_code
     return result
 
 

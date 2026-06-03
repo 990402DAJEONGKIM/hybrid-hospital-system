@@ -1,3 +1,52 @@
+// ── 사이드바 렌더링 ──────────────────────────────────────────
+async function renderSidebar(activePage) {
+    const el = document.getElementById('portalSidebar');
+    if (!el) return;
+
+    const links = [
+        { href: 'appointment.html',       icon: 'fa-calendar-plus',  label: '예약 신청' },
+        { href: 'my-appointments.html',   icon: 'fa-calendar-check', label: '예약조회·변경' },
+        { href: 'my-records.html',        icon: 'fa-notes-medical',  label: '진료기록' },
+        { href: 'mypage.html',            icon: 'fa-user-circle',    label: '내 정보' },
+        { href: 'change-password.html',   icon: 'fa-key',            label: '비밀번호 변경' },
+    ];
+
+    let patientName = '';
+    let memberNumber = '';
+    try {
+        const [meRes, profileRes] = await Promise.all([
+            fetch(`${BASE_URL}/auth/me`, { credentials: 'include', headers: { 'X-API-Key': API_KEY } }),
+            fetch(`${BASE_URL}/portal/my-profile`, { credentials: 'include', headers: { 'X-API-Key': API_KEY } }),
+        ]);
+        if (meRes.ok) { const me = await meRes.json(); memberNumber = me.member_number || ''; }
+        if (profileRes.ok) { const p = await profileRes.json(); patientName = p.patient_name || ''; }
+    } catch {}
+
+    el.innerHTML = `
+        <div style="padding:14px 20px 12px;border-bottom:1px solid #e8ecf0;">
+            <a href="index.html" style="display:flex;align-items:center;gap:7px;font-size:14px;font-weight:700;color:var(--primary);text-decoration:none;">
+                <i class="fas fa-heartbeat"></i>김이박 클리닉
+            </a>
+            <a href="index.html" style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;font-size:12px;color:#90a4ae;text-decoration:none;">
+                <i class="fas fa-arrow-left" style="font-size:10px;"></i>홈으로
+            </a>
+        </div>
+        <div class="sidebar-patient">
+            <div class="name">${patientName ? patientName + '님' : '환자 포털'}</div>
+            ${memberNumber ? `<div class="member">회원번호: ${memberNumber}</div>` : ''}
+        </div>
+        <div class="sidebar-label">메뉴</div>
+        ${links.map(l => `
+            <a href="${l.href}" class="sidebar-link${activePage === l.href ? ' active' : ''}">
+                <i class="fas ${l.icon}"></i>${l.label}
+            </a>`).join('')}
+        <div style="margin-top:auto;padding:20px 20px 0;">
+            <button onclick="logout()" style="width:100%;padding:8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;color:#546e7a;cursor:pointer;">
+                <i class="fas fa-sign-out-alt" style="margin-right:6px;"></i>로그아웃
+            </button>
+        </div>`;
+}
+
 // ── 공통 fetch 옵션 ────────────────────────────────────────
 const _fetchDefaults = {
     credentials: 'include',
@@ -70,7 +119,11 @@ async function requireLogin() {
         if (!res || !res.ok) { window.location.href = 'login.html'; return null; }
         const me = await res.json();
         if (me.role !== 'patient') { window.location.href = 'login.html'; return null; }
-        if (me.password_expired) { window.location.href = 'change-password.html'; return null; }
+        // must_change_password=true 또는 비밀번호 만료 시 변경 페이지 강제 이동 (SFR-038)
+        if (me.must_change_password || me.password_expired) {
+            window.location.href = 'change-password.html';
+            return null;
+        }
         return me;
     } catch {
         window.location.href = 'login.html';
@@ -114,8 +167,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // 비밀번호 만료 시 변경 페이지로
-    if (me.password_expired) { window.location.href = 'change-password.html'; return; }
+    // must_change_password 또는 비밀번호 만료 시 변경 페이지 강제 이동 (SFR-038)
+    if (me.must_change_password || me.password_expired) { window.location.href = 'change-password.html'; return; }
 
     const header           = document.querySelector('.sass-header');
     const mobileMenuBtn    = document.getElementById('sassMobileMenuBtn');
@@ -126,6 +179,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const appointmentSection    = document.getElementById('appointment-section');
     const calendarGridContainer = document.querySelector('.calendar-grid-container');
     const calendarGrid          = document.getElementById('calendar-grid');
+
+    // 달력 요소가 없으면 index.html이 아닌 서브페이지 — 이 핸들러 종료
+    if (!calendarGrid) return;
     const monthYearDisplay      = document.getElementById('currentMonthYear');
     const prevMonthBtn          = document.getElementById('prevMonth');
     const nextMonthBtn          = document.getElementById('nextMonth');
@@ -137,15 +193,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const navHome                 = document.getElementById('nav-home');
     const mobileNavHome           = document.getElementById('mobile-nav-home');
-    const navHospitalIntro        = document.getElementById('nav-hospital-intro');
-    const mobileNavHospitalIntro  = document.getElementById('mobile-nav-hospital-intro');
     const manageAppointmentsBtn   = document.getElementById('nav-manage-appointments');
     const navNewAppointmentBtn    = document.getElementById('nav-new-appointment');
     const navMyRecordsBtn         = document.getElementById('nav-my-records');
+    const navMypageBtn            = document.getElementById('nav-mypage');
     const navChangePasswordBtn    = document.getElementById('nav-change-password');
-    const navEditProfile          = document.getElementById('nav-edit-profile');
-    const headerAppointmentBtn    = document.getElementById('headerAppointmentBtn');
-    const mobileAppointmentBtn    = document.getElementById('mobileAppointmentBtn');
     const logoutBtn               = document.getElementById('logoutBtn');
     const userWelcomeItem         = document.getElementById('userWelcomeItem');
     const userWelcome             = document.getElementById('userWelcome');
@@ -159,13 +211,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentEditEncounterId = null;
 
 
-    const profileEditSection  = document.getElementById('profile-edit-section');
-    const profileEmailInput   = document.getElementById('profileEmail');
-    const profileBirthInput   = document.getElementById('profileBirth');
-    const profileGenderInput  = document.getElementById('profileGender');
-    const profileMsg          = document.getElementById('profileMsg');
-    const saveProfileBtn      = document.getElementById('saveProfileBtn');
-    const hospitalIntroSection = document.getElementById('hospital-intro-section');
 
     // ── 헤더 ────────────────────────────────────────────────
     window.addEventListener('scroll', () => {
@@ -180,7 +225,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (mobileMenuClose) mobileMenuClose.addEventListener('click', toggleMenu);
     if (overlay)         overlay.addEventListener('click', toggleMenu);
 
-    if (userWelcome)     userWelcome.textContent = '환영합니다';
+    // 환자 이름 헤더 표시
+    try {
+        const profileRes = await apiCall('/portal/my-profile');
+        if (profileRes && profileRes.ok) {
+            const profile = await profileRes.json();
+            if (userWelcome) {
+                userWelcome.textContent = profile.patient_name
+                    ? `${profile.patient_name}님`
+                    : '환영합니다';
+            }
+        } else {
+            if (userWelcome) userWelcome.textContent = '환영합니다';
+        }
+    } catch {
+        if (userWelcome) userWelcome.textContent = '환영합니다';
+    }
     if (userWelcomeItem) userWelcomeItem.classList.remove('hidden');
     if (logoutBtn)       logoutBtn.classList.remove('hidden');
     if (logoutBtn)       logoutBtn.addEventListener('click', logout);
@@ -349,83 +409,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderMyAppointments();
     };
 
-    // ── 개인정보 수정 ───────────────────────────────────────
-    const GENDER_LABEL = { M: '남성', F: '여성', U: '미확인' };
-
-    const renderUserProfile = async () => {
-        const res = await apiCall('/portal/my-profile');
-        if (!res || !res.ok) return;
-        const data = await res.json();
-        if (profileEmailInput)  profileEmailInput.value  = data.email || '';
-        if (profileBirthInput)  profileBirthInput.value  = data.birth_year ? `${data.birth_year}년생` : '-';
-        if (profileGenderInput) profileGenderInput.value = GENDER_LABEL[data.gender_code] || '-';
-    };
-
-    if (saveProfileBtn) {
-        saveProfileBtn.addEventListener('click', async () => {
-            const email = profileEmailInput?.value?.trim();
-            if (!email) { return; }
-            saveProfileBtn.disabled = true;
-            if (profileMsg) { profileMsg.classList.add('hidden'); }
-
-            const res = await apiCall('/portal/my-profile', {
-                method: 'PATCH',
-                body: JSON.stringify({ email }),
-            });
-
-            if (profileMsg) {
-                profileMsg.classList.remove('hidden');
-                if (res && res.ok) {
-                    profileMsg.textContent = '이메일이 변경되었습니다.';
-                    profileMsg.className = 'text-sm font-medium text-center py-2 rounded-lg bg-green-50 text-green-700';
-                } else {
-                    const err = await res?.json().catch(() => ({}));
-                    profileMsg.textContent = err.detail || '저장 중 오류가 발생했습니다.';
-                    profileMsg.className = 'text-sm font-medium text-center py-2 rounded-lg bg-red-50 text-red-600';
-                }
-            }
-            saveProfileBtn.disabled = false;
-        });
-    }
-
-    // ── 섹션 전환 ───────────────────────────────────────────
-    const showSection = async (sectionId) => {
-        appointmentSection.classList.add('hidden');
-        profileEditSection.classList.add('hidden');
-        if (hospitalIntroSection) hospitalIntroSection.classList.add('hidden');
-
-        if (sectionId === 'profile-edit') {
-            profileEditSection.classList.remove('hidden');
-            await renderUserProfile();
-        } else if (sectionId === 'hospital-intro') {
-            if (hospitalIntroSection) hospitalIntroSection.classList.remove('hidden');
-        } else {
-            appointmentSection.classList.remove('hidden');
-            await loadAppointments();
-            renderCalendar();
-        }
-    };
-
     const closeMenuIfOpen = () => {
-        if (mobileMenu.classList.contains('sass-active')) toggleMenu();
+        if (mobileMenu && mobileMenu.classList.contains('sass-active')) toggleMenu();
     };
 
-    const goToNewAppointment = (e) => {
-        e.preventDefault();
-        window.location.href = 'appointment.html';
-    };
-
-    if (navNewAppointmentBtn)    navNewAppointmentBtn.addEventListener('click', goToNewAppointment);
+    if (navNewAppointmentBtn)    navNewAppointmentBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'appointment.html'; });
     if (navMyRecordsBtn)         navMyRecordsBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'my-records.html'; });
+    if (navMypageBtn)            navMypageBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'mypage.html'; });
     if (navChangePasswordBtn)    navChangePasswordBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'change-password.html'; });
-    if (navEditProfile)          navEditProfile.addEventListener('click', async (e) => { e.preventDefault(); await showSection('profile-edit'); closeMenuIfOpen(); });
     if (manageAppointmentsBtn)   manageAppointmentsBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'my-appointments.html'; });
-    if (headerAppointmentBtn)    headerAppointmentBtn.addEventListener('click', goToNewAppointment);
-    if (mobileAppointmentBtn)    mobileAppointmentBtn.addEventListener('click', goToNewAppointment);
-    if (navHome)                 navHome.addEventListener('click', async (e) => { e.preventDefault(); await showSection('calendar'); closeMenuIfOpen(); });
-    if (mobileNavHome)           mobileNavHome.addEventListener('click', async (e) => { e.preventDefault(); await showSection('calendar'); closeMenuIfOpen(); });
-    if (navHospitalIntro)        navHospitalIntro.addEventListener('click', (e) => { e.preventDefault(); showSection('hospital-intro'); closeMenuIfOpen(); });
-    if (mobileNavHospitalIntro)  mobileNavHospitalIntro.addEventListener('click', (e) => { e.preventDefault(); showSection('hospital-intro'); closeMenuIfOpen(); });
+    if (navHome)                 navHome.addEventListener('click', async (e) => { e.preventDefault(); closeMenuIfOpen(); });
+    if (mobileNavHome)           mobileNavHome.addEventListener('click', async (e) => { e.preventDefault(); closeMenuIfOpen(); });
 
     // ── 진료과 드롭다운 동적 로드 ────────────────────────────
     const deptDropdown = document.getElementById('deptDropdown');

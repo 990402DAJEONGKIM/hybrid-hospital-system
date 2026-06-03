@@ -157,6 +157,136 @@ INSERT INTO sync_patients (patient_id_hash, birth_year, gender_code, phone_hash,
      'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f')
 ON CONFLICT (patient_id_hash) DO NOTHING;
 
+-- ── sync_encounters (온프레미스 → AWS 동기화 테스트 데이터) ──────
+INSERT INTO sync_encounters
+    (encounter_id, patient_id_hash, encounter_type, department_code, doctor_id, visit_date, status_code)
+VALUES
+    -- 환자 21870195 (hash: 64db...)
+    ('e1000000-0000-0000-0000-000000000001',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     'outpatient_new', 'INTERNAL',
+     'a1000000-0000-0000-0000-000000000001',
+     '2025-01-15', 'completed'),
+
+    ('e1000000-0000-0000-0000-000000000002',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     'outpatient_return', 'CARDIO',
+     'a1000000-0000-0000-0000-000000000002',
+     '2025-03-20', 'completed'),
+
+    ('e1000000-0000-0000-0000-000000000007',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     'inpatient', 'INTERNAL',
+     'a1000000-0000-0000-0000-000000000001',
+     '2025-11-10', 'completed'),
+
+    -- 환자 72897828 (hash: bf1a...)
+    ('e1000000-0000-0000-0000-000000000003',
+     'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
+     'outpatient_new', 'NEURO',
+     'a1000000-0000-0000-0000-000000000003',
+     '2025-02-10', 'completed'),
+
+    ('e1000000-0000-0000-0000-000000000008',
+     'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
+     'outpatient_return', 'NEURO',
+     'a1000000-0000-0000-0000-000000000003',
+     '2025-08-22', 'completed'),
+
+    -- 환자 78124857 (hash: ba51...)
+    ('e1000000-0000-0000-0000-000000000004',
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     'outpatient_new', 'ORTHO',
+     'a1000000-0000-0000-0000-000000000004',
+     '2025-04-05', 'completed'),
+
+    ('e1000000-0000-0000-0000-000000000009',
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     'surgery', 'SURGERY',
+     'a1000000-0000-0000-0000-000000000005',
+     '2025-09-15', 'completed')
+ON CONFLICT (encounter_id) DO NOTHING;
+
+-- ── sync_diagnoses (진단 코드 테스트 데이터) ──────────────────────
+INSERT INTO sync_diagnoses
+    (diagnosis_id, encounter_id, patient_id_hash, diagnosis_code, is_primary, diagnosed_at)
+VALUES
+    ('f1000000-0000-0000-0000-000000000001',
+     'e1000000-0000-0000-0000-000000000001',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     'J06.9', TRUE, '2025-01-15 10:30:00+00'),
+
+    ('f1000000-0000-0000-0000-000000000002',
+     'e1000000-0000-0000-0000-000000000002',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     'I49.9', TRUE, '2025-03-20 14:00:00+00'),
+
+    ('f1000000-0000-0000-0000-000000000003',
+     'e1000000-0000-0000-0000-000000000002',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     'I10', FALSE, '2025-03-20 14:00:00+00'),
+
+    ('f1000000-0000-0000-0000-000000000004',
+     'e1000000-0000-0000-0000-000000000007',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     'I11.0', TRUE, '2025-11-10 09:00:00+00'),
+
+    ('f1000000-0000-0000-0000-000000000005',
+     'e1000000-0000-0000-0000-000000000003',
+     'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
+     'G43.9', TRUE, '2025-02-10 09:00:00+00'),
+
+    ('f1000000-0000-0000-0000-000000000006',
+     'e1000000-0000-0000-0000-000000000008',
+     'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
+     'G43.9', TRUE, '2025-08-22 11:00:00+00'),
+
+    ('f1000000-0000-0000-0000-000000000007',
+     'e1000000-0000-0000-0000-000000000004',
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     'M17.1', TRUE, '2025-04-05 11:00:00+00'),
+
+    ('f1000000-0000-0000-0000-000000000008',
+     'e1000000-0000-0000-0000-000000000009',
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     'M17.1', TRUE, '2025-09-15 08:00:00+00'),
+
+    ('f1000000-0000-0000-0000-000000000009',
+     'e1000000-0000-0000-0000-000000000009',
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     'Z96.6', FALSE, '2025-09-15 08:00:00+00')
+ON CONFLICT (diagnosis_id) DO NOTHING;
+
+-- ── sync_allergies (알레르기 테스트 데이터) ───────────────────────
+INSERT INTO sync_allergies
+    (allergy_id, patient_id_hash, allergy_name, severity_code)
+VALUES
+    ('g1000000-0000-0000-0000-000000000001',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     '페니실린', 'high'),
+
+    ('g1000000-0000-0000-0000-000000000002',
+     'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
+     '아스피린', 'medium'),
+
+    ('g1000000-0000-0000-0000-000000000003',
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     '새우', 'low')
+ON CONFLICT (allergy_id) DO NOTHING;
+
+-- ── sync_surgery_histories (수술 이력 테스트 데이터) ─────────────
+INSERT INTO sync_surgery_histories
+    (surgery_history_id, patient_id_hash, surgery_name, surgery_date)
+VALUES
+    ('h1000000-0000-0000-0000-000000000001',
+     '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
+     '충수 절제술', '2018-06-12'),
+
+    ('h1000000-0000-0000-0000-000000000002',
+     'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
+     '우측 슬관절 전치환술', '2025-09-15')
+ON CONFLICT (surgery_history_id) DO NOTHING;
+
 INSERT INTO sync_wards (ward_id, ward_name, room_type, total_beds, available_beds) VALUES
     ('d1000000-0000-0000-0000-000000000001', '1병동 1인실',  'single', 10, 8),
     ('d1000000-0000-0000-0000-000000000002', '2병동 2인실',  'double', 20, 18),
@@ -166,44 +296,44 @@ ON CONFLICT (ward_id) DO NOTHING;
 
 
 -- ── 9. 테스트 계정 ────────────────────────────────────────────
--- bcrypt(Test1234!, cost=12) = $2b$12$Xs0fpzH99rKZ1xFziQ9c.OmfPJt9QLYYPzyum3EVr4vs9BXIhgyxC
+-- bcrypt(Test1234!, cost=12) = $2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO
 -- user_id는 온프레미스 DB와 동일 (JWT sub 공유를 위해 고정)
 INSERT INTO users
     (user_id, member_number, password_hash, role_id, doctor_id, is_active, must_change_password)
 VALUES
     ('c1000000-0000-0000-0000-000000000001',
      'admin-1',
-     '$2b$12$Xs0fpzH99rKZ1xFziQ9c.OmfPJt9QLYYPzyum3EVr4vs9BXIhgyxC',
+     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
      1, NULL, TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000002',
      'dr-INTERNAL-1',
-     '$2b$12$Xs0fpzH99rKZ1xFziQ9c.OmfPJt9QLYYPzyum3EVr4vs9BXIhgyxC',
+     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
      2, 'a1000000-0000-0000-0000-000000000001', TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000003',
      'dr-CARDIO-1',
-     '$2b$12$Xs0fpzH99rKZ1xFziQ9c.OmfPJt9QLYYPzyum3EVr4vs9BXIhgyxC',
+     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
      2, 'a1000000-0000-0000-0000-000000000002', TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000004',
      'dr-NEURO-1',
-     '$2b$12$Xs0fpzH99rKZ1xFziQ9c.OmfPJt9QLYYPzyum3EVr4vs9BXIhgyxC',
+     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
      2, 'a1000000-0000-0000-0000-000000000003', TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000005',
      'dr-ORTHO-1',
-     '$2b$12$Xs0fpzH99rKZ1xFziQ9c.OmfPJt9QLYYPzyum3EVr4vs9BXIhgyxC',
+     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
      2, 'a1000000-0000-0000-0000-000000000004', TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000006',
      'nurse-1',
-     '$2b$12$Xs0fpzH99rKZ1xFziQ9c.OmfPJt9QLYYPzyum3EVr4vs9BXIhgyxC',
+     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
      3, NULL, TRUE, FALSE),
 
     ('c1000000-0000-0000-0000-000000000007',
      'nurse-2',
-     '$2b$12$Xs0fpzH99rKZ1xFziQ9c.OmfPJt9QLYYPzyum3EVr4vs9BXIhgyxC',
+     '$2b$12$DhOagoshvOfVw78FJsSAP.GjWNQP487x6L.h9sl4FR6tnTdgfCNRO',
      3, NULL, TRUE, FALSE)
 ON CONFLICT (member_number) DO NOTHING;
 

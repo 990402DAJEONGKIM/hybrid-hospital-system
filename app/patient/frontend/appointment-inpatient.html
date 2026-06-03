@@ -27,8 +27,11 @@
         #errMsg { color:#e53935; font-size:13px; margin-top:8px; min-height:18px; }
     </style>
 </head>
-<body style="background:#f0f4f8;min-height:100vh;">
-<div class="appt-form-wrap">
+<body style="margin:0;">
+<div class="portal-layout">
+<aside class="portal-sidebar" id="portalSidebar"></aside>
+<main class="portal-content">
+<div class="appt-form-wrap" style="margin:0;max-width:560px;">
     <h2 style="margin-bottom:8px;">입원 예약</h2>
     <p style="color:#78909c;font-size:14px;margin-bottom:24px;">병동 입원 및 병상 배정 신청입니다.</p>
 
@@ -221,7 +224,10 @@
         }
     }
 
+    renderSidebar('appointment.html');
     init();
 </script>
+</main>
+</div>
 </body>
 </html>

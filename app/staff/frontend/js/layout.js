@@ -18,9 +18,7 @@ const _SHORTCUTS = {
     ],
     doctor: [
         { url:'/doctor-schedule.html',  icon:'stethoscope',   color:'#0ea5e9', label:'오늘 진료',    desc:'확정된 진료 일정 확인' },
-        { url:'/patient-search.html',   icon:'search',        color:'#10b981', label:'환자 검색',    desc:'담당 환자 EMR 조회' },
-        { url:'/my-patients.html',      icon:'user-injured',  color:'#6366f1', label:'내 환자 목록', desc:'담당 환자 진료기록' },
-        { url:'/encounter-new.html',    icon:'notes-medical', color:'#f59e0b', label:'진료 기록',    desc:'진료 내용·처방 입력' },
+        { url:'/my-patients.html',      icon:'user-injured',  color:'#6366f1', label:'내 환자 목록', desc:'담당 환자 목록 · EMR · 진료 기록' },
     ],
     admin: [
         { url:'/admin-dashboard.html',     icon:'tachometer-alt', color:'#1d4ed8', label:'운영 대시보드',  desc:'예약·보안·알림·시스템 현황' },
@@ -87,7 +85,10 @@ async function initLayout() {
             <div class="l-header__right">
                 <span class="l-user-info">
                     <i class="fas fa-user-circle"></i>
-                    <strong>${me.member_number}</strong>
+                    <strong>${me.role === 'doctor' && me.doctor_name ? me.doctor_name : me.member_number}</strong>
+                    ${me.role === 'doctor' && me.department_name
+                        ? `<span class="l-role-badge" style="background:#e0f2fe;color:#0369a1;">${me.department_name}</span>`
+                        : ''}
                     <span class="l-role-badge"
                           style="background:${_ROLE_BG[me.role]};color:${_ROLE_COLORS[me.role]};">
                         ${_ROLE_LABELS[me.role]}

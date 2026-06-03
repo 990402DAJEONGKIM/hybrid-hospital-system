@@ -278,11 +278,12 @@ def me(
     )
 
     result = {
-        "user_id":              str(user.user_id),
-        "member_number":        user.member_number,
-        "role":                 user.role_ref.role_code,
-        "password_expired":     password_expired,
-        "password_expire_days": policy.expire_days,
+        "user_id":               str(user.user_id),
+        "member_number":         user.member_number,
+        "role":                  user.role_ref.role_code,
+        "must_change_password":  user.must_change_password,
+        "password_expired":      password_expired,
+        "password_expire_days":  policy.expire_days,
     }
     if user.patient_id_hash:
         result["patient_id_hash"] = user.patient_id_hash
@@ -306,10 +307,15 @@ def change_password(
     if pw_error:
         raise HTTPException(status_code=400, detail=pw_error)
 
-    user.password_hash       = hash_password(body.new_password)
-    user.password_changed_at = datetime.now(timezone.utc)
+    policy = get_password_policy(db)
+    now    = datetime.now(timezone.utc)
 
-    # 비밀번호 변경 시 기존 세션 전체 폐기 (탈취된 토큰 무력화)
+    user.password_hash        = hash_password(body.new_password)
+    user.password_changed_at  = now
+    user.must_change_password = False
+    user.password_expires_at  = now + timedelta(days=policy.expire_days)
+
+    # 비밀번호 변경 시 기존 세션 전체 폐기 (탈취된 토큰 무력화, SFR-038)
     db.query(SessionModel).filter(
         SessionModel.user_id    == user.user_id,
         SessionModel.is_revoked == False,

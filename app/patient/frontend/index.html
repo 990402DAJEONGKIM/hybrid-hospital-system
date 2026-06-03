@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>김이박 클리닉 - 환자 포털</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/tailwind.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <script src="js/config.js"></script>
@@ -41,21 +41,19 @@
                                 <a href="#" id="nav-new-appointment" class="sass-dropdown-link">예약</a>
                                 <a href="#" id="nav-manage-appointments" class="sass-dropdown-link">예약조회 및 변경</a>
                                 <a href="#" id="nav-my-records" class="sass-dropdown-link">진료기록</a>
+                                <a href="#" id="nav-mypage" class="sass-dropdown-link">내 정보</a>
                                 <a href="#" id="nav-change-password" class="sass-dropdown-link">비밀번호 변경</a>
-                                <a href="#" id="nav-edit-profile" class="sass-dropdown-link">개인정보 수정</a>
                             </div>
                         </li>
-                        <li><a href="#" id="nav-hospital-intro" class="sass-nav-link">병원 소개</a></li>
-                        <li id="userWelcomeItem" class="hidden flex items-center"><span id="userWelcome" class="text-sm font-medium text-gray-700 mr-2"></span></li>
+                        <li id="userWelcomeItem" class="hidden flex items-center"><span id="userWelcome" class="text-sm font-semibold text-gray-700 mr-2"></span></li>
                         <li><button id="logoutBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold hover:bg-gray-300 transition-colors hidden">로그아웃</button></li>
                         <li id="nav-login-btn-wrap" class="hidden"><a href="login.html" class="sass-appointment-btn" style="background:#2563eb;color:#fff;padding:8px 20px;border-radius:20px;font-weight:700;text-decoration:none;">로그인</a></li>
-                        <li id="nav-appointment-btn-wrap"><button id="headerAppointmentBtn" class="sass-appointment-btn">예약하기</button></li>
                     </ul>
                 </nav>
 
                 <button class="md:hidden text-2xl" id="sassMobileMenuBtn">
-                    <i class="fas fa-bars"></i>
-                </button>
+                <i class="fas fa-bars"></i>
+            </button>
             </div>
         </div>
     </header>
@@ -69,12 +67,10 @@
             <a href="#" id="mobile-nav-home" class="text-lg font-medium">홈</a>
             <a href="#" class="text-lg font-medium">진료과</a>
             <a href="#" class="text-lg font-medium">환자</a>
-            <a href="#" id="mobile-nav-hospital-intro" class="text-lg font-medium">병원 소개</a>
-            <button id="mobileAppointmentBtn" class="sass-appointment-btn w-full justify-center">예약하기</button>
         </nav>
     </div>
 
-    <main class="pt-36 pb-6 px-6 w-full main-content" style="max-width:100%;">
+    <main class="pt-20 pb-4 px-6 w-full main-content" style="max-width:100%;">
 
         <!-- 미로그인 랜딩 섹션 -->
         <section id="landing-section" class="hidden">
@@ -110,9 +106,9 @@
         </section>
 
         <!-- 예약 스케줄 달력 섹션 (로그인 후) -->
-        <section id="appointment-section" class="bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-3xl font-bold text-blue-900">예약 스케줄</h2>
+        <section id="appointment-section" class="bg-white rounded-2xl shadow-lg p-5 flex flex-col" style="height: calc(100vh - 120px); min-height: 480px; max-height: 780px;">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-blue-900">예약 스케줄</h2>
                 <div class="flex items-center space-x-4">
                     <button id="prevMonth" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-chevron-left"></i></button>
                     <h3 id="currentMonthYear" class="text-xl font-semibold"></h3>
@@ -120,7 +116,7 @@
                 </div>
             </div>
 
-            <div class="calendar-grid-container grid grid-cols-7 border-t border-l border-gray-100 rounded-xl overflow-hidden shadow-sm">
+            <div class="calendar-grid-container grid grid-cols-7 border-t border-l border-gray-100 rounded-xl overflow-hidden shadow-sm" style="flex:1; min-height:0;">
                 <div class="calendar-weekday is-sunday">일</div>
                 <div class="calendar-weekday">월</div>
                 <div class="calendar-weekday">화</div>
@@ -129,83 +125,6 @@
                 <div class="calendar-weekday">금</div>
                 <div class="calendar-weekday is-saturday">토</div>
                 <div id="calendar-grid" class="contents"></div>
-            </div>
-        </section>
-
-        <!-- 개인정보 수정 섹션 -->
-        <section id="profile-edit-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-3xl font-bold text-blue-900">개인정보 수정</h2>
-            </div>
-            <div class="max-w-lg mx-auto w-full space-y-5">
-
-                <!-- 이메일 (수정 가능) -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                        이메일 (로그인 아이디) <span class="text-blue-500 text-xs">수정 가능</span>
-                    </label>
-                    <input type="email" id="profileEmail"
-                        class="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                </div>
-
-                <!-- 읽기 전용 정보 -->
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">출생연도</label>
-                        <input type="text" id="profileBirth" readonly
-                            class="w-full p-3 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed outline-none text-gray-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">성별</label>
-                        <input type="text" id="profileGender" readonly
-                            class="w-full p-3 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed outline-none text-gray-500">
-                    </div>
-                </div>
-
-                <!-- 안내 박스 -->
-                <div class="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                    <i class="fas fa-info-circle text-amber-500 mt-0.5 flex-shrink-0 text-sm"></i>
-                    <p class="text-xs text-amber-700 leading-relaxed">
-                        출생연도·성별·연락처 변경이 필요하시면 <strong>원무과에 직접 문의</strong>해주세요.<br>
-                        병원 등록 정보는 포털에서 수정할 수 없습니다.
-                    </p>
-                </div>
-
-                <div id="profileMsg" class="hidden text-sm font-medium text-center py-2 rounded-lg"></div>
-
-                <div class="pt-2">
-                    <button id="saveProfileBtn"
-                        class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        이메일 저장
-                    </button>
-                </div>
-            </div>
-        </section>
-
-        <!-- 병원 소개 섹션 -->
-        <section id="hospital-intro-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="mb-8 text-center">
-                <h2 class="text-3xl font-bold text-blue-900 mb-4">병원 소개</h2>
-                <p class="text-xl text-gray-700 font-medium">김이박 클리닉입니다.</p>
-            </div>
-            <div class="max-w-4xl mx-auto w-full">
-                <h3 class="text-xl font-bold text-blue-800 mb-4"><i class="fas fa-history mr-2"></i>병원 연혁</h3>
-                <div class="overflow-x-auto border border-gray-100 rounded-xl shadow-sm">
-                    <table class="w-full text-sm text-left text-gray-500">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 w-1/4">연도</th>
-                                <th class="px-6 py-3">주요 연혁</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2020년</td><td class="px-6 py-4">김이박 클리닉 개원</td></tr>
-                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2021년</td><td class="px-6 py-4">보건복지부 지정 의료기관 획득</td></tr>
-                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2022년</td><td class="px-6 py-4">최첨단 MRI 및 CT 장비 도입</td></tr>
-                            <tr class="bg-white hover:bg-gray-50"><td class="px-6 py-4 font-bold text-gray-900">2024년</td><td class="px-6 py-4">지역 거점 응급의료센터 선정</td></tr>
-                        </tbody>
-                    </table>
-                </div>
             </div>
         </section>
     </main>

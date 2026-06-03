@@ -1,159 +1,184 @@
 <!DOCTYPE html>
-<!-- by 김다정 — 환자 내 정보(마이페이지) 페이지 (웹 구조도 반영) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>내 정보 - 김이박 클리닉 환자 포털</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        body { margin: 0; background: #f0f4f8; }
+        .info-card {
+            background: #fff; border-radius: 12px;
+            padding: 24px; margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+        }
+        .info-card h3 {
+            font-size: 15px; font-weight: 700; color: #263238;
+            margin: 0 0 16px; display: flex; align-items: center; gap: 8px;
+        }
+        .info-card h3 i { color: var(--primary); }
+        .field-group { margin-bottom: 14px; }
+        .field-group label {
+            display: block; font-size: 12px; font-weight: 600;
+            color: #78909c; margin-bottom: 5px;
+        }
+        .field-group input {
+            width: 100%; padding: 10px 12px; border: 1px solid #cfd8dc;
+            border-radius: 8px; font-size: 14px; box-sizing: border-box;
+            color: #263238;
+        }
+        .field-group input:focus { outline: none; border-color: var(--primary); }
+        .field-group input[readonly] {
+            background: #f5f7fa; color: #90a4ae; cursor: not-allowed;
+        }
+        .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .info-note {
+            background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px;
+            padding: 10px 14px; font-size: 12px; color: #795548; margin-bottom: 14px;
+            display: flex; align-items: flex-start; gap: 8px;
+        }
+        .no-email-banner {
+            background: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px;
+            padding: 12px 14px; font-size: 13px; color: #e65100;
+            display: none; align-items: flex-start; gap: 10px; margin-bottom: 16px;
+        }
+        .field-msg { font-size: 12px; font-weight: 600; text-align: center; padding: 8px; border-radius: 6px; margin-top: 8px; display: none; }
+        .field-msg.ok  { background: #e8f5e9; color: #2e7d32; }
+        .field-msg.err { background: #fce4ec; color: #c62828; }
+        .save-btn {
+            width: 100%; padding: 11px; background: var(--primary); color: #fff;
+            border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+            cursor: pointer; transition: opacity 0.2s;
+        }
+        .save-btn:hover { opacity: 0.88; }
+    </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body>
 
-    <header class="bg-white shadow-sm sticky top-0 z-50">
-        <div class="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
-            <a href="index.html" class="flex items-center gap-2 text-blue-600 font-bold text-lg">
-                <i class="fas fa-heartbeat"></i>
-                <span>김이박 클리닉</span>
-            </a>
-            <button onclick="doLogout()" class="text-sm text-gray-500 hover:text-gray-700">
-                <i class="fas fa-sign-out-alt mr-1"></i>로그아웃
+<div class="portal-layout">
+    <!-- 사이드바 -->
+    <aside class="portal-sidebar" id="portalSidebar"></aside>
+
+    <!-- 본문 -->
+    <main class="portal-content">
+        <h2 style="font-size:22px;font-weight:700;color:#263238;margin-bottom:20px;">
+            <i class="fas fa-user-circle" style="color:var(--primary);margin-right:8px;"></i>내 정보
+        </h2>
+
+        <!-- 이메일 미등록 경고 -->
+        <div class="no-email-banner" id="noEmailBanner">
+            <i class="fas fa-bell" style="margin-top:1px;flex-shrink:0;"></i>
+            <span><strong>이메일이 등록되어 있지 않습니다.</strong><br>
+            예약 확정·변경·취소 알림을 받으시려면 이메일을 등록해주세요.</span>
+        </div>
+
+        <!-- 기본 정보 -->
+        <div class="info-card">
+            <h3><i class="fas fa-id-card"></i>기본 정보</h3>
+
+            <div class="field-group">
+                <label>이름</label>
+                <input type="text" id="patientName" readonly placeholder="불러오는 중...">
+            </div>
+
+            <div class="field-row">
+                <div class="field-group">
+                    <label>출생연도</label>
+                    <input type="text" id="birthYear" readonly>
+                </div>
+                <div class="field-group">
+                    <label>성별</label>
+                    <input type="text" id="gender" readonly>
+                </div>
+            </div>
+
+            <div class="info-note">
+                <i class="fas fa-info-circle" style="margin-top:1px;flex-shrink:0;"></i>
+                <span>이름·출생연도·성별·연락처 변경은 <strong>원무과에 직접 문의</strong>해주세요.</span>
+            </div>
+        </div>
+
+        <!-- 이메일 -->
+        <div class="info-card">
+            <h3><i class="fas fa-envelope"></i>이메일 <span style="font-size:12px;font-weight:400;color:#90a4ae;">(예약 알림 수신용 — 선택)</span></h3>
+
+            <div class="field-group">
+                <label>이메일 주소</label>
+                <input type="email" id="emailInput" placeholder="예: patient@example.com">
+            </div>
+
+            <div class="field-msg" id="profileMsg"></div>
+
+            <button class="save-btn" onclick="saveEmail()">
+                <i class="fas fa-save" style="margin-right:6px;"></i>이메일 저장
             </button>
         </div>
-    </header>
-
-    <main class="max-w-2xl mx-auto px-4 py-8">
-        <div class="flex items-center gap-3 mb-6">
-            <a href="index.html" class="text-blue-500 hover:text-blue-700 text-sm">
-                <i class="fas fa-arrow-left mr-1"></i>홈으로
-            </a>
-            <h1 class="text-2xl font-bold text-gray-800">내 정보</h1>
-        </div>
-
-        <!-- 계정 정보 (읽기 전용 + 이메일 수정 가능) -->
-        <div class="bg-white rounded-xl shadow-sm p-6 mb-5">
-            <h2 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                <i class="fas fa-user-circle text-blue-500"></i> 계정 정보
-            </h2>
-
-            <!-- by 김다정 — 출생연도·성별만 표시 (실명·주민번호 미표시), ISMS-P 원칙 -->
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">이메일 (로그인 아이디)</label>
-                    <input type="email" id="email"
-                        class="w-full px-3 py-2.5 border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 outline-none">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 mb-1">출생연도</label>
-                        <input type="text" id="birthYear" readonly
-                            class="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-500 cursor-not-allowed outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 mb-1">성별</label>
-                        <input type="text" id="gender" readonly
-                            class="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-500 cursor-not-allowed outline-none">
-                    </div>
-                </div>
-
-                <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2">
-                    <i class="fas fa-info-circle text-amber-500 mt-0.5 flex-shrink-0 text-sm"></i>
-                    <p class="text-xs text-amber-700 leading-relaxed">
-                        출생연도·성별·연락처 변경은 <strong>원무과에 직접 문의</strong>해주세요.
-                        포털에서는 이메일만 수정할 수 있습니다.
-                    </p>
-                </div>
-
-                <div id="profileMsg" class="hidden text-sm font-semibold text-center py-2 rounded-lg"></div>
-
-                <button onclick="saveEmail()"
-                    class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors">
-                    이메일 저장
-                </button>
-            </div>
-        </div>
-
-        <!-- 빠른 링크 -->
-        <div class="bg-white rounded-xl shadow-sm p-6">
-            <h2 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                <i class="fas fa-link text-blue-500"></i> 빠른 메뉴
-            </h2>
-            <div class="grid grid-cols-2 gap-3">
-                <!-- by 김다정 — 마이페이지에서 바로 접근 가능한 주요 메뉴 링크 추가 -->
-                <a href="appointment.html"
-                    class="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors">
-                    <i class="fas fa-calendar-alt"></i> 예약 조회
-                </a>
-                <a href="prescription.html"
-                    class="flex items-center gap-2 px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors">
-                    <i class="fas fa-pills"></i> 처방전 조회
-                </a>
-                <a href="my-records.html"
-                    class="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm font-medium text-green-700 hover:bg-green-100 transition-colors">
-                    <i class="fas fa-file-medical"></i> 진료 기록
-                </a>
-                <a href="change-password.html"
-                    class="flex items-center gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-                    <i class="fas fa-key"></i> 비밀번호 변경
-                </a>
-            </div>
-        </div>
     </main>
+</div>
 
-    <script src="js/config.js"></script>
-    <script>
-        // by 김다정 — 환자 마이페이지 초기화
-        const GENDER_KR = { M:'남성', F:'여성', male:'남성', female:'여성' };
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script>
+    const GENDER_KR = { M: '남성', F: '여성', U: '미상', male: '남성', female: '여성' };
 
-        (async () => {
-            const res = await fetch(`${BASE_URL}/auth/me`, {
-                credentials: 'include',
-                headers: { 'X-API-Key': API_KEY },
-            });
-            if (!res.ok) { window.location.href = 'login.html'; return; }
-            const me = await res.json();
-            if (me.role !== 'patient') { window.location.href = 'login.html'; return; }
-
-            document.getElementById('email').value     = me.email || '';
-            document.getElementById('birthYear').value = me.birth_year ? me.birth_year + '년생' : '-';
-            document.getElementById('gender').value    = GENDER_KR[me.gender_code] || me.gender_code || '-';
-        })();
-
-        async function saveEmail() {
-            const email = document.getElementById('email').value.trim();
-            const msg   = document.getElementById('profileMsg');
-
-            if (!email || !email.includes('@')) {
-                msg.textContent = '올바른 이메일 형식을 입력해주세요.';
-                msg.className = 'text-sm font-semibold text-center py-2 rounded-lg text-red-600 bg-red-50';
-                msg.classList.remove('hidden');
-                return;
-            }
-            const res = await fetch(`${BASE_URL}/portal/profile`, {
-                method: 'PATCH',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-                body: JSON.stringify({ email }),
-            });
-            if (res.ok) {
-                msg.textContent = '이메일이 저장되었습니다.';
-                msg.className = 'text-sm font-semibold text-center py-2 rounded-lg text-green-700 bg-green-50';
-            } else {
-                const data = await res.json().catch(() => ({}));
-                msg.textContent = data.detail || '저장 중 오류가 발생했습니다.';
-                msg.className = 'text-sm font-semibold text-center py-2 rounded-lg text-red-600 bg-red-50';
-            }
-            msg.classList.remove('hidden');
+    async function initPage() {
+        const meRes = await fetch(`${BASE_URL}/auth/me`, {
+            credentials: 'include', headers: { 'X-API-Key': API_KEY },
+        });
+        if (!meRes.ok) { window.location.href = 'login.html'; return; }
+        const me = await meRes.json();
+        if (me.role !== 'patient') { window.location.href = 'login.html'; return; }
+        if (me.must_change_password || me.password_expired) {
+            window.location.href = 'change-password.html'; return;
         }
 
-        async function doLogout() {
-            await fetch(`${BASE_URL}/auth/logout`, {
-                method: 'POST', credentials: 'include',
-                headers: { 'X-API-Key': API_KEY },
-            }).catch(() => {});
-            window.location.href = 'login.html';
+        const profileRes = await fetch(`${BASE_URL}/portal/my-profile`, {
+            credentials: 'include', headers: { 'X-API-Key': API_KEY },
+        });
+        if (profileRes.ok) {
+            const p = await profileRes.json();
+            document.getElementById('patientName').value = p.patient_name || '-';
+            document.getElementById('birthYear').value   = p.birth_year ? p.birth_year + '년생' : '-';
+            document.getElementById('gender').value      = GENDER_KR[p.gender_code] || p.gender_code || '-';
+            document.getElementById('emailInput').value  = p.email || '';
+            if (!p.email) document.getElementById('noEmailBanner').style.display = 'flex';
         }
-    </script>
+    }
+
+    async function saveEmail() {
+        const email = document.getElementById('emailInput').value.trim();
+        const msg   = document.getElementById('profileMsg');
+        msg.className = 'field-msg'; msg.style.display = 'none';
+
+        if (!email) {
+            msg.textContent = '이메일 주소를 입력해주세요.';
+            msg.className = 'field-msg err'; msg.style.display = 'block'; return;
+        }
+        if (!email.includes('@') || !email.includes('.')) {
+            msg.textContent = '올바른 이메일 형식을 입력해주세요. (예: name@example.com)';
+            msg.className = 'field-msg err'; msg.style.display = 'block'; return;
+        }
+
+        const res = await fetch(`${BASE_URL}/portal/my-profile`, {
+            method: 'PATCH', credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            body: JSON.stringify({ email }),
+        });
+
+        if (res.ok) {
+            msg.textContent = '이메일이 저장되었습니다.';
+            msg.className = 'field-msg ok'; msg.style.display = 'block';
+            document.getElementById('noEmailBanner').style.display = 'none';
+        } else {
+            const data = await res.json().catch(() => ({}));
+            msg.textContent = data.detail || '저장 중 오류가 발생했습니다.';
+            msg.className = 'field-msg err'; msg.style.display = 'block';
+        }
+    }
+
+    renderSidebar('mypage.html');
+    initPage();
+</script>
 </body>
 </html>

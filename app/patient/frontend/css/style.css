@@ -332,18 +332,19 @@ body {
 
 .calendar-weekday {
   background-color: #f8fafc;
-  padding: 12px 0;
+  padding: 6px 0;
   text-align: center;
   font-weight: 700;
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   border-right: 1px solid #f1f5f9;
   border-bottom: 1px solid #f1f5f9;
 }
 
 .calendar-day {
   height: 100%;
-  padding: 12px;
+  min-height: 60px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
   border-right: 1px solid #f1f5f9;
@@ -369,10 +370,10 @@ body {
 }
 
 .day-number {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
  *,
@@ -1455,4 +1456,101 @@ video {
   font-weight: 700;
   color: #263238;
   margin-bottom: 4px;
+}
+
+/* ── 환자 포털 사이드바 레이아웃 ───────────────────────────── */
+.portal-layout {
+  display: flex;
+  align-items: flex-start;
+  min-height: calc(100vh - 70px);
+  padding-top: 70px;
+  max-width: 1100px;
+  margin: 0 auto;
+  gap: 0;
+}
+
+.portal-sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid #e8ecf0;
+  min-height: calc(100vh - 70px);
+  padding: 24px 0 40px;
+  position: sticky;
+  top: 70px;
+}
+
+.portal-sidebar .sidebar-patient {
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid #e8ecf0;
+  margin-bottom: 8px;
+}
+.portal-sidebar .sidebar-patient .name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #263238;
+}
+.portal-sidebar .sidebar-patient .member {
+  font-size: 11px;
+  color: #90a4ae;
+  margin-top: 2px;
+}
+
+.portal-sidebar .sidebar-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #b0bec5;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 12px 20px 4px;
+}
+
+.portal-sidebar a.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #546e7a;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+  border-left: 3px solid transparent;
+}
+.portal-sidebar a.sidebar-link i {
+  width: 16px;
+  text-align: center;
+  font-size: 13px;
+}
+.portal-sidebar a.sidebar-link:hover {
+  background: #f0f4f8;
+  color: var(--primary);
+}
+.portal-sidebar a.sidebar-link.active {
+  background: #e3f2fd;
+  color: var(--primary);
+  border-left-color: var(--primary);
+  font-weight: 700;
+}
+
+.portal-content {
+  flex: 1;
+  padding: 28px 28px 40px;
+  min-width: 0;
+  background: #f0f4f8;
+  min-height: calc(100vh - 70px);
+}
+
+@media (max-width: 640px) {
+  .portal-layout { flex-direction: column; }
+  .portal-sidebar {
+    width: 100%;
+    min-height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid #e8ecf0;
+    padding: 12px 0;
+  }
+  .portal-sidebar a.sidebar-link { padding: 8px 16px; }
+  .portal-content { padding: 16px; }
 }
