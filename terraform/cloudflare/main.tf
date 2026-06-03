@@ -50,6 +50,16 @@ resource "cloudflare_record" "wazuh" {
   proxied = false
 }
 
+# Grafana 서비스 레코드 26-06-03 김강환
+resource "cloudflare_record" "grafana" {
+  zone_id = var.cloudflare_zone_id
+  name    = "grafana"
+  type    = "CNAME"
+  content = "aws-staff-alb-622767637.ap-south-2.elb.amazonaws.com"
+  ttl     = 60
+  proxied = false
+}
+
 # ── DR 레코드 ─────────────────────────────────────────────────────────────────
 
 resource "cloudflare_record" "dr" {
@@ -90,6 +100,8 @@ resource "cloudflare_record" "dkim_3" {
   proxied = false
 }
 
+
+
 # ── ACM 검증 레코드 ───────────────────────────────────────────────────────────
 
 resource "cloudflare_record" "acm_patient" {
@@ -115,6 +127,17 @@ resource "cloudflare_record" "acm_wazuh" {
   name    = "_c43a682cfeb7903dc19fc042ad2d25d2.wazuh"
   type    = "CNAME"
   content = "_4ce7a1a9339b037903303f2603cc10d8.jkddzztszm.acm-validations.aws"
+  ttl     = 60
+  proxied = false
+}
+
+
+# ACM grafana.mzclinic.cloud 인증서 검증 레코드 26-06-03 김강환
+resource "cloudflare_record" "acm_grafana" {
+  zone_id = var.cloudflare_zone_id
+  name    = "_e9756ad397620ca25c721c0f319469a3.grafana"
+  type    = "CNAME"
+  content = "_64f7da68ff773f1aa6060c3be756d0de.jkddzztszm.acm-validations.aws"
   ttl     = 60
   proxied = false
 }
