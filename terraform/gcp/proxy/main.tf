@@ -111,25 +111,6 @@ resource "google_compute_firewall" "allow_iap_ssh_proxy" {
 
 
 
-# monitoring EC2 → node exporter 9100 허용
-resource "google_compute_firewall" "allow_monitoring_node_exporter" {
-  name    = "gcp-fw-allow-monitoring-node-exporter"
-  network = data.google_compute_network.main.name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["9100"]
-  }
-
-  # AWS VPC CIDR에서만 허용
-  source_ranges = ["10.0.0.0/16"]
-  target_tags   = ["rds-proxy"]
-
-  description = "Allow Prometheus node exporter scrape from AWS monitoring EC2"
-}
-
-
-
 # ── 프록시 인스턴스 ───────────────────────────────────────────
 
 resource "google_compute_instance" "proxy" {
@@ -317,7 +298,7 @@ WAZUH_EOF
     apt-get update -y
     apt-get install -y alloy
 
-    cat > /etc/alloy/config.alloy << 'ALLOYEOF'
+    cat > /etc/alloy/config.alloy << ALLOYEOF
 prometheus.exporter.unix "local" {
   include_exporter_metrics = true
 }
