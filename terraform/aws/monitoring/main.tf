@@ -21,7 +21,7 @@ resource "aws_security_group" "aws-monitoring-sg" {
     to_port     = 9090
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/16", "10.10.0.0/16", "172.30.0.0/16"]
-    description = "Prometheus remote write — Alloy push (VPC/GCP/onprem)"
+    description = "Prometheus remote write from Alloy push (VPC/GCP/onprem)"
   }
 
 
@@ -53,9 +53,6 @@ resource "aws_instance" "aws-monitoring-01" {
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
     aws_region       = data.aws_region.current.region
     base_domain      = var.base_domain
-    wazuh_manager_ip = data.terraform_remote_state.wazuh.outputs.wazuh_private_ip
-    wazuh_indexer_ip = data.terraform_remote_state.wazuh_indexer.outputs.indexer_private_ip
-    gcp_proxy_ip     = data.terraform_remote_state.gcp_proxy.outputs.proxy_internal_ip
   }))
 
   root_block_device {
@@ -75,7 +72,7 @@ resource "aws_instance" "aws-monitoring-01" {
 # ─────────────────────────────────────────────────────────
 resource "aws_cloudwatch_metric_alarm" "aws-monitoring-reboot" {
   alarm_name          = "aws-monitoring-instance-reboot"
-  alarm_description   = "monitoring EC2 OS 장애 감지 시 자동 reboot — IP/EBS 유지"
+  alarm_description   = "monitoring EC2 OS failure - auto reboot, IP/EBS preserved"
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed_Instance"
   statistic           = "Maximum"
@@ -104,7 +101,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-monitoring-reboot" {
 # ─────────────────────────────────────────────────────────
 resource "aws_cloudwatch_metric_alarm" "aws-monitoring-recover" {
   alarm_name          = "aws-monitoring-system-recover"
-  alarm_description   = "monitoring EC2 하드웨어 장애 감지 시 자동 recover — IP/EBS 유지"
+  alarm_description   = "monitoring EC2 hardware failure - auto recover, IP/EBS preserved"
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed_System"
   statistic           = "Maximum"
@@ -159,7 +156,7 @@ resource "aws_dlm_lifecycle_policy" "aws-monitoring-snapshot" {
     resource_types = ["INSTANCE"]
 
     schedule {
-      name = "1시간마다 스냅샷"
+      name = "snapshot every 1 hour"
 
       create_rule {
         interval      = 1
