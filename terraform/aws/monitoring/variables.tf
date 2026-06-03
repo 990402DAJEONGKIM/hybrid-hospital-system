@@ -19,3 +19,8 @@ variable "ami_id" {
   type        = string
   default     = "ami-0eab39170eb2844c5"
 }
+
+variable "monitoring_private_ip" {
+  description = "monitoring EC2 고정 Private IP — TFC Variables에서 관리"
+  type        = string
+}
