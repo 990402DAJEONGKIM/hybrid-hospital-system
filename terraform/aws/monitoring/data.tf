@@ -94,22 +94,23 @@ data "terraform_remote_state" "gcp_proxy" {
   }
 }
 
-data "terraform_remote_state" "alb" {
-  backend = "remote"
-  config = {
-    organization = "k2p"
-    workspaces = { name = "TC-aws-ALB" }
-  }
+
+
+
+
+
+# 단일 EC2 instance ID output — SSM 접속용
+output "monitoring_instance_id" {
+  description = "모니터링 EC2 인스턴스 ID (SSM 접속용)"
+  value       = aws_instance.aws-monitoring-01.id
+  sensitive   = true
 }
 
 
-
-
-
-# ASG 이름 output으로 교체
-output "monitoring_asg_name" {
-  description = "모니터링 ASG 이름"
-  value       = aws_autoscaling_group.aws-monitoring-asg.name
+output "monitoring_private_ip" {
+  description = "모니터링 EC2 고정 Private IP"
+  value       = aws_instance.aws-monitoring-01.private_ip
+  sensitive   = true
 }
 
 output "grafana_url" {
