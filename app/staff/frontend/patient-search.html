@@ -36,7 +36,8 @@
         .sub-list li { padding:4px 0; border-bottom:1px solid #f0f0f0; color:#374151; }
     </style>
 </head>
-<body style="background:#f5f7fa;min-height:100vh;">
+<body>
+<div id="page-content">
 <div class="page-wrap">
     <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <h2 style="margin-bottom:4px;">환자 검색 / 조회</h2>
@@ -118,8 +119,11 @@
     </div>
 </div>
 
+</div>
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/router.js"></script>
 <script>
     let currentRole = null;
     const _patientMap = new Map();
@@ -129,7 +133,7 @@
     }
 
     async function init() {
-        const me = await requireLogin();
+        const me = await initLayout();
         if (!me) return;
         currentRole = me.role;
         if (['doctor', 'admin'].includes(me.role)) {

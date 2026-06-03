@@ -78,7 +78,11 @@ def get_current_user(
         user_id   = request.headers.get("X-User-Id", "")
         user_role = request.headers.get("X-User-Role", "")
         if user_id and user_role:
-            return {"sub": user_id, "role": user_role, "service_call": True}
+            payload: dict = {"sub": user_id, "role": user_role, "service_call": True}
+            doctor_id = request.headers.get("X-Doctor-Id")
+            if doctor_id:
+                payload["did"] = doctor_id
+            return payload
 
     if not access_token:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")

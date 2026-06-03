@@ -330,8 +330,10 @@ def me(
 
     result = {
         "user_id":              str(user.user_id),
+        "member_number":        user.member_number,
         "role":                 user.role_ref.role_code,
         "password_expired":     password_expired,
+        "must_change_password": user.must_change_password,
         "password_expire_days": policy.expire_days,
     }
     if user.patient_id_hash:
@@ -374,23 +376,28 @@ def change_password(
 
 _ROLE_MENUS = {
     "nurse": [
-        {"menu_code": "NURSE_DASHBOARD",  "menu_name": "예약 현황",      "menu_url": "/nurse-dashboard.html",       "icon": "calendar-alt"},
-        {"menu_code": "NURSE_APPT_NEW",   "menu_name": "수동 예약 등록", "menu_url": "/nurse-appointment-new.html", "icon": "plus-circle"},
-        {"menu_code": "WARD_STATUS",      "menu_name": "병동 현황",      "menu_url": "/ward-status.html",           "icon": "hospital"},
-        {"menu_code": "CHANGE_PW",        "menu_name": "비밀번호 변경",  "menu_url": "/change-password.html",       "icon": "key"},
+        {"menu_code": "NURSE_DASHBOARD",    "menu_name": "예약 현황",      "menu_url": "/nurse-dashboard.html",       "icon": "calendar-alt"},
+        {"menu_code": "NURSE_APPT_NEW",     "menu_name": "수동 예약",       "menu_url": "/nurse-appointment-new.html", "icon": "plus-circle"},
+        {"menu_code": "PATIENT_REGISTER",   "menu_name": "환자 등록",       "menu_url": "/patient-register.html",      "icon": "user-plus"},
+        {"menu_code": "PATIENT_SEARCH",     "menu_name": "환자 검색",       "menu_url": "/patient-search.html",        "icon": "search"},
+        {"menu_code": "WARD_STATUS",        "menu_name": "병동 현황",       "menu_url": "/ward-status.html",           "icon": "hospital"},
+        {"menu_code": "ENCOUNTER_NEW",      "menu_name": "진료 등록",       "menu_url": "/encounter-new.html",         "icon": "notes-medical"},
+        {"menu_code": "CHANGE_PW",          "menu_name": "비밀번호 변경",   "menu_url": "/change-password.html",       "icon": "key"},
     ],
     "doctor": [
-        {"menu_code": "DOCTOR_SCHEDULE",  "menu_name": "오늘 진료",      "menu_url": "/doctor-schedule.html",       "icon": "stethoscope"},
-        {"menu_code": "PATIENT_DETAIL",   "menu_name": "환자 조회",      "menu_url": "/patient-detail.html",        "icon": "user-injured"},
-        {"menu_code": "CHANGE_PW",        "menu_name": "비밀번호 변경",  "menu_url": "/change-password.html",       "icon": "key"},
+        {"menu_code": "DOCTOR_SCHEDULE",    "menu_name": "오늘 진료",       "menu_url": "/doctor-schedule.html",       "icon": "stethoscope"},
+        {"menu_code": "PATIENT_SEARCH",     "menu_name": "환자 검색",       "menu_url": "/patient-search.html",        "icon": "search"},
+        {"menu_code": "MY_PATIENTS",        "menu_name": "내 환자 목록",    "menu_url": "/my-patients.html",           "icon": "user-injured"},
+        {"menu_code": "ENCOUNTER_NEW",      "menu_name": "진료 기록",       "menu_url": "/encounter-new.html",         "icon": "notes-medical"},
+        {"menu_code": "CHANGE_PW",          "menu_name": "비밀번호 변경",   "menu_url": "/change-password.html",       "icon": "key"},
     ],
     "admin": [
-        {"menu_code": "ADMIN_USERS",      "menu_name": "사용자 관리",    "menu_url": "/admin-users.html",           "icon": "users"},
-        {"menu_code": "ADMIN_ROLES",      "menu_name": "역할/권한 관리", "menu_url": "/admin-roles.html",           "icon": "shield-alt"},
-        {"menu_code": "ADMIN_POLICY",     "menu_name": "보안 정책",      "menu_url": "/admin-policy.html",          "icon": "lock"},
-        {"menu_code": "ADMIN_LOGS",       "menu_name": "감사 로그",      "menu_url": "/admin-logs.html",            "icon": "clipboard-list"},
-        {"menu_code": "ADMIN_LOGIN_HIST", "menu_name": "로그인 이력",    "menu_url": "/admin-login-history.html",   "icon": "history"},
-        {"menu_code": "CHANGE_PW",        "menu_name": "비밀번호 변경",  "menu_url": "/change-password.html",       "icon": "key"},
+        {"menu_code": "ADMIN_USERS",        "menu_name": "사용자 관리",     "menu_url": "/admin-users.html",           "icon": "users"},
+        {"menu_code": "ADMIN_ROLES",        "menu_name": "역할/권한 관리",  "menu_url": "/admin-roles.html",           "icon": "shield-alt"},
+        {"menu_code": "ADMIN_POLICY",       "menu_name": "보안 정책",       "menu_url": "/admin-policy.html",          "icon": "lock"},
+        {"menu_code": "ADMIN_LOGS",         "menu_name": "감사 로그",       "menu_url": "/admin-logs.html",            "icon": "clipboard-list"},
+        {"menu_code": "ADMIN_LOGIN_HIST",   "menu_name": "로그인 이력",     "menu_url": "/admin-login-history.html",   "icon": "history"},
+        {"menu_code": "CHANGE_PW",          "menu_name": "비밀번호 변경",   "menu_url": "/change-password.html",       "icon": "key"},
     ],
 }
 

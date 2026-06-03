@@ -43,7 +43,13 @@ class OnpremClient:
         data = client.get("/portal/patients", name="홍")
     """
 
-    def __init__(self, user_id: str, user_role: str, source_ip: Optional[str] = None):
+    def __init__(
+        self,
+        user_id:   str,
+        user_role: str,
+        source_ip: Optional[str] = None,
+        doctor_id: Optional[str] = None,
+    ):
         if not ONPREM_API_URL:
             raise HTTPException(
                 status_code=503,
@@ -58,6 +64,8 @@ class OnpremClient:
             "X-Source-IP":   source_ip or "",
             "Content-Type":  "application/json",
         }
+        if doctor_id:
+            self._headers["X-Doctor-Id"] = doctor_id
 
     def get(self, path: str, **params: Any) -> Any:
         filtered = {k: v for k, v in params.items() if v is not None}

@@ -7,8 +7,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
 </head>
-<body style="background:#f5f7fa;min-height:100vh;">
-<div style="max-width:560px;margin:80px auto 40px;padding:0 16px;">
+<body>
+<div id="page-content">
+<div style="max-width:560px;margin:0 auto;">
 
     <a href="/nurse-dashboard.html"
        style="font-size:13px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:5px;margin-bottom:24px;">
@@ -47,11 +48,14 @@
     </div>
 </div>
 
+</div>
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/router.js"></script>
 <script>
     (async () => {
-        const me = await requireLogin();
+        const me = await initLayout();
         if (!me) return;
     })();
 </script>

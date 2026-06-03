@@ -26,7 +26,8 @@
         .back-link:hover { text-decoration:underline; }
     </style>
 </head>
-<body style="background:#f5f7fa;min-height:100vh;">
+<body>
+<div id="page-content">
 <div class="page-wrap">
     <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -38,11 +39,14 @@
     <div class="ward-grid" id="wardGrid"></div>
 </div>
 
+</div>
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/router.js"></script>
 <script>
     async function init() {
-        const me = await requireLogin();
+        const me = await initLayout();
         if (!me) return;
         await load();
     }

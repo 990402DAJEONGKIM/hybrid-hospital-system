@@ -43,7 +43,8 @@
         .enc-status-form button { padding:8px 16px; background:#059669; color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; }
     </style>
 </head>
-<body style="background:#f5f7fa;min-height:100vh;">
+<body>
+<div id="page-content">
 <div class="page-wrap">
     <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <h2 style="margin-bottom:4px;">오늘 진료 목록</h2>
@@ -133,8 +134,11 @@
     </div>
 </div>
 
+</div>
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/router.js"></script>
 <script>
     let currentEncounterId = null;
     const _encMap = new Map();
@@ -150,7 +154,7 @@
     const STATUS_LABEL = { open: '진행 중', closed: '완료', cancelled: '취소' };
 
     async function init() {
-        const me = await requireLogin();
+        const me = await initLayout();
         if (!me) return;
         if (me.role !== 'doctor') {
             alert('의사 계정만 접근할 수 있습니다.');
