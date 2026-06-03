@@ -25,8 +25,11 @@
         #errMsg { color:#e53935; font-size:13px; margin-top:8px; min-height:18px; }
     </style>
 </head>
-<body style="background:#f0f4f8;min-height:100vh;">
-<div class="appt-form-wrap">
+<body style="margin:0;">
+<div class="portal-layout">
+<aside class="portal-sidebar" id="portalSidebar"></aside>
+<main class="portal-content">
+<div class="appt-form-wrap" style="margin:0;max-width:560px;">
     <h2 style="margin-bottom:8px;">수술 전 예약</h2>
     <p style="color:#78909c;font-size:14px;margin-bottom:24px;">수술 전 필수 검사 및 일정 확인 예약입니다.</p>
 
@@ -191,7 +194,7 @@
         document.getElementById('errMsg').textContent = '';
 
         const body = {
-            type_code:        'pre_surgery',
+            type_code:        'surgery',
             department_code:  document.getElementById('deptSelect').value,
             appointment_date: document.getElementById('apptDate').value,
             appointment_time: document.getElementById('apptTime').value,
@@ -214,7 +217,10 @@
         }
     }
 
+    renderSidebar('appointment.html');
     init();
 </script>
+</main>
+</div>
 </body>
 </html>

@@ -13,8 +13,8 @@ from core.security import get_current_user, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
-    Notification, SyncDepartment, SyncDiagnosis, SyncDoctor, SyncEncounter,
-    SyncPatient, SyncSurgery, SyncWard, User,
+    Notification, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
+    SyncEncounter, SyncPatient, SyncSurgery, SyncWard, User,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,9 @@ def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
     try:
         patient = db.query(User).filter(User.user_id == appt.patient_user_id).first()
         if not patient:
+            return
+        if not patient.email:
+            logger.info("이메일 미등록 환자 — 알림 생략 (patient_user_id=%s)", appt.patient_user_id)
             return
         type_name = appt.appt_type.type_name if appt.appt_type else None
         sent = send_appointment_notification(
@@ -58,7 +61,7 @@ def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
 
 # ── 직렬화 헬퍼 ──────────────────────────────────────────────────
 
-def _appt_out(appt: Appointment) -> dict:
+def _appt_out(appt: Appointment, doctor_name: str | None = None) -> dict:
     s = appt.appt_status
     t = appt.appt_type
     return {
@@ -71,6 +74,7 @@ def _appt_out(appt: Appointment) -> dict:
         "appointment_time":      appt.appointment_time.strftime("%H:%M") if appt.appointment_time else None,
         "department_code":       appt.department_code,
         "doctor_id":             str(appt.doctor_id) if appt.doctor_id else None,
+        "doctor_name":           doctor_name,
         "ward_id":               str(appt.ward_id) if appt.ward_id else None,
         "room_type_pref":        appt.room_type_pref,
         "has_chronic_condition": appt.has_chronic_condition,
@@ -80,6 +84,13 @@ def _appt_out(appt: Appointment) -> dict:
         "cancelled_at":          appt.cancelled_at.isoformat() if appt.cancelled_at else None,
         "cancel_reason":         appt.cancel_reason,
     }
+
+
+def _resolve_doctor_name(db: DbSession, doctor_id) -> str | None:
+    if not doctor_id:
+        return None
+    doc = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == doctor_id).first()
+    return doc.doctor_name if doc else None
 
 
 # ── 권한 헬퍼 ────────────────────────────────────────────────────
@@ -132,9 +143,13 @@ def get_appointment_types(
     current_user: dict     = Depends(get_current_user),
     db:           DbSession = Depends(get_read_db),
 ):
+    """환자 예약 화면용 예약 유형 목록 — 초진(initial) 제외."""
     types = (
         db.query(AppointmentType)
-        .filter(AppointmentType.is_active == True)
+        .filter(
+            AppointmentType.is_active == True,
+            AppointmentType.type_code != "initial",   # SFR-035: 초진 미노출
+        )
         .order_by(AppointmentType.sort_order)
         .all()
     )
@@ -195,6 +210,37 @@ def get_doctors(
     ]
 
 
+@router.get("/recent-encounter")
+def get_recent_encounter(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_read_db),
+):
+    """최근 방문 진료과·담당 의사 조회 — 예약 신청 첫 단계 기본값 제안용 (SFR-035)."""
+    pid = _require_patient(current_user)
+
+    last = (
+        db.query(SyncEncounter)
+        .filter(SyncEncounter.patient_id_hash == pid)
+        .order_by(SyncEncounter.visit_date.desc())
+        .first()
+    )
+    if not last:
+        return {"department_code": None, "department_name": None, "doctor_id": None, "doctor_name": None}
+
+    dept = db.query(SyncDepartment).filter(
+        SyncDepartment.department_code == last.department_code
+    ).first()
+
+    doctor_name = _resolve_doctor_name(db, last.doctor_id)
+
+    return {
+        "department_code": last.department_code,
+        "department_name": dept.department_name if dept else last.department_code,
+        "doctor_id":       str(last.doctor_id) if last.doctor_id else None,
+        "doctor_name":     doctor_name,
+    }
+
+
 # ── 예약 CRUD ────────────────────────────────────────────────────
 
 @router.get("/appointments")
@@ -209,7 +255,16 @@ def list_appointments(
         .order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc())
         .all()
     )
-    return [_appt_out(a) for a in appts]
+    result = []
+    for a in appts:
+        doctor_name = _resolve_doctor_name(db, a.doctor_id)
+        dept = db.query(SyncDepartment).filter(
+            SyncDepartment.department_code == a.department_code
+        ).first()
+        row = _appt_out(a, doctor_name)
+        row["department_name"] = dept.department_name if dept else a.department_code
+        result.append(row)
+    return result
 
 
 @router.get("/appointments/available-slots")
@@ -229,7 +284,6 @@ def get_available_slots(
     if target_date < date_type.today():
         raise HTTPException(status_code=400, detail="과거 날짜는 조회할 수 없습니다.")
 
-    # 09:00 ~ 17:30, 30분 간격 슬롯 생성
     all_slots = [
         time_type(h, m)
         for h in range(9, 18)
@@ -237,7 +291,6 @@ def get_available_slots(
         if not (h == 17 and m == 30)
     ]
 
-    # 취소·미내원 제외한 예약된 슬롯 조회
     q = (
         db.query(Appointment.appointment_time)
         .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
@@ -262,6 +315,55 @@ def get_available_slots(
     ]
 
 
+@router.get("/appointments/{appointment_id}/history")
+def get_appointment_history(
+    appointment_id: str,
+    current_user:   dict     = Depends(get_current_user),
+    db:             DbSession = Depends(get_read_db),
+):
+    """예약 변경 이력 조회 (SFR-036)."""
+    pid = _require_patient(current_user)
+    try:
+        appt_uuid = uuid_module.UUID(appointment_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 예약 ID입니다.")
+
+    appt = db.query(Appointment).filter(
+        Appointment.appointment_id  == appt_uuid,
+        Appointment.patient_id_hash == pid,
+    ).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    histories = (
+        db.query(AppointmentHistory)
+        .filter(AppointmentHistory.appointment_id == appt_uuid)
+        .order_by(AppointmentHistory.changed_at.asc())
+        .all()
+    )
+
+    def _status_name(status_id):
+        if not status_id:
+            return None
+        s = db.query(AppointmentStatus).filter(AppointmentStatus.status_id == status_id).first()
+        return s.status_name if s else None
+
+    return [
+        {
+            "history_id":    str(h.history_id),
+            "changed_at":    h.changed_at.isoformat() if h.changed_at else None,
+            "prev_date":     str(h.prev_date) if h.prev_date else None,
+            "new_date":      str(h.new_date)  if h.new_date  else None,
+            "prev_time":     h.prev_time.strftime("%H:%M") if h.prev_time else None,
+            "new_time":      h.new_time.strftime("%H:%M")  if h.new_time  else None,
+            "prev_status":   _status_name(h.prev_status_id),
+            "new_status":    _status_name(h.new_status_id),
+            "change_reason": h.change_reason,
+        }
+        for h in histories
+    ]
+
+
 @router.get("/appointments/{appointment_id}")
 def get_appointment(
     appointment_id: str,
@@ -280,7 +382,8 @@ def get_appointment(
     ).first()
     if not appt:
         raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
-    return _appt_out(appt)
+    doctor_name = _resolve_doctor_name(db, appt.doctor_id)
+    return _appt_out(appt, doctor_name)
 
 
 @router.post("/appointments", status_code=201)
@@ -292,6 +395,10 @@ def create_appointment(
     pid = _require_patient(current_user)
     now = datetime.now(timezone.utc)
 
+    # 초진 예약 유형 차단 (SFR-035)
+    if body.type_code.lower() in ("initial", "first_visit"):
+        raise HTTPException(status_code=400, detail="초진 예약은 온라인으로 신청할 수 없습니다.")
+
     # 예약 유형 검증
     appt_type = db.query(AppointmentType).filter(
         AppointmentType.type_code == body.type_code,
@@ -300,7 +407,7 @@ def create_appointment(
     if not appt_type:
         raise HTTPException(status_code=400, detail="유효하지 않은 예약 유형입니다.")
 
-    # 재진·입원·수술전: 해당 진료과 이전 내원 이력 필수
+    # 재진·입원·수술: 해당 진료과 이전 내원 이력 필수
     if appt_type.requires_previous_visit:
         has_visit = db.query(SyncEncounter).filter(
             SyncEncounter.patient_id_hash == pid,
@@ -309,7 +416,7 @@ def create_appointment(
         if not has_visit:
             raise HTTPException(
                 status_code=400,
-                detail="해당 진료과의 이전 내원 이력이 없어 재진/입원 예약이 불가합니다.",
+                detail="해당 진료과의 이전 내원 이력이 없어 예약이 불가합니다.",
             )
 
     # 진료과 검증
@@ -349,7 +456,7 @@ def create_appointment(
     except (ValueError, AttributeError):
         raise HTTPException(status_code=422, detail="시간 형식이 올바르지 않습니다. (HH:MM)")
 
-    # 동시 요청 중복 예약 방지 (PER-003) — 같은 의사·날짜·시간 행 잠금 후 재검증
+    # 동시 요청 중복 예약 방지 (SFR-035) — 같은 의사·날짜·시간 행 잠금 후 재검증
     conflict_q = (
         db.query(Appointment)
         .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
@@ -384,7 +491,7 @@ def create_appointment(
         notes                 = body.notes,
     )
     db.add(appt)
-    db.flush()  # appointment_id 확보 (commit 전)
+    db.flush()
 
     db.add(AppointmentHistory(
         appointment_id = appt.appointment_id,
@@ -396,14 +503,13 @@ def create_appointment(
     ))
 
     record_audit(
-        db, action_type="CREATE_APPOINTMENT", result_code="201",
+        db, action_type="APPOINTMENT_CREATE", result_code="201",
         user_id=patient_user_id, patient_id_hash=pid,
         target_table="appointments", target_id=appt.appointment_id,
     )
     db.commit()
     db.refresh(appt)
 
-    # 예약 접수 이메일 알림 (실패해도 예약 처리에 영향 없음)
     _notify_patient(db, appt, "pending")
 
     return _appt_out(appt)
@@ -429,8 +535,9 @@ def update_appointment(
     if not appt:
         raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
 
-    if not appt.appt_status or appt.appt_status.status_code != "pending":
-        raise HTTPException(status_code=400, detail="대기 중인 예약만 수정할 수 있습니다.")
+    # is_terminal인 예약(완료·취소)은 변경 불가 (SFR-036)
+    if appt.appt_status and appt.appt_status.is_terminal:
+        raise HTTPException(status_code=400, detail="완료되거나 취소된 예약은 변경할 수 없습니다.")
 
     now       = datetime.now(timezone.utc)
     prev_date = appt.appointment_date
@@ -469,27 +576,39 @@ def update_appointment(
     ))
 
     record_audit(
-        db, action_type="UPDATE_APPOINTMENT", result_code="200",
+        db, action_type="APPOINTMENT_UPDATE", result_code="200",
         user_id=patient_user_id, patient_id_hash=pid,
         target_table="appointments", target_id=appt.appointment_id,
     )
     db.commit()
     db.refresh(appt)
+
+    _notify_patient(db, appt, "updated")
+
     return _appt_out(appt)
 
 
 @router.delete("/appointments/{appointment_id}", status_code=200)
 def cancel_appointment(
-    appointment_id: str,
-    cancel_reason:  Optional[str] = Query(default=None),
-    current_user:   dict     = Depends(get_current_user),
-    db:             DbSession = Depends(get_db),
+    appointment_id:    str,
+    member_number:     Optional[str] = Query(default=None, description="본인 확인용 회원번호 (SFR-036)"),
+    cancel_reason:     Optional[str] = Query(default=None),
+    current_user:      dict     = Depends(get_current_user),
+    db:                DbSession = Depends(get_db),
 ):
     pid = _require_patient(current_user)
     try:
         appt_uuid = uuid_module.UUID(appointment_id)
     except ValueError:
         raise HTTPException(status_code=422, detail="유효하지 않은 예약 ID입니다.")
+
+    # 본인 확인 절차 필수 (SFR-036)
+    if not member_number:
+        raise HTTPException(status_code=400, detail="예약 취소를 위해 회원번호를 입력해주세요.")
+
+    user = db.query(User).filter(User.user_id == current_user["sub"]).first()
+    if not user or user.member_number != member_number:
+        raise HTTPException(status_code=403, detail="회원번호가 일치하지 않습니다. 본인 확인에 실패했습니다.")
 
     appt = db.query(Appointment).filter(
         Appointment.appointment_id  == appt_uuid,
@@ -525,12 +644,15 @@ def cancel_appointment(
     appt.updated_at   = now
 
     record_audit(
-        db, action_type="CANCEL_APPOINTMENT", result_code="200",
+        db, action_type="APPOINTMENT_CANCEL", result_code="200",
         user_id=patient_user_id, patient_id_hash=pid,
         target_table="appointments", target_id=appt.appointment_id,
     )
     db.commit()
     db.refresh(appt)
+
+    _notify_patient(db, appt, "cancelled")
+
     return {"message": "예약이 취소되었습니다.", "appointment": _appt_out(appt)}
 
 
@@ -545,9 +667,9 @@ def get_my_profile(
     current_user: dict     = Depends(get_current_user),
     db:           DbSession = Depends(get_read_db),
 ):
-    """본인 이메일 + 비식별 인적정보 조회."""
+    """본인 이메일 + 비식별 인적정보 + 실명(onprem 조회) 반환."""
     user = db.query(User).filter(User.user_id == current_user["sub"]).first()
-    result: dict = {"email": user.email}
+    result: dict = {"email": user.email, "patient_name": None}
 
     if user.patient_id_hash:
         patient = db.query(SyncPatient).filter(
@@ -556,6 +678,19 @@ def get_my_profile(
         if patient:
             result["birth_year"]  = patient.birth_year
             result["gender_code"] = patient.gender_code
+
+        # 환자 실명은 onprem에만 있으므로 서비스 간 호출로 조회
+        try:
+            from core.onprem_client import OnpremClient, ONPREM_API_URL
+            if ONPREM_API_URL:
+                client = OnpremClient(
+                    user_id   = current_user["sub"],
+                    user_role = "nurse",   # 서비스 간 호출 — 환자 본인 정보 조회
+                )
+                data = client.get(f"/portal/patients/by-hash/{user.patient_id_hash}")
+                result["patient_name"] = data.get("patient_name")
+        except Exception:
+            pass   # onprem 미연결 시 이름 없이 반환
 
     return result
 
@@ -585,7 +720,7 @@ def update_my_profile(
     return {"email": user.email, "message": "이메일이 변경되었습니다."}
 
 
-# ── 진료기록 조회 ─────────────────────────────────────────────────
+# ── 병동 조회 ─────────────────────────────────────────────────────
 
 @router.get("/wards/availability")
 def get_wards_availability(
@@ -593,7 +728,7 @@ def get_wards_availability(
     current_user: dict          = Depends(get_current_user),
     db:           DbSession     = Depends(get_read_db),
 ):
-    """가용 병상이 있는 병동 목록 조회 (입원 예약 병동 선택용)."""
+    """가용 병상이 있는 병동 목록 조회 — 입원 예약 병동 선택용 (SFR-035)."""
     q = db.query(SyncWard).filter(SyncWard.available_beds > 0)
     if room_type:
         if room_type not in ("single", "double", "shared"):
@@ -612,12 +747,14 @@ def get_wards_availability(
     ]
 
 
+# ── 진료기록 조회 (SFR-037) ───────────────────────────────────────
+
 @router.get("/my-records")
 def get_my_records(
     current_user: dict     = Depends(get_current_user),
     db:           DbSession = Depends(get_db),
 ):
-    """본인 진료기록 조회 (sync_encounters + sync_diagnoses 기반, 비식별)."""
+    """본인 진료기록 목록 조회 — diagnosis_text 미노출, 의사명 포함 (SFR-037)."""
     pid = current_user.get("pid")
     if not pid:
         raise HTTPException(status_code=403, detail="환자 계정만 진료기록을 조회할 수 있습니다.")
@@ -641,8 +778,9 @@ def get_my_records(
         diag_map.setdefault(str(d.encounter_id), []).append(d.diagnosis_code)
 
     record_audit(
-        db, action_type="RECORD_VIEW", result_code="200",
+        db, action_type="EMR_SELF_VIEW", result_code="200",
         user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+        target_table="sync_encounters",
     )
 
     return [
@@ -652,10 +790,120 @@ def get_my_records(
             "encounter_type":  e.encounter_type,
             "department_code": e.department_code,
             "doctor_id":       str(e.doctor_id) if e.doctor_id else None,
+            "doctor_name":     _resolve_doctor_name(db, e.doctor_id),
             "status_code":     e.status_code,
             "diagnoses":       diag_map.get(str(e.encounter_id), []),
         }
         for e in encounters
+    ]
+
+
+@router.get("/encounters/{encounter_id}")
+def get_encounter_detail(
+    encounter_id: str,
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    """진료 상세 조회 — diagnosis_text 미노출, clinical_notes 미제공 (SFR-037)."""
+    pid = current_user.get("pid")
+    if not pid:
+        raise HTTPException(status_code=403, detail="환자 계정만 진료기록을 조회할 수 있습니다.")
+
+    enc = db.query(SyncEncounter).filter(
+        SyncEncounter.encounter_id == encounter_id
+    ).first()
+
+    if not enc:
+        raise HTTPException(status_code=404, detail="진료 기록을 찾을 수 없습니다.")
+
+    # 타 환자 접근 차단 + 감사 로그 (SFR-037)
+    if enc.patient_id_hash != pid:
+        record_audit(
+            db, action_type="UNAUTHORIZED_ACCESS", result_code="403",
+            user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+            target_table="sync_encounters",
+        )
+        db.commit()
+        raise HTTPException(status_code=403, detail="본인의 진료 기록만 조회할 수 있습니다.")
+
+    diagnoses = (
+        db.query(SyncDiagnosis)
+        .filter(SyncDiagnosis.encounter_id == encounter_id)
+        .all()
+    )
+
+    dept = db.query(SyncDepartment).filter(
+        SyncDepartment.department_code == enc.department_code
+    ).first()
+
+    record_audit(
+        db, action_type="EMR_SELF_VIEW", result_code="200",
+        user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+        target_table="sync_encounters",
+    )
+    db.commit()
+
+    return {
+        "encounter_id":    enc.encounter_id,
+        "visit_date":      str(enc.visit_date),
+        "encounter_type":  enc.encounter_type,
+        "department_code": enc.department_code,
+        "department_name": dept.department_name if dept else enc.department_code,
+        "doctor_id":       str(enc.doctor_id) if enc.doctor_id else None,
+        "doctor_name":     _resolve_doctor_name(db, enc.doctor_id),
+        "status_code":     enc.status_code,
+        "diagnoses":       [
+            {
+                "diagnosis_code": d.diagnosis_code,
+                "is_primary":     d.is_primary,
+            }
+            for d in diagnoses
+        ],
+    }
+
+
+@router.get("/allergies")
+def get_allergies(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_read_db),
+):
+    """본인 알레르기 정보 조회 (SFR-037)."""
+    pid = _require_patient(current_user)
+    allergies = (
+        db.query(SyncAllergy)
+        .filter(SyncAllergy.patient_id_hash == pid)
+        .all()
+    )
+    return [
+        {
+            "allergy_id":    a.allergy_id,
+            "allergy_name":  a.allergy_name,
+            "severity_code": a.severity_code,
+        }
+        for a in allergies
+    ]
+
+
+@router.get("/surgery-histories")
+def get_surgery_histories(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_read_db),
+):
+    """본인 수술 이력 조회 (SFR-037)."""
+    pid = _require_patient(current_user)
+    surgeries = (
+        db.query(SyncSurgery)
+        .filter(SyncSurgery.patient_id_hash == pid)
+        .order_by(SyncSurgery.surgery_date.desc())
+        .all()
+    )
+    return [
+        {
+            "surgery_history_id": s.surgery_history_id,
+            "surgery_name":       s.surgery_name,
+            "surgery_date":       str(s.surgery_date) if s.surgery_date else None,
+        }
+        for s in surgeries
     ]
 
 
@@ -665,7 +913,7 @@ def get_prescriptions(
     current_user: dict     = Depends(get_current_user),
     db:           DbSession = Depends(get_read_db),
 ):
-    """본인 진단 코드 목록 조회 (처방전 내역 — diagnosis_code/ICD 코드만, 원문 미포함)."""
+    """본인 진단 코드 목록 조회 — diagnosis_code(ICD 코드)만, 원문 미포함 (SFR-037)."""
     pid = _require_patient(current_user)
 
     diagnoses = (

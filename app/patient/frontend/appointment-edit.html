@@ -21,8 +21,11 @@
         #errMsg { color:#e53935; font-size:13px; margin-top:8px; min-height:18px; }
     </style>
 </head>
-<body>
-<div class="edit-wrap">
+<body style="margin:0;">
+<div class="portal-layout">
+<aside class="portal-sidebar" id="portalSidebar"></aside>
+<main class="portal-content">
+<div class="edit-wrap" style="margin:0;max-width:480px;">
     <h2 style="margin-bottom:8px;">예약 일정 변경</h2>
     <p style="color:#78909c;font-size:14px;margin-bottom:24px;">대기 중인 예약의 날짜, 시간, 메모를 변경할 수 있습니다.</p>
 
@@ -119,7 +122,10 @@
         }
     }
 
+    renderSidebar('my-appointments.html');
     init();
 </script>
+</main>
+</div>
 </body>
 </html>

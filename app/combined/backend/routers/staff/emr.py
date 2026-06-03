@@ -13,19 +13,26 @@
 AWS RDS에 저장하지 않습니다.
 """
 
+import logging
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import date as date_type, datetime, timezone
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db
 from core.onprem_client import OnpremClient
 from core.security import get_client_ip, get_current_user
-from models.db import Appointment, AppointmentHistory, AppointmentStatus, Notification, Role, User
+from models.db import (
+    Appointment, AppointmentHistory, AppointmentStatus,
+    SyncDiagnosis, SyncEncounter, User,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/emr", tags=["emr"])
 
@@ -438,9 +445,194 @@ def my_encounters(
     )
 
 
+
+
 # ============================================================
-# SFR-018 — 의사 환자 검색 / EMR 조회 / Break-glass
+# SFR-018 — 의사 담당 환자 목록 (온프레미스 + AWS 다음예약일)
 # ============================================================
+
+@router.get("/doctor/patients")
+def doctor_list_patients(
+    request:      Request,
+    q:            Optional[str] = Query(default=None),
+    tab:          str           = Query(default="outpatient"),
+    sort:         str           = Query(default="patient_name"),
+    limit:        int           = Query(default=50, le=200),
+    offset:       int           = Query(default=0),
+    current_user: dict          = Depends(_require_roles("doctor")),
+    db:           DbSession     = Depends(get_db),
+):
+    onprem_sort = sort if sort in ("patient_name", "last_visit") else "patient_name"
+    data: Any = _client(current_user, request).get(
+        "/portal/doctor/patients",
+        q=q, tab=tab, sort=onprem_sort, limit=limit, offset=offset,
+    )
+    items = data.get("items", [])
+    if items:
+        hashes = [it["patient_id_hash"] for it in items if it.get("patient_id_hash")]
+        if hashes:
+            today = date_type.today()
+            next_appts = (
+                db.query(
+                    Appointment.patient_id_hash,
+                    func.min(Appointment.appointment_date).label("next_date"),
+                )
+                .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
+                .filter(
+                    Appointment.patient_id_hash.in_(hashes),
+                    Appointment.appointment_date >= today,
+                    AppointmentStatus.is_terminal == False,
+                )
+                .group_by(Appointment.patient_id_hash)
+                .all()
+            )
+            next_map = {h: str(d) for h, d in next_appts}
+            for it in items:
+                it["next_appt"] = next_map.get(it.get("patient_id_hash"))
+    if sort == "next_appt":
+        items.sort(key=lambda x: x.get("next_appt") or "9999-12-31")
+    data["items"] = items
+    return data
+
+
+# ============================================================
+# SFR-019 — 의사 진료 기록 작성
+# ============================================================
+
+class DoctorEncounterCreate(BaseModel):
+    patient_id:      str
+    department_code: str
+    chief_complaint: Optional[str] = None
+
+
+class SoapNoteCreate(BaseModel):
+    note_type: str
+    note_text: str
+
+
+class DoctorDiagnosisCreate(BaseModel):
+    diagnosis_code: str
+    diagnosis_text: str
+    is_primary:     bool = False
+
+
+class DoctorEncounterStatusUpdate(BaseModel):
+    status_code: str
+
+
+def _sync_encounter_to_aws(db: DbSession, enc_data: dict) -> None:
+    enc_id = enc_data.get("encounter_id")
+    if not enc_id:
+        return
+    try:
+        now = datetime.now(timezone.utc)
+        visit_date = None
+        if enc_data.get("visit_datetime"):
+            try:
+                visit_date = datetime.fromisoformat(enc_data["visit_datetime"]).date()
+            except Exception:
+                pass
+        doctor_uuid = None
+        if enc_data.get("doctor_id"):
+            try:
+                doctor_uuid = uuid.UUID(enc_data["doctor_id"])
+            except Exception:
+                pass
+        existing = db.query(SyncEncounter).filter(SyncEncounter.encounter_id == enc_id).first()
+        if existing:
+            existing.status_code = enc_data.get("status_code", existing.status_code)
+            existing.synced_at   = now
+        else:
+            db.add(SyncEncounter(
+                encounter_id    = enc_id,
+                patient_id_hash = enc_data.get("patient_id_hash"),
+                encounter_type  = enc_data.get("encounter_type"),
+                department_code = enc_data.get("department_code"),
+                doctor_id       = doctor_uuid,
+                visit_date      = visit_date,
+                status_code     = enc_data.get("status_code"),
+                created_at      = now,
+                synced_at       = now,
+            ))
+        for d in enc_data.get("diagnoses", []):
+            if not d.get("diagnosis_id") or not d.get("diagnosis_code"):
+                continue
+            if not db.query(SyncDiagnosis).filter(
+                SyncDiagnosis.diagnosis_id == d["diagnosis_id"]
+            ).first():
+                db.add(SyncDiagnosis(
+                    diagnosis_id    = d["diagnosis_id"],
+                    encounter_id    = enc_id,
+                    patient_id_hash = enc_data.get("patient_id_hash"),
+                    diagnosis_code  = d["diagnosis_code"],
+                    is_primary      = d.get("is_primary", False),
+                    diagnosed_at    = now,
+                    synced_at       = now,
+                ))
+        db.commit()
+    except Exception as exc:
+        logger.warning("AWS sync 실패 (encounter_id=%s): %s", enc_id, exc)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+@router.post("/doctor/encounters", status_code=201)
+def doctor_create_encounter(
+    body:         DoctorEncounterCreate,
+    request:      Request,
+    current_user: dict      = Depends(_require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
+):
+    result = _client(current_user, request).post(
+        "/portal/doctor/encounters", body.model_dump(exclude_none=True)
+    )
+    _sync_encounter_to_aws(db, result)
+    return result
+
+
+@router.post("/doctor/encounters/{encounter_id}/notes", status_code=201)
+def doctor_create_note(
+    encounter_id: str,
+    body:         SoapNoteCreate,
+    request:      Request,
+    current_user: dict = Depends(_require_roles("doctor")),
+):
+    return _client(current_user, request).post(
+        f"/portal/doctor/encounters/{encounter_id}/notes",
+        body.model_dump(),
+    )
+
+
+@router.post("/doctor/encounters/{encounter_id}/diagnoses", status_code=201)
+def doctor_create_diagnosis(
+    encounter_id: str,
+    body:         DoctorDiagnosisCreate,
+    request:      Request,
+    current_user: dict = Depends(_require_roles("doctor")),
+):
+    return _client(current_user, request).post(
+        f"/portal/doctor/encounters/{encounter_id}/diagnoses",
+        body.model_dump(),
+    )
+
+
+@router.patch("/doctor/encounters/{encounter_id}")
+def doctor_update_encounter(
+    encounter_id: str,
+    body:         DoctorEncounterStatusUpdate,
+    request:      Request,
+    current_user: dict      = Depends(_require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
+):
+    result = _client(current_user, request).patch(
+        f"/portal/doctor/encounters/{encounter_id}",
+        body.model_dump(),
+    )
+    _sync_encounter_to_aws(db, result)
+    return result
+
 
 @router.get("/doctor/patients/search")
 def doctor_search_patients(
@@ -448,7 +640,7 @@ def doctor_search_patients(
     q:            str  = Query(..., min_length=1),
     current_user: dict = Depends(_require_roles("doctor")),
 ):
-    """SFR-018 — 담당 환자 검색 (patient_name OR member_number)."""
+    """SFR-018 — 담당 환자 검색."""
     return _client(current_user, request).get("/portal/doctor/patients/search", q=q)
 
 
@@ -458,47 +650,19 @@ def doctor_get_emr(
     request:      Request,
     current_user: dict = Depends(_require_roles("doctor")),
 ):
-    """SFR-018 — 담당 환자 EMR 전체 조회 (온프레미스 → VPN 경유)."""
+    """SFR-018 — 담당 환자 EMR 전체 조회."""
     return _client(current_user, request).get(
         f"/portal/doctor/patients/{patient_id}/emr"
     )
 
 
-@router.post("/doctor/patients/{patient_id}/break-glass")
-def doctor_break_glass(
+@router.get("/doctor/patients/{patient_id}/encounters/latest")
+def doctor_get_latest_encounter(
     patient_id:   str,
     request:      Request,
-    current_user: dict      = Depends(_require_roles("doctor")),
-    db:           DbSession = Depends(get_db),
+    current_user: dict = Depends(_require_roles("doctor")),
 ):
-    """SFR-018 Break-glass — 비담당 환자 긴급 접근.
-    온프레미스 audit_logs BREAK_GLASS + AWS notifications 관리자 알림.
-    """
-    # 온프레미스: BREAK_GLASS 로그 + EMR 데이터 반환
-    emr_data = _client(current_user, request).post(
-        f"/portal/doctor/patients/{patient_id}/break-glass", body={}
+    return _client(current_user, request).get(
+        f"/portal/doctor/patients/{patient_id}/encounters/latest"
     )
 
-    # AWS: 활성 관리자 전원에게 알림 레코드 생성
-    now = datetime.now(timezone.utc)
-    admins = (
-        db.query(User)
-        .join(Role, User.role_id == Role.role_id)
-        .filter(Role.role_code == "admin", User.is_active == True)
-        .all()
-    )
-    for admin in admins:
-        db.add(Notification(
-            user_id       = admin.user_id,
-            channel       = "system",
-            status        = "pending",
-            error_message = (
-                f"[Break-glass] 의사 {current_user['sub']} 가 "
-                f"비담당 환자 {patient_id} 의 EMR에 긴급 접근했습니다. "
-                f"({now.strftime('%Y-%m-%d %H:%M UTC')})"
-            ),
-        ))
-    if admins:
-        db.commit()
-
-    return emr_data

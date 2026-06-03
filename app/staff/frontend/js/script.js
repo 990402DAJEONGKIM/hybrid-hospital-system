@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── 헤더 ────────────────────────────────────────────────
     window.addEventListener('scroll', () => {
-        header.classList.toggle('sass-header-scrolled', window.scrollY > 50);
+        if (header) header.classList.toggle('sass-header-scrolled', window.scrollY > 50);
     });
     const toggleMenu = () => {
         mobileMenu.classList.toggle('sass-active');
