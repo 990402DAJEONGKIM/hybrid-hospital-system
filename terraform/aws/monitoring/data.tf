@@ -50,6 +50,15 @@ data "aws_security_group" "wazuh" {
   }
 }
 
+# Wazuh Indexer 보안그룹 참조
+data "aws_security_group" "wazuh_indexer" {
+  filter {
+    name   = "tag:Name"
+    values = ["aws-wazuh-indexer-sg"]
+  }
+}
+
+
 
 # Wazuh Manager IP — TC-aws-wazuh output에서 참조
 data "terraform_remote_state" "wazuh" {

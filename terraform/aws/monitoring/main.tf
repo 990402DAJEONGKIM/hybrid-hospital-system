@@ -51,6 +51,19 @@ resource "aws_security_group_rule" "aws-wazuh-allow-node-exporter" {
   description              = "node exporter scrape from monitoring EC2"
 }
 
+
+# Wazuh Indexer에 node exporter 9100 허용 — monitoring EC2에서만
+resource "aws_security_group_rule" "aws-wazuh-indexer-allow-node-exporter" {
+  type                     = "ingress"
+  from_port                = 9100
+  to_port                  = 9100
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.aws-monitoring-sg.id
+  security_group_id        = data.aws_security_group.wazuh_indexer.id
+  description              = "node exporter scrape from monitoring EC2"
+}
+
+
 # ─────────────────────────────────────────────────────────
 # Prometheus + Grafana EC2
 # ─────────────────────────────────────────────────────────
