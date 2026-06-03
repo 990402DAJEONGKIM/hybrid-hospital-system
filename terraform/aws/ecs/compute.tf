@@ -76,6 +76,7 @@ resource "aws_launch_template" "ecs" {
     cluster_name    = aws_ecs_cluster.main.name
     wazuh_server_ip = var.wazuh_server_ip
     aws_region      = var.aws_region
+    monitoring_ip   = data.terraform_remote_state.monitoring.outputs.monitoring_private_ip
   }))
 
   tag_specifications {
