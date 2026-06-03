@@ -29,7 +29,8 @@
         .back-link:hover { text-decoration:underline; }
     </style>
 </head>
-<body style="background:#f5f7fa;min-height:100vh;">
+<body>
+<div id="page-content">
 <div class="page-wrap">
     <a class="back-link" href="/index.html"><i class="fas fa-arrow-left"></i> 대시보드</a>
     <h2 style="margin-bottom:6px;">내 진료 일정</h2>
@@ -56,8 +57,11 @@
     </table>
 </div>
 
+</div>
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/router.js"></script>
 <script>
     const STATUS_LBL = {
         pending: '대기', confirmed: '확정',
@@ -72,7 +76,7 @@
     let deptMap = {};
 
     async function init() {
-        const me = await requireLogin();
+        const me = await initLayout();
         if (!me) return;
 
         if (me.role !== 'doctor') {

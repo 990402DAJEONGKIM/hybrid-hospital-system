@@ -56,7 +56,8 @@
         }
     </style>
 </head>
-<body style="background:#f5f7fa;min-height:100vh;">
+<body>
+<div id="page-content">
 
 <div class="page-wrap">
     <div class="page-header">
@@ -144,12 +145,15 @@
     </div>
 </div>
 
+</div>
 <script src="/js/config.js"></script>
-<script src="/js/auth.js"></script>
+<script src="/js/auth.js">
+<script src="/js/layout.js"></script>
+<script src="/js/router.js"></script>
 <script src="/js/session-timer.js"></script>
 <script>
     (async () => {
-        const me = await requireLogin();
+        const me = await initLayout();
         if (!me) return;
         if (!['nurse', 'admin'].includes(me.role)) {
             alert('환자 등록 권한이 없습니다.');

@@ -1,24 +1,99 @@
-// by 김다정 — 역할 기반 페이지 라우팅 (웹 구조도 반영)
-// 로그인 성공 후 역할에 맞는 기본 페이지로 이동시킬 때 사용.
+// router.js — SPA 라우터
+// layout.js가 sidebar click 핸들러에서 loadPage()를 호출
 
-const ROLE_HOME = {
-    doctor: '/doctor-schedule.html',
-    nurse:  '/nurse-dashboard.html',
-    admin:  '/admin-users.html',
-};
+async function loadPage(url) {
+    const main = document.querySelector('.l-main');
+    if (!main) return;
 
-// 역할에 맞는 홈 페이지로 이동. index.html 대시보드에서 직접 링크 클릭 시에도 활용 가능.
-function routeByRole(role) {
-    const dest = ROLE_HOME[role] || '/index.html';
-    window.location.href = dest;
-}
+    main.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:#94a3b8;">
+            <div style="text-align:center;">
+                <i class="fas fa-spinner fa-spin" style="font-size:28px;margin-bottom:12px;display:block;"></i>
+                로딩 중...
+            </div>
+        </div>`;
 
-// 로그인 후 me 객체를 받아 즉시 라우팅.
-function routeAfterLogin(me) {
-    if (!me) return;
-    if (me.password_expired) {
-        window.location.href = '/change-password.html';
-        return;
+    try {
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const html = await res.text();
+        const doc  = new DOMParser().parseFromString(html, 'text/html');
+
+        // 이전 페이지에서 주입된 <style> 태그 제거
+        document.querySelectorAll('style[data-spa]').forEach(function(el) { el.remove(); });
+
+        // 현재 페이지의 <head style> 태그를 document.head 에 주입
+        // → 페이지 고유 CSS (.toolbar, .data-table, .form-card 등)가 SPA 전환 시에도 유지됨
+        doc.querySelectorAll('head style').forEach(function(s) {
+            var el = document.createElement('style');
+            el.textContent = s.textContent;
+            el.setAttribute('data-spa', '1');
+            document.head.appendChild(el);
+        });
+
+        const pc = doc.getElementById('page-content');
+        main.innerHTML = '<div id="page-content">' + (pc ? pc.innerHTML : '') + '</div>';
+
+        // 사이드바 active 상태 갱신
+        const pageName = url.startsWith('/') ? url : '/' + url.split('/').pop();
+        document.querySelectorAll('.sidebar-item').forEach(function(el) {
+            var href = el.getAttribute('href') || '';
+            el.classList.toggle('sidebar-item--active', href === pageName);
+        });
+
+        // 인라인 스크립트 실행
+        // - DOMContentLoaded → IIFE 변환 (index.html 전용 패턴)
+        // - initLayout() → 캐시된 me
+        // - 전체 스크립트를 IIFE로 감싸 const/let/function 전역 오염 방지
+        doc.querySelectorAll('body > script:not([src])').forEach(function(s) {
+            var code = s.textContent.trim();
+
+            code = code.replace(
+                /const\s+me\s*=\s*await\s+initLayout\(\);/,
+                'const me = window._cachedMe;'
+            );
+
+            // DOMContentLoaded 패턴이 있을 때만 변환 (없는 페이지에서 lastIndexOf가
+            // forEach/fetch 내부의 }); 를 잘못 교체하는 버그 방지)
+            var hasDCL = false;
+            code = code.replace(
+                /document\.addEventListener\(\s*['"]DOMContentLoaded['"]\s*,\s*async\s*\(\s*\)\s*=>\s*\{/,
+                function() { hasDCL = true; return '(async () => {'; }
+            );
+            if (hasDCL) {
+                var li = code.lastIndexOf('});');
+                if (li !== -1) code = code.slice(0, li) + '})();' + code.slice(li + 3);
+            }
+
+            // ── IIFE 래핑 ───────────────────────────────────────
+            // const/let 선언의 전역 오염을 막되,
+            // onclick="fn()" 형태의 이벤트 핸들러가 함수를 찾을 수 있도록
+            // 스크립트 내 모든 named function 선언을 window.* 에 노출한다.
+            var exposed = [];
+            var fnRe = /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+            var fm;
+            while ((fm = fnRe.exec(code)) !== null) {
+                if (exposed.indexOf(fm[1]) === -1) exposed.push(fm[1]);
+            }
+            var exposeCode = exposed.map(function(n) {
+                return 'if (typeof ' + n + ' === "function") window.' + n + ' = ' + n + ';';
+            }).join('\n');
+
+            code = '(() => {\n' + code + '\n' + exposeCode + '\n})();';
+
+            var el = document.createElement('script');
+            el.textContent = code;
+            document.body.appendChild(el);
+            document.body.removeChild(el);
+        });
+
+        history.pushState({ page: url }, '', url);
+
+    } catch (err) {
+        main.innerHTML = '<div style="padding:40px;text-align:center;color:#dc2626;"><i class="fas fa-exclamation-triangle" style="font-size:24px;margin-bottom:8px;display:block;"></i>페이지를 불러올 수 없습니다.</div>';
     }
-    routeByRole(me.role);
 }
+
+window.addEventListener('popstate', function(e) {
+    if (e.state && e.state.page) loadPage(e.state.page);
+});

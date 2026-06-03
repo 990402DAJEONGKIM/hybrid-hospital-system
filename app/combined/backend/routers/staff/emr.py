@@ -48,6 +48,7 @@ def _client(current_user: dict, request: Request) -> OnpremClient:
         user_id   = current_user["sub"],
         user_role = current_user.get("role", ""),
         source_ip = get_client_ip(request),
+        doctor_id = current_user.get("did"),   # 의사 계정이면 X-Doctor-Id 헤더로 전달
     )
 
 

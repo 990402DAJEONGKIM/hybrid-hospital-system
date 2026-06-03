@@ -29,7 +29,8 @@
         .isms-notice { background:#fff8e1; border:1px solid #f59e0b; border-radius:6px; padding:10px 16px; font-size:12px; color:#92400e; margin-bottom:18px; }
     </style>
 </head>
-<body style="background:#f5f7fa;min-height:100vh;">
+<body>
+<div id="page-content">
 <div class="page-wrap">
     <a class="back-link" href="/patient-search.html"><i class="fas fa-arrow-left"></i> 환자 검색으로 돌아가기</a>
     <h2 style="margin-bottom:4px;">진료 등록</h2>
@@ -92,14 +93,17 @@
     </div>
 </div>
 
+</div>
 <script src="/js/config.js"></script>
 <script src="/js/script.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/router.js"></script>
 <script>
     const params   = new URLSearchParams(window.location.search);
     const patientId = params.get('pid');
     // by 김다정 — pname URL 파라미터 제거, 백엔드 API로 마스킹된 정보 조회 (ISMS-P 하드스톱 수정)
     async function init() {
-        const me = await requireLogin();
+        const me = await initLayout();
         if (!me) return;
 
         if (!['nurse', 'admin'].includes(me.role)) {

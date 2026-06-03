@@ -84,272 +84,350 @@
         </nav>
     </div>
 
-    <main class="pt-40 pb-20 px-4 container mx-auto main-content">
-        <!-- 예약 스케줄 달력 섹션 -->
-        <section id="appointment-section" class="bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-3xl font-bold text-blue-900">예약 스케줄</h2>
-                <div class="flex items-center space-x-4">
-                    <button id="prevMonth" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-chevron-left"></i></button>
-                    <h3 id="currentMonthYear" class="text-xl font-semibold"></h3>
-                    <button id="nextMonth" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-chevron-right"></i></button>
-                </div>
-            </div>
+    <main class="main-content">
 
-            <div class="calendar-grid-container grid grid-cols-7 border-t border-l border-gray-100 rounded-xl overflow-hidden shadow-sm">
-                <div class="calendar-weekday is-sunday">일</div>
-                <div class="calendar-weekday">월</div>
-                <div class="calendar-weekday">화</div>
-                <div class="calendar-weekday">수</div>
-                <div class="calendar-weekday">목</div>
-                <div class="calendar-weekday">금</div>
-                <div class="calendar-weekday is-saturday">토</div>
-                <div id="calendar-grid" class="contents">
-                    <!-- JS에서 날짜가 동적으로 삽입됨 -->
+        <!-- ── 히어로 섹션 ───────────────────────────────── -->
+        <section id="appointment-section" style="
+            min-height:88vh;
+            background: linear-gradient(135deg, #e0f2fe 0%, #fef3c7 40%, #fce7f3 100%);
+            display:flex; align-items:center; justify-content:center;
+            padding: 120px 40px 60px;
+            position:relative; overflow:hidden;">
+
+            <!-- 배경 장식 원 -->
+            <div style="position:absolute;top:-80px;right:-80px;width:360px;height:360px;border-radius:50%;background:rgba(96,165,250,.12);pointer-events:none;"></div>
+            <div style="position:absolute;bottom:-60px;left:-60px;width:260px;height:260px;border-radius:50%;background:rgba(251,191,36,.12);pointer-events:none;"></div>
+            <div style="position:absolute;top:30%;left:10%;width:120px;height:120px;border-radius:50%;background:rgba(167,243,208,.18);pointer-events:none;"></div>
+
+            <div style="max-width:1100px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:40px;flex-wrap:wrap;">
+
+                <!-- 텍스트 영역 -->
+                <div style="flex:1;min-width:280px;">
+                    <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.7);border:1px solid #bfdbfe;border-radius:20px;padding:6px 16px;font-size:13px;color:#1d4ed8;font-weight:600;margin-bottom:24px;">
+                        <i class="fas fa-heart" style="color:#f87171;"></i> 당신의 건강이 우리의 사명입니다
+                    </div>
+                    <h1 style="font-size:clamp(2rem,4vw,3.2rem);font-weight:900;color:#0f172a;line-height:1.2;margin-bottom:20px;">
+                        건강한 내일을<br>
+                        <span style="background:linear-gradient(90deg,#2563eb,#0ea5e9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">함께 만들어갑니다</span>
+                    </h1>
+                    <p style="font-size:1.05rem;color:#475569;line-height:1.8;margin-bottom:32px;max-width:480px;">
+                        김이박 클리닉은 여러분의 소중한 건강을 지키기 위해<br>
+                        최고의 의료진과 첨단 장비로 정성껏 진료합니다.
+                    </p>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                        <button id="headerAppointmentBtn2" onclick="document.getElementById('headerAppointmentBtn')?.click()" style="
+                            background:linear-gradient(135deg,#2563eb,#0ea5e9);
+                            color:#fff;border:none;padding:14px 32px;
+                            border-radius:50px;font-size:15px;font-weight:700;
+                            cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,.35);
+                            transition:transform .2s,box-shadow .2s;"
+                            onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 32px rgba(37,99,235,.45)'"
+                            onmouseout="this.style.transform='';this.style.boxShadow='0 8px 24px rgba(37,99,235,.35)'">
+                            <i class="fas fa-calendar-check" style="margin-right:8px;"></i>진료 예약하기
+                        </button>
+                        <button onclick="document.getElementById('nav-hospital-intro')?.click()" style="
+                            background:rgba(255,255,255,.8);border:2px solid #bfdbfe;
+                            color:#1d4ed8;padding:14px 28px;border-radius:50px;
+                            font-size:15px;font-weight:700;cursor:pointer;transition:background .2s;"
+                            onmouseover="this.style.background='#fff'"
+                            onmouseout="this.style.background='rgba(255,255,255,.8)'">
+                            병원 소개 <i class="fas fa-arrow-right" style="margin-left:6px;font-size:12px;"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 일러스트 영역 -->
+                <div style="flex:1;min-width:260px;max-width:420px;display:flex;justify-content:center;">
+                    <div style="position:relative;width:340px;height:340px;">
+                        <!-- 중앙 큰 원 -->
+                        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+                                    width:220px;height:220px;border-radius:50%;
+                                    background:linear-gradient(135deg,#dbeafe,#e0f2fe);
+                                    box-shadow:0 16px 48px rgba(96,165,250,.25);
+                                    display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-hospital-alt" style="font-size:72px;color:#2563eb;opacity:.85;"></i>
+                        </div>
+                        <!-- 떠다니는 작은 뱃지들 -->
+                        <div style="position:absolute;top:20px;right:30px;
+                                    background:#fff;border-radius:16px;padding:10px 16px;
+                                    box-shadow:0 8px 24px rgba(0,0,0,.1);
+                                    display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#059669;
+                                    animation:float 3s ease-in-out infinite;">
+                            <i class="fas fa-user-md" style="color:#059669;"></i> 전문의 진료
+                        </div>
+                        <div style="position:absolute;bottom:40px;left:10px;
+                                    background:#fff;border-radius:16px;padding:10px 16px;
+                                    box-shadow:0 8px 24px rgba(0,0,0,.1);
+                                    display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#2563eb;
+                                    animation:float 3.5s ease-in-out infinite 0.5s;">
+                            <i class="fas fa-shield-alt" style="color:#2563eb;"></i> ISMS-P 인증
+                        </div>
+                        <div style="position:absolute;bottom:80px;right:0;
+                                    background:#fff;border-radius:16px;padding:10px 16px;
+                                    box-shadow:0 8px 24px rgba(0,0,0,.1);
+                                    display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#f59e0b;
+                                    animation:float 4s ease-in-out infinite 1s;">
+                            <i class="fas fa-star" style="color:#f59e0b;"></i> 환자 만족 1위
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- 환자 기본정보 관리 섹션 (새로운 페이지 역할) -->
-        <section id="patient-management-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-3xl font-bold text-blue-900">환자 정보 관리</h2>
-            </div>
-
-            <!-- 검색바 -->
-            <div class="mb-6 flex gap-2">
-                <input type="text" id="patientSearchInput" placeholder="이름 또는 연락처로 검색..." class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                <button id="patientSearchBtn" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700">검색</button>
-            </div>
-
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500">
-                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3">환자 식별자 (비식별)</th>
-                            <th class="px-4 py-3">출생연도</th>
-                            <th class="px-4 py-3">성별</th>
-                            <th class="px-4 py-3">마지막 방문일</th>
-                            <th class="px-4 py-3">상세</th>
-                        </tr>
-                    </thead>
-                    <tbody id="patientTableBody">
-                        <!-- JS에서 데이터가 삽입됨 -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- 개인정보 수정 섹션 -->
-        <section id="profile-edit-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-3xl font-bold text-blue-900">개인정보 수정</h2>
-            </div>
-            
-            <div class="max-w-lg mx-auto w-full space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">성함</label>
-                        <input type="text" id="profileName" readonly class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">생년월일</label>
-                        <input type="text" id="profileBirth" readonly class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">성별 코드</label>
-                        <input type="text" id="profileGender" readonly class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none">
-                    </div>
-                </div>
+        <!-- ── 통계 바 ────────────────────────────────────── -->
+        <section style="background:#0f172a;padding:32px 40px;">
+            <div style="max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:24px;text-align:center;">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">연락처 (수정 가능)</label>
-                    <input type="tel" id="profileContact" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    <div style="font-size:2rem;font-weight:900;color:#60a5fa;">20+</div>
+                    <div style="font-size:13px;color:#94a3b8;margin-top:4px;">년 진료 경력</div>
                 </div>
-                
-                <div class="pt-4">
-                    <button id="saveProfileBtn" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">수정사항 저장</button>
+                <div style="border-left:1px solid #1e293b;">
+                    <div style="font-size:2rem;font-weight:900;color:#34d399;">10+</div>
+                    <div style="font-size:13px;color:#94a3b8;margin-top:4px;">명의 전문의</div>
+                </div>
+                <div style="border-left:1px solid #1e293b;">
+                    <div style="font-size:2rem;font-weight:900;color:#f472b6;">50,000+</div>
+                    <div style="font-size:13px;color:#94a3b8;margin-top:4px;">누적 환자 수</div>
+                </div>
+                <div style="border-left:1px solid #1e293b;">
+                    <div style="font-size:2rem;font-weight:900;color:#fbbf24;">365</div>
+                    <div style="font-size:13px;color:#94a3b8;margin-top:4px;">일 응급 연락 가능</div>
                 </div>
             </div>
         </section>
 
-        <!-- 병원 소개 섹션 -->
-        <section id="hospital-intro-section" class="hidden bg-white rounded-2xl shadow-lg p-8 flex flex-col flex-grow">
-            <div class="mb-8 text-center">
-                <h2 class="text-3xl font-bold text-blue-900 mb-4">병원 소개</h2>
-                <p class="text-xl text-gray-700 font-medium">김이박 클리닉입니다.</p>
-            </div>
-            
-            <div class="max-w-4xl mx-auto w-full">
-                <h3 class="text-xl font-bold text-blue-800 mb-4"><i class="fas fa-history mr-2"></i>병원 연혁</h3>
-                <div class="overflow-x-auto border border-gray-100 rounded-xl shadow-sm">
-                    <table class="w-full text-sm text-left text-gray-500">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 w-1/4">연도</th>
-                                <th class="px-6 py-3">주요 연혁</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            <tr class="bg-white hover:bg-gray-50">
-                                <td class="px-6 py-4 font-bold text-gray-900">2020년</td>
-                                <td class="px-6 py-4">김이박 클리닉 개원</td>
-                            </tr>
-                            <tr class="bg-white hover:bg-gray-50">
-                                <td class="px-6 py-4 font-bold text-gray-900">2021년</td>
-                                <td class="px-6 py-4">보건복지부 지정 의료기관 획득</td>
-                            </tr>
-                            <tr class="bg-white hover:bg-gray-50">
-                                <td class="px-6 py-4 font-bold text-gray-900">2022년</td>
-                                <td class="px-6 py-4">최첨단 MRI 및 CT 장비 도입</td>
-                            </tr>
-                            <tr class="bg-white hover:bg-gray-50">
-                                <td class="px-6 py-4 font-bold text-gray-900">2024년</td>
-                                <td class="px-6 py-4">지역 거점 응급의료센터 선정</td>
-                            </tr>
-                        </tbody>
-                    </table>
+        <!-- ── 진료과목 섹션 ──────────────────────────────── -->
+        <section style="padding:72px 40px;background:#f8fafc;">
+            <div style="max-width:1100px;margin:0 auto;">
+                <div style="text-align:center;margin-bottom:48px;">
+                    <p style="color:#2563eb;font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">진료과목</p>
+                    <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:900;color:#0f172a;">최고의 전문의가 함께합니다</h2>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:20px;">
+                    <div class="dept-card" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 32px rgba(0,0,0,.1)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(0,0,0,.05)'">
+                        <div style="width:56px;height:56px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;"><i class="fas fa-heart" style="font-size:22px;color:#f87171;"></i></div>
+                        <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:4px;">심장내과</div>
+                        <div style="font-size:12px;color:#64748b;">심혈관 질환 전문</div>
+                    </div>
+                    <div class="dept-card" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 32px rgba(0,0,0,.1)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(0,0,0,.05)'">
+                        <div style="width:56px;height:56px;border-radius:50%;background:#f5f3ff;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;"><i class="fas fa-brain" style="font-size:22px;color:#a78bfa;"></i></div>
+                        <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:4px;">신경과</div>
+                        <div style="font-size:12px;color:#64748b;">신경계 질환 치료</div>
+                    </div>
+                    <div class="dept-card" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 32px rgba(0,0,0,.1)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(0,0,0,.05)'">
+                        <div style="width:56px;height:56px;border-radius:50%;background:#fff7ed;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;"><i class="fas fa-bone" style="font-size:22px;color:#fb923c;"></i></div>
+                        <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:4px;">정형외과</div>
+                        <div style="font-size:12px;color:#64748b;">근골격계 전문</div>
+                    </div>
+                    <div class="dept-card" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 32px rgba(0,0,0,.1)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(0,0,0,.05)'">
+                        <div style="width:56px;height:56px;border-radius:50%;background:#f0fdf4;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;"><i class="fas fa-lungs" style="font-size:22px;color:#34d399;"></i></div>
+                        <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:4px;">내과</div>
+                        <div style="font-size:12px;color:#64748b;">내과 질환 치료</div>
+                    </div>
+                    <div class="dept-card" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 32px rgba(0,0,0,.1)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(0,0,0,.05)'">
+                        <div style="width:56px;height:56px;border-radius:50%;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;"><i class="fas fa-child" style="font-size:22px;color:#60a5fa;"></i></div>
+                        <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:4px;">소아청소년과</div>
+                        <div style="font-size:12px;color:#64748b;">어린이 건강 케어</div>
+                    </div>
+                    <div class="dept-card" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 32px rgba(0,0,0,.1)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(0,0,0,.05)'">
+                        <div style="width:56px;height:56px;border-radius:50%;background:#fffbeb;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;"><i class="fas fa-eye" style="font-size:22px;color:#f59e0b;"></i></div>
+                        <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:4px;">외과</div>
+                        <div style="font-size:12px;color:#64748b;">수술 및 처치 전문</div>
+                    </div>
                 </div>
             </div>
         </section>
+
+        <!-- ── 특장점 섹션 ───────────────────────────────── -->
+        <section style="padding:72px 40px;background:#fff;">
+            <div style="max-width:1100px;margin:0 auto;">
+                <div style="text-align:center;margin-bottom:48px;">
+                    <p style="color:#2563eb;font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">왜 김이박 클리닉인가요?</p>
+                    <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:900;color:#0f172a;">환자 중심의 의료 서비스</h2>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px;">
+                    <div style="display:flex;gap:18px;padding:24px;border-radius:16px;background:#f8fafc;">
+                        <div style="width:48px;height:48px;border-radius:12px;background:#2563eb18;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-user-md" style="font-size:20px;color:#2563eb;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:6px;">경험 많은 전문의</div>
+                            <div style="font-size:13px;color:#64748b;line-height:1.6;">20년 이상 임상 경험을 보유한 각 과목별 전문의들이 직접 진료합니다.</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:18px;padding:24px;border-radius:16px;background:#f8fafc;">
+                        <div style="width:48px;height:48px;border-radius:12px;background:#05996918;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-microscope" style="font-size:20px;color:#059669;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:6px;">최첨단 진단 장비</div>
+                            <div style="font-size:13px;color:#64748b;line-height:1.6;">MRI, CT, 초음파 등 최신 의료 장비를 통해 정확하고 빠른 진단을 제공합니다.</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:18px;padding:24px;border-radius:16px;background:#f8fafc;">
+                        <div style="width:48px;height:48px;border-radius:12px;background:#7c3aed18;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-calendar-alt" style="font-size:20px;color:#7c3aed;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:6px;">편리한 온라인 예약</div>
+                            <div style="font-size:13px;color:#64748b;line-height:1.6;">24시간 언제든지 온라인으로 예약하고, 예약 확인·변경·취소를 편리하게 처리합니다.</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:18px;padding:24px;border-radius:16px;background:#f8fafc;">
+                        <div style="width:48px;height:48px;border-radius:12px;background:#dc262618;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-shield-alt" style="font-size:20px;color:#dc2626;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:6px;">개인정보 철저 보호</div>
+                            <div style="font-size:13px;color:#64748b;line-height:1.6;">ISMS-P 인증을 받은 보안 시스템으로 환자의 의료 정보를 안전하게 보호합니다.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── CTA 섹션 ──────────────────────────────────── -->
+        <section style="padding:72px 40px;background:linear-gradient(135deg,#1e40af,#0ea5e9);text-align:center;">
+            <div style="max-width:640px;margin:0 auto;">
+                <i class="fas fa-heartbeat" style="font-size:48px;color:rgba(255,255,255,.6);margin-bottom:20px;display:block;"></i>
+                <h2 style="font-size:clamp(1.6rem,3vw,2rem);font-weight:900;color:#fff;margin-bottom:16px;">지금 바로 예약하세요</h2>
+                <p style="color:rgba(255,255,255,.8);font-size:15px;line-height:1.7;margin-bottom:32px;">
+                    온라인 예약으로 대기 시간을 줄이고,<br>전문의에게 더 빠르게 진료받으세요.
+                </p>
+                <button onclick="document.getElementById('headerAppointmentBtn')?.click()" style="
+                    background:#fff;color:#1e40af;border:none;padding:14px 40px;
+                    border-radius:50px;font-size:16px;font-weight:800;cursor:pointer;
+                    box-shadow:0 8px 24px rgba(0,0,0,.2);transition:transform .2s;"
+                    onmouseover="this.style.transform='translateY(-2px)'"
+                    onmouseout="this.style.transform=''">
+                    <i class="fas fa-calendar-check" style="margin-right:8px;"></i>온라인 예약 바로가기
+                </button>
+            </div>
+        </section>
+
+        <!-- ── 푸터 ──────────────────────────────────────── -->
+        <footer style="background:#0f172a;padding:40px;text-align:center;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;">
+                <i class="fas fa-heartbeat" style="color:#60a5fa;font-size:18px;"></i>
+                <span style="font-weight:800;color:#f1f5f9;font-size:16px;">김이박 클리닉</span>
+            </div>
+            <p style="color:#475569;font-size:13px;margin-bottom:4px;">서울특별시 강남구 테헤란로 123 | 대표전화: 02-1234-5678</p>
+            <p style="color:#475569;font-size:13px;">진료시간: 평일 09:00 – 18:00 | 응급: 24시간</p>
+            <p style="color:#334155;font-size:12px;margin-top:16px;">© 2026 김이박 클리닉. All rights reserved.</p>
+        </footer>
+
     </main>
 
-    <!-- 예약 상세 내역 모달 -->
-    <div id="calendarModal" class="fixed inset-0 z-[2000] hidden items-center justify-center bg-black bg-opacity-50">
+    <!-- script.js 호환성용 숨김 요소 -->
+    <div style="display:none;">
+        <div id="calendar-grid"></div>
+        <div id="currentMonthYear"></div>
+        <button id="prevMonth"></button>
+        <button id="nextMonth"></button>
+        <section id="patient-management-section"></section>
+        <section id="profile-edit-section">
+            <input id="profileName"><input id="profileBirth"><input id="profileGender">
+            <input id="profileContact"><button id="saveProfileBtn"></button>
+        </section>
+        <section id="hospital-intro-section"></section>
+        <input id="patientSearchInput"><button id="patientSearchBtn"></button>
+        <tbody id="patientTableBody"></tbody>
+    </div>
+
+    <!-- 모달 (script.js에서 참조) -->
+    <div id="calendarModal"          class="fixed inset-0 z-[2000] hidden items-center justify-center bg-black bg-opacity-50">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 id="modalDateHeader" class="text-xl font-bold text-blue-900"></h3>
                 <button id="closeCalendarModal" class="text-2xl">&times;</button>
             </div>
-            <div id="modalAppointmentList" class="space-y-3 mb-6 max-h-60 overflow-y-auto">
-                <!-- 예약 내역이 여기에 표시됨 -->
-            </div>
-            <div class="flex justify-end">
-                <button id="modalConfirmBtn" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">닫기</button>
-            </div>
+            <div id="modalAppointmentList" class="space-y-3 mb-6 max-h-60 overflow-y-auto"></div>
+            <button id="modalConfirmBtn" class="w-full bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">닫기</button>
         </div>
     </div>
-
-    <!-- 나의 예약 관리 모달 -->
     <div id="manageAppointmentsModal" class="fixed inset-0 z-[2000] hidden items-center justify-center bg-black bg-opacity-50">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-blue-900">나의 예약 조회 및 변경</h3>
                 <button id="closeManageModal" class="text-2xl">&times;</button>
             </div>
-            <div id="myAppointmentList" class="space-y-4 mb-6 max-h-96 overflow-y-auto">
-                <!-- 예약 목록이 여기에 동적으로 생성됨 -->
-            </div>
-            <div class="text-right">
-                <button id="manageModalCloseBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-bold">닫기</button>
-            </div>
+            <div id="myAppointmentList" class="space-y-4 mb-6 max-h-96 overflow-y-auto"></div>
+            <button id="manageModalCloseBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-bold">닫기</button>
         </div>
     </div>
-
-    <!-- 예약 수정 모달 -->
-    <div id="editAppointmentModal" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
+    <div id="editAppointmentModal"   class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-blue-900">예약 수정</h3>
                 <button id="closeEditModal" class="text-2xl">&times;</button>
             </div>
             <div class="space-y-4 mb-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">예약 날짜</label>
-                    <input type="date" id="editAppDate" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">진료과 선택</label>
-                    <select id="editAppDept" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        <option value="ORTHO">정형외과</option>
-                        <option value="INTERNAL">내과</option>
-                        <option value="ANESTHESIA">마취통증의학과</option>
-                    </select>
-                </div>
+                <input type="date" id="editAppDate" class="w-full p-2 border border-gray-300 rounded-lg">
+                <select id="editAppDept" class="w-full p-2 border border-gray-300 rounded-lg">
+                    <option value="ORTHO">정형외과</option><option value="INTERNAL">내과</option>
+                </select>
             </div>
             <div class="flex space-x-3">
                 <button id="cancelEditBtn" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">취소</button>
-                <button id="saveEditBtn" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">저장</button>
+                <button id="saveEditBtn"   class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">저장</button>
             </div>
         </div>
     </div>
-
-    <!-- 신규 예약 등록 모달 -->
-    <div id="newAppointmentModal" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
+    <div id="newAppointmentModal"    class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-blue-900">신규 진료 예약</h3>
                 <button id="closeNewAppModal" class="text-2xl">&times;</button>
             </div>
             <div class="space-y-4 mb-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">예약 날짜</label>
-                    <input type="date" id="newAppDate" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">진료 시간</label>
-                    <select id="newAppTime" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="09:00">09:00</option>
-                        <option value="10:00">10:00</option>
-                        <option value="11:00">11:00</option>
-                        <option value="14:00">14:00</option>
-                        <option value="15:00">15:00</option>
-                        <option value="16:00">16:00</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">진료과 선택</label>
-                    <select id="newAppDept" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="ORTHO">정형외과</option>
-                        <option value="INTERNAL">내과</option>
-                        <option value="ANESTHESIA">마취통증의학과</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">기타 요청사항</label>
-                    <textarea id="newAppNote" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" rows="2" placeholder="증상을 간단히 적어주세요."></textarea>
-                </div>
+                <input type="date" id="newAppDate" class="w-full p-2 border border-gray-300 rounded-lg">
+                <select id="newAppTime" class="w-full p-2 border border-gray-300 rounded-lg">
+                    <option value="09:00">09:00</option><option value="10:00">10:00</option>
+                    <option value="14:00">14:00</option><option value="15:00">15:00</option>
+                </select>
+                <select id="newAppDept" class="w-full p-2 border border-gray-300 rounded-lg">
+                    <option value="ORTHO">정형외과</option><option value="INTERNAL">내과</option>
+                </select>
+                <textarea id="newAppNote" class="w-full p-2 border border-gray-300 rounded-lg" rows="2" placeholder="증상을 간단히 적어주세요."></textarea>
             </div>
             <div class="flex space-x-3">
                 <button id="cancelNewAppBtn" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">취소</button>
-                <button id="saveNewAppBtn" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700">예약 신청</button>
+                <button id="saveNewAppBtn"   class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">예약 신청</button>
             </div>
         </div>
     </div>
-
-    <!-- 환자 상세 정보 수정 모달 (리스트에서 관리 버튼 클릭 시 노출) -->
-    <div id="patientEditModal" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
+    <div id="patientEditModal"       class="fixed inset-0 z-[3000] hidden items-center justify-center bg-black bg-opacity-50">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-blue-900">환자 상세 정보 수정</h3>
                 <button id="closePatientEditModal" class="text-2xl">&times;</button>
             </div>
             <div class="space-y-4 mb-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">이름</label>
-                    <input type="text" id="patientName" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">나이</label>
-                    <input type="number" id="patientAge" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">주소</label>
-                    <input type="text" id="patientAddress" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">연락처</label>
-                    <input type="tel" id="patientContact" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">진단명 (비식별화)</label>
-                    <input type="text" id="patientDiagnosis" readonly class="w-full p-2 bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed outline-none">
-                </div>
+                <input type="text"   id="patientName"      class="w-full p-2 border border-gray-300 rounded-lg" placeholder="이름">
+                <input type="number" id="patientAge"       class="w-full p-2 border border-gray-300 rounded-lg" placeholder="나이">
+                <input type="text"   id="patientAddress"   class="w-full p-2 border border-gray-300 rounded-lg" placeholder="주소">
+                <input type="tel"    id="patientContact"   class="w-full p-2 border border-gray-300 rounded-lg" placeholder="연락처">
+                <input type="text"   id="patientDiagnosis" class="w-full p-2 bg-gray-100 border border-gray-300 rounded-lg" readonly>
             </div>
             <div class="flex space-x-3">
                 <button id="cancelPatientEditBtn" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">취소</button>
-                <button id="savePatientInfoBtn" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">저장</button>
+                <button id="savePatientInfoBtn"   class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">저장</button>
             </div>
         </div>
     </div>
+
+    <!-- 떠다니는 뱃지 애니메이션 -->
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50%       { transform: translateY(-10px); }
+        }
+        .main-content { padding-top: 0; }
+        .dept-card {
+            background:#fff; border-radius:16px; padding:24px; text-align:center;
+            box-shadow:0 2px 12px rgba(0,0,0,.05); cursor:pointer;
+            transition:transform .2s, box-shadow .2s;
+        }
+    </style>
 </body>
 </html>

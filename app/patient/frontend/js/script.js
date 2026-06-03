@@ -81,8 +81,41 @@ async function requireLogin() {
 // ── DOMContentLoaded ──────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
 
-    const me = await requireLogin();
-    if (!me) return;
+    // 소프트 인증: 미로그인 시 리다이렉트 대신 UI 분기
+    let me = null;
+    try {
+        const res = await fetch(`${BASE_URL}/auth/me`, {
+            credentials: 'include',
+            headers: { 'X-API-Key': API_KEY },
+        });
+        if (res && res.ok) {
+            const data = await res.json();
+            if (data.role === 'patient') me = data;
+        }
+    } catch {}
+
+    // 로그인 버튼 vs 사용자 정보 전환
+    const loginBtnWrap = document.getElementById('nav-login-btn-wrap');
+    const appointmentBtnWrap = document.getElementById('nav-appointment-btn-wrap');
+    if (me) {
+        if (loginBtnWrap)       loginBtnWrap.classList.add('hidden');
+        if (appointmentBtnWrap) appointmentBtnWrap.classList.remove('hidden');
+    } else {
+        if (loginBtnWrap)       loginBtnWrap.classList.remove('hidden');
+        if (appointmentBtnWrap) appointmentBtnWrap.classList.add('hidden');
+    }
+
+    // 미로그인 시: 랜딩 섹션만 표시하고 종료
+    if (!me) {
+        const landingSection = document.getElementById('landing-section');
+        const appointmentSection = document.getElementById('appointment-section');
+        if (landingSection)      landingSection.classList.remove('hidden');
+        if (appointmentSection)  appointmentSection.classList.add('hidden');
+        return;
+    }
+
+    // 비밀번호 만료 시 변경 페이지로
+    if (me.password_expired) { window.location.href = 'change-password.html'; return; }
 
     const header           = document.querySelector('.sass-header');
     const mobileMenuBtn    = document.getElementById('sassMobileMenuBtn');

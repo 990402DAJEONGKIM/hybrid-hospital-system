@@ -7,7 +7,206 @@
   --light: #eceff1;
   --white: #fff;
   --success: #4caf50;
+
+  /* 레이아웃 토큰 */
+  --header-h:   56px;
+  --sidebar-w:  260px;
+  --footer-h:   44px;
+  --sidebar-bg: #0f172a;
+  --sidebar-hover: #1e293b;
+  --sidebar-active: #1d4ed8;
 }
+
+/* ═══════════════════════════════════════════════════════
+   공통 레이아웃 (layout.js 가 주입하는 구조에 적용)
+   ═══════════════════════════════════════════════════════ */
+
+/* 전체 뷰포트 */
+html, body { height: 100%; margin: 0; padding: 0; }
+
+/* ── 헤더 ─────────────────────────────────────────────── */
+.l-header {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: #0f172a;
+  display: flex; align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.l-header__logo {
+  display: flex; align-items: center; gap: 8px;
+  color: #fff; font-weight: 800; font-size: 16px;
+  flex-shrink: 0;
+}
+.l-header__logo i { color: #6ee7b7; font-size: 20px; }
+.l-header__center { flex: 1; }
+.l-header__system {
+  font-size: 11px; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.l-header__right {
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+.l-user-info {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: #cbd5e1;
+}
+.l-user-info i { color: #94a3b8; }
+.l-user-info strong { color: #f1f5f9; }
+.l-role-badge {
+  font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px;
+}
+.l-logout-btn {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: #e2e8f0; font-size: 12px; font-weight: 600;
+  padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  transition: background .15s;
+}
+.l-logout-btn:hover { background: rgba(255,255,255,.2); }
+
+/* ── 본문 컨테이너 ────────────────────────────────────── */
+.l-body {
+  display: flex;
+  min-height: calc(100vh - var(--header-h) - var(--footer-h));
+  margin-top: var(--header-h);
+  margin-bottom: var(--footer-h);
+}
+
+/* ── 사이드바 ─────────────────────────────────────────── */
+.l-sidebar {
+  width: var(--sidebar-w);
+  background: var(--sidebar-bg);
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 16px 0;
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h) - var(--footer-h));
+}
+.l-sidebar__title {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: #475569;
+  padding: 0 16px 8px;
+  border-bottom: 1px solid #1e293b;
+  margin-bottom: 8px;
+}
+.l-sidebar__nav { display: flex; flex-direction: column; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  color: #94a3b8; text-decoration: none;
+  font-size: 13px; font-weight: 500;
+  transition: background .1s, color .1s;
+  border-left: 3px solid transparent;
+}
+.sidebar-item:hover {
+  background: var(--sidebar-hover); color: #e2e8f0;
+}
+.sidebar-item--active {
+  background: var(--sidebar-hover);
+  color: #fff; border-left-color: var(--sidebar-active);
+  font-weight: 700;
+}
+.sidebar-item i { width: 16px; text-align: center; font-size: 14px; flex-shrink: 0; }
+
+/* ── 사이드바 카드형 메뉴 아이템 ──────────────────────── */
+.sidebar-item--card {
+  align-items: flex-start;
+  padding: 10px 14px 10px 16px;
+}
+.sidebar-item--card i { margin-top: 2px; }
+.sidebar-item__texts {
+  display: flex; flex-direction: column; min-width: 0;
+}
+.sidebar-item__label {
+  font-size: 13px; font-weight: 600; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sidebar-item__desc {
+  font-size: 11px; color: #475569; line-height: 1.3; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sidebar-item:hover .sidebar-item__desc,
+.sidebar-item--active .sidebar-item__desc { color: #64748b; }
+
+/* ── 메인 콘텐츠 ──────────────────────────────────────── */
+.l-main {
+  flex: 1;
+  background: #f1f5f9;
+  overflow-y: auto;
+  padding: 28px;
+  min-width: 0;
+}
+
+/* ── 푸터 ─────────────────────────────────────────────── */
+.l-footer {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: var(--footer-h);
+  background: #0f172a;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  font-size: 11px; color: #475569;
+  z-index: 100;
+}
+
+/* page-wrap / portal-wrap 리셋: l-main 안에서는 상단 margin(고정 헤더용 80px)만 제거
+   - max-width 는 유지 (페이지 고유 폼 너비 보존)
+   - 좌우 padding 은 제거 (l-main의 padding:28px 이 대신 간격 제공)
+   - margin: auto (수평 중앙 정렬) 는 유지 */
+.l-main .page-wrap,
+.l-main .portal-wrap,
+.l-main #portalWrap {
+  margin-top: 0;
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+}
+
+/* ── 페이지 콘텐츠 공통 스타일 ────────────────────────── */
+.page-title {
+  font-size: 22px; font-weight: 800; color: #1e293b;
+  margin: 0 0 6px;
+}
+.page-sub {
+  font-size: 13px; color: #64748b; margin: 0 0 24px;
+}
+.card {
+  background: #fff; border-radius: 12px; padding: 24px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.06);
+  margin-bottom: 20px;
+}
+.card-title {
+  font-size: 15px; font-weight: 700; color: #1e293b;
+  margin-bottom: 16px;
+}
+.btn { border: none; cursor: pointer; border-radius: 8px; font-weight: 700; padding: 9px 18px; font-size: 13px; transition: opacity .15s; }
+.btn:hover { opacity: .85; }
+.btn-primary  { background: #1d4ed8; color: #fff; }
+.btn-secondary{ background: #e2e8f0; color: #374151; }
+.btn-danger   { background: #dc2626; color: #fff; }
+.form-label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: #374151; margin-bottom: 5px;
+}
+.form-control {
+  width: 100%; padding: 9px 12px;
+  border: 1px solid #d1d5db; border-radius: 8px;
+  font-size: 14px; outline: none; background: #f9fafb;
+  transition: border-color .15s, background .15s;
+  box-sizing: border-box;
+}
+.form-control:focus { border-color: #1d4ed8; background: #fff; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead tr { background: #f8fafc; }
+th { padding: 10px 12px; font-weight: 700; color: #374151; text-align: left; border-bottom: 2px solid #e2e8f0; }
+td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; color: #374151; }
+tr:hover td { background: #f8fafc; }
 
 body {
   font-family: "Poppins", sans-serif;
