@@ -151,7 +151,7 @@ resource "aws_iam_role_policy_attachment" "aws-monitoring-dlm-policy" {
 }
 
 resource "aws_dlm_lifecycle_policy" "aws-monitoring-snapshot" {
-  description        = "monitoring EC2 1시간마다 스냅샷 — 24개 보관"
+  description        = "monitoring EC2 snapshot every 1 hour - 24 count"
   execution_role_arn = aws_iam_role.aws-monitoring-dlm-role.arn
   state              = "ENABLED"
 
