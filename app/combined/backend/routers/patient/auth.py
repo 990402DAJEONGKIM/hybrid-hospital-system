@@ -13,10 +13,11 @@ from core.security import (
     COOKIE_SECURE,
     create_access_token, generate_refresh_token,
     get_client_ip, get_current_user, get_password_policy,
-    hash_password, record_audit, record_login_history,
-    sha256_hex, verify_password,
+    hash_password, sha256_hex,
+    verify_api_key, verify_password,
 )
-from models.db import LoginHistory, Session as SessionModel, User
+from core.ses import send_lockout_alert
+from models.db import AuditLog, LoginHistory, Role, Session as SessionModel, SyncPatient, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,12 +34,6 @@ class LoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
-
-class CreateUserRequest(BaseModel):
-    email:     str
-    password:  str
-    role:      str   # doctor / nurse / admin
-    doctor_id: str | None = None
 
 
 # ── 비밀번호 정책 검증 (ISMS-P 2.5.3) ──────────────────────
@@ -59,75 +54,91 @@ def validate_password(password: str) -> str | None:
     return None
 
 
+def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result: str, request: Request, patient_hash: str = None):
+    """감사 로그 기록 (ISMS-P 2.9.1)"""
+    log = AuditLog(
+        user_id=user_id,
+        patient_id_hash=patient_hash,
+        action_type=action,
+        source_ip=get_client_ip(request),
+        result_code=result
+    )
+    db.add(log)
+    db.commit()
+
+
 def _build_token_payload(user: User) -> dict:
     payload = {
-        "sub":                 str(user.user_id),
-        "role":                user.role,
-        "must_change_password": user.must_change_password,
+        "sub":  str(user.user_id),
+        "role": user.role_ref.role_code,   # role_code from roles table (ISMS-P 2.5.4)
     }
+    if user.patient_id_hash:
+        payload["pid"] = user.patient_id_hash
     if user.doctor_id:
         payload["did"] = str(user.doctor_id)
     return payload
 
 
-def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
-    response.set_cookie(
-        key="access_token", value=access_token,
-        httponly=True, secure=COOKIE_SECURE, samesite="strict",
-        max_age=ACCESS_TOKEN_EXPIRE_SECONDS, path="/",
-    )
-    response.set_cookie(
-        key="refresh_token", value=refresh_token,
-        httponly=True, secure=COOKIE_SECURE, samesite="strict",
-        max_age=REFRESH_TOKEN_EXPIRE_HOURS * 3600, path="/auth/refresh",
-    )
-
-
 # ── 엔드포인트 ──────────────────────────────────────────────
+
 
 @router.post("/login")
 def login(
     body:    LoginRequest,
     request: Request,
     db:      DbSession = Depends(get_db),
+    _:       str       = Depends(verify_api_key),
 ):
-    ip = get_client_ip(request)
-    ua = request.headers.get("user-agent")
+    # 로그인 시도 기록 준비 (ISMS-P 2.9.1)
+    history = LoginHistory(email=body.member_number, ip_address=get_client_ip(request), user_agent=request.headers.get("user-agent"))
 
     user = db.query(User).filter(User.member_number == body.member_number).first()
     if not user:
-        record_login_history(db, "fail", email=body.member_number, ip_address=ip, user_agent=ua)
+        history.result = "fail"
+        db.add(history)
         db.commit()
         raise HTTPException(status_code=401, detail="회원번호 또는 비밀번호가 올바르지 않습니다.")
 
     now = datetime.now(timezone.utc)
 
     if user.locked_until and user.locked_until > now:
-        record_login_history(db, "locked", email=body.member_number, user_id=user.user_id, ip_address=ip, user_agent=ua)
+        history.user_id = user.user_id
+        history.result = "locked"
+        db.add(history)
         db.commit()
         remaining = int((user.locked_until - now).total_seconds() / 60)
-        raise HTTPException(status_code=401, detail=f"계정이 잠겨 있습니다. {remaining}분 후 재시도하세요.")
-
-    if not user.is_active:
-        record_login_history(db, "fail", email=body.member_number, user_id=user.user_id, ip_address=ip, user_agent=ua)
-        db.commit()
-        raise HTTPException(status_code=401, detail="비활성화된 계정입니다. 관리자에게 문의하세요.")
+        raise HTTPException(
+            status_code=401,
+            detail=f"계정이 잠겨 있습니다. {remaining}분 후 재시도하세요.",
+        )
 
     if not verify_password(body.password, user.password_hash):
         policy = get_password_policy(db)
+        history.user_id = user.user_id
+        history.result = "fail"
         user.failed_login_cnt += 1
-        result = "fail"
         if user.failed_login_cnt >= policy.max_failed_logins:
             user.locked_until = now + timedelta(minutes=policy.lockout_minutes)
-            result = "locked"
-            record_audit(db, "ACCOUNT_LOCKED", "401", user_id=user.user_id, source_ip=ip)
-        record_login_history(db, result, email=body.member_number, user_id=user.user_id, ip_address=ip, user_agent=ua)
+            history.result = "locked"
+            _record_audit(db, user.user_id, "ACCOUNT_LOCKED", "401", request)
+            # 관리자 SES 알림 (실패해도 로그인 흐름에 영향 없음)
+            send_lockout_alert(
+                target_email = user.email,
+                ip_address   = get_client_ip(request),
+                locked_until = user.locked_until.isoformat(),
+            )
+        db.add(history)
         db.commit()
         raise HTTPException(status_code=401, detail="회원번호 또는 비밀번호가 올바르지 않습니다.")
 
+    # 성공 기록
     user.failed_login_cnt = 0
     user.locked_until     = None
     user.last_login_at    = now
+    history.user_id = user.user_id
+    history.result = "success"
+    db.add(history)
+    _record_audit(db, user.user_id, "LOGIN", "200", request)
 
     access_token  = create_access_token(_build_token_payload(user), ACCESS_TOKEN_EXPIRE_SECONDS)
     refresh_token = generate_refresh_token()
@@ -135,51 +146,55 @@ def login(
     db.add(SessionModel(
         user_id            = user.user_id,
         refresh_token_hash = sha256_hex(refresh_token),
-        user_agent         = ua,
-        ip_address         = ip,
+        user_agent         = request.headers.get("user-agent"),
+        ip_address         = get_client_ip(request),
         expires_at         = now + timedelta(hours=REFRESH_TOKEN_EXPIRE_HOURS),
     ))
-    record_login_history(db, "success", email=body.member_number, user_id=user.user_id, ip_address=ip, user_agent=ua)
-    record_audit(db, "LOGIN", "200", user_id=user.user_id, source_ip=ip)
     db.commit()
 
+    access_token_expires_at = (
+        now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)
+    ).isoformat()
+
     response = JSONResponse({
-        "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_SECONDS,
-        "expires_at": (now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)).isoformat(),
+        "token_type":              "bearer",
+        "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
+        "access_token_expires_at": access_token_expires_at,
     })
     _set_auth_cookies(response, access_token, refresh_token)
     return response
 
 
-@router.post("/logout", status_code=204)
-def logout(
-    request:  Request,
-    response: Response,
-    db:       DbSession = Depends(get_db),
-):
-    refresh_token = request.cookies.get("refresh_token")
-    if refresh_token:
-        session = db.query(SessionModel).filter(
-            SessionModel.refresh_token_hash == sha256_hex(refresh_token),
-        ).first()
-        if session:
-            session.is_revoked = True
-            record_audit(db, "LOGOUT", "204", user_id=session.user_id, source_ip=get_client_ip(request))
-            db.commit()
-
-    response.delete_cookie(key="access_token",  path="/")
-    response.delete_cookie(key="refresh_token", path="/auth/refresh")
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="strict",
+        max_age=ACCESS_TOKEN_EXPIRE_SECONDS,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="strict",
+        max_age=REFRESH_TOKEN_EXPIRE_HOURS * 3600,
+        path="/auth/refresh",
+    )
 
 
 @router.post("/refresh")
 def refresh(
     request: Request,
     db:      DbSession = Depends(get_db),
+    _:       str       = Depends(verify_api_key),
 ):
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
-        raise HTTPException(status_code=401, detail="유효하지 않은 세션입니다.")
+        raise HTTPException(status_code=401, detail="유효하지 않은 세션입니다. 다시 로그인하세요.")
 
     now        = datetime.now(timezone.utc)
     token_hash = sha256_hex(refresh_token)
@@ -188,6 +203,7 @@ def refresh(
         SessionModel.refresh_token_hash == token_hash,
     ).first()
 
+    # 만료·폐기된 토큰으로 재시도 → 탈취 의심, 해당 계정 전체 세션 폐기
     if not session or session.is_revoked or session.expires_at < now:
         if session and not session.is_revoked:
             db.query(SessionModel).filter(
@@ -197,7 +213,8 @@ def refresh(
         raise HTTPException(status_code=401, detail="유효하지 않은 세션입니다. 다시 로그인하세요.")
 
     user = db.query(User).filter(User.user_id == session.user_id).first()
-    session.is_revoked = True
+
+    session.is_revoked = True  # 기존 토큰 폐기 (Rotation)
 
     new_access_token  = create_access_token(_build_token_payload(user), ACCESS_TOKEN_EXPIRE_SECONDS)
     new_refresh_token = generate_refresh_token()
@@ -208,14 +225,40 @@ def refresh(
         expires_at         = now + timedelta(hours=REFRESH_TOKEN_EXPIRE_HOURS),
     ))
     db.commit()
+    _record_audit(db, user.user_id, "TOKEN_REFRESH", "200", request)
+
+    new_expires_at = (
+        now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)
+    ).isoformat()
 
     response = JSONResponse({
-        "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_SECONDS,
-        "expires_at": (now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)).isoformat(),
+        "token_type":              "bearer",
+        "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
+        "access_token_expires_at": new_expires_at,
     })
     _set_auth_cookies(response, new_access_token, new_refresh_token)
     return response
+
+
+@router.post("/logout", status_code=204)
+def logout(
+    request: Request,
+    response: Response,
+    db:       DbSession = Depends(get_db),
+    _:        str       = Depends(verify_api_key),
+):
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token:
+        session = db.query(SessionModel).filter(
+            SessionModel.refresh_token_hash == sha256_hex(refresh_token),
+        ).first()
+        if session:
+            session.is_revoked = True
+            _record_audit(db, session.user_id, "LOGOUT", "204", request)
+            db.commit()
+
+    response.delete_cookie(key="access_token",  path="/")
+    response.delete_cookie(key="refresh_token", path="/auth/refresh")
 
 
 @router.get("/me")
@@ -237,13 +280,12 @@ def me(
     result = {
         "user_id":              str(user.user_id),
         "member_number":        user.member_number,
-        "email":                user.email,
-        "role":                 user.role,
+        "role":                 user.role_ref.role_code,
         "password_expired":     password_expired,
-        "must_change_password": user.must_change_password,
+        "password_expire_days": policy.expire_days,
     }
-    if user.doctor_id:
-        result["doctor_id"] = str(user.doctor_id)
+    if user.patient_id_hash:
+        result["patient_id_hash"] = user.patient_id_hash
     return result
 
 
@@ -264,55 +306,34 @@ def change_password(
     if pw_error:
         raise HTTPException(status_code=400, detail=pw_error)
 
-    user.password_hash        = hash_password(body.new_password)
-    user.password_changed_at  = datetime.now(timezone.utc)
-    user.must_change_password = False
+    user.password_hash       = hash_password(body.new_password)
+    user.password_changed_at = datetime.now(timezone.utc)
 
+    # 비밀번호 변경 시 기존 세션 전체 폐기 (탈취된 토큰 무력화)
     db.query(SessionModel).filter(
         SessionModel.user_id    == user.user_id,
         SessionModel.is_revoked == False,
     ).update({"is_revoked": True})
 
-    record_audit(db, "PASSWORD_CHANGE", "204", user_id=user.user_id, source_ip=get_client_ip(request))
+    _record_audit(db, user.user_id, "PASSWORD_CHANGE", "204", request)
     db.commit()
 
     response.delete_cookie(key="access_token",  path="/")
     response.delete_cookie(key="refresh_token", path="/auth/refresh")
 
 
-@router.get("/me/menus")
-def get_menus(current_user: dict = Depends(get_current_user)):
-    """역할별 메뉴 목록."""
-    _MENUS = {
-        "doctor": [
-            {"menu_code": "MY_PATIENTS",    "menu_name": "내 환자 목록",    "menu_url": "/my-patients.html",     "icon": "user-injured"},
-            {"menu_code": "PATIENT_SEARCH", "menu_name": "환자 검색",       "menu_url": "/patient-search.html",  "icon": "search"},
-            {"menu_code": "CHANGE_PW",      "menu_name": "비밀번호 변경",   "menu_url": "/change-password.html", "icon": "key"},
-        ],
-        "nurse": [
-            {"menu_code": "PATIENT_REGISTER", "menu_name": "환자 등록",       "menu_url": "/patient-register.html", "icon": "user-plus"},
-            {"menu_code": "PATIENT_SEARCH",   "menu_name": "환자 검색/조회",  "menu_url": "/patient-search.html",  "icon": "search"},
-            {"menu_code": "ENCOUNTER_NEW",    "menu_name": "진료 등록",        "menu_url": "/encounter-new.html",   "icon": "plus-circle"},
-            {"menu_code": "WARD_STATUS",      "menu_name": "병동 현황",        "menu_url": "/ward-status.html",     "icon": "hospital"},
-            {"menu_code": "CHANGE_PW",        "menu_name": "비밀번호 변경",   "menu_url": "/change-password.html", "icon": "key"},
-        ],
-        "admin": [
-            {"menu_code": "PATIENT_REGISTER", "menu_name": "환자 등록",       "menu_url": "/patient-register.html",    "icon": "user-plus"},
-            {"menu_code": "ADMIN_USERS",      "menu_name": "사용자 관리",     "menu_url": "/admin-users.html",         "icon": "users"},
-            {"menu_code": "ADMIN_LOGS",       "menu_name": "감사 로그",        "menu_url": "/admin-logs.html",          "icon": "clipboard-list"},
-            {"menu_code": "ADMIN_LOGIN",      "menu_name": "로그인 이력",      "menu_url": "/admin-login-history.html", "icon": "history"},
-            {"menu_code": "CHANGE_PW",        "menu_name": "비밀번호 변경",   "menu_url": "/change-password.html",     "icon": "key"},
-        ],
-    }
-    return _MENUS.get(current_user.get("role"), [])
-
-
 @router.get("/session-status")
-def session_status(current_user: dict = Depends(get_current_user)):
+def session_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """액세스 토큰 잔여 시간 반환. 프론트엔드 만료 경고 타이머용."""
     exp = current_user.get("exp")
     if not exp:
-        return {"remaining_seconds": 0, "will_expire_soon": True}
-    remaining = max(0, int(exp - datetime.now(timezone.utc).timestamp()))
+        return {"remaining_seconds": 0, "will_expire_soon": True, "expires_at": None}
+
+    now_ts    = datetime.now(timezone.utc).timestamp()
+    remaining = max(0, int(exp - now_ts))
+
     return {
         "remaining_seconds": remaining,
         "will_expire_soon":  remaining < 300,

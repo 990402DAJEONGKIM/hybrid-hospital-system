@@ -55,8 +55,49 @@
         <div id="appointments" class="appointments"></div>
       </section>
     </section>
+
+    <!-- 긴급 공지 (SFR-009) — 인증 없이 상단 표시 -->
+    <section id="noticePanel" class="panel notice-panel hidden">
+      <h2>📢 긴급 공지</h2>
+      <ul id="noticeList" class="notice-list"></ul>
+    </section>
   </main>
 
+  <style>
+    .notice-panel { border-left: 4px solid #e53e3e; background: #fff5f5; }
+    .notice-list  { list-style: none; padding: 0; margin: 0; }
+    .notice-list li { padding: 0.75rem 0; border-bottom: 1px solid #fed7d7; }
+    .notice-list li:last-child { border-bottom: none; }
+    .notice-list .notice-title   { font-weight: 700; color: #c53030; }
+    .notice-list .notice-content { margin-top: 0.25rem; color: #2d3748; }
+    .notice-list .notice-date    { font-size: 0.75rem; color: #718096; margin-top: 0.25rem; }
+  </style>
+
+  <script>
+    // 긴급 공지 로드 (인증 불필요)
+    (async function loadNotices() {
+      try {
+        const res = await fetch('/notices');
+        if (!res.ok) return;
+        const notices = await res.json();
+        if (!notices.length) return;
+        const panel = document.getElementById('noticePanel');
+        const list  = document.getElementById('noticeList');
+        list.innerHTML = notices.map(n => `
+          <li>
+            <div class="notice-title">${escapeHtml(n.title)}</div>
+            <div class="notice-content">${escapeHtml(n.content)}</div>
+            <div class="notice-date">${new Date(n.created_at).toLocaleString('ko-KR')}</div>
+          </li>
+        `).join('');
+        panel.classList.remove('hidden');
+      } catch (_) {}
+    })();
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
   <script src="/js/app.js"></script>
 </body>
 </html>

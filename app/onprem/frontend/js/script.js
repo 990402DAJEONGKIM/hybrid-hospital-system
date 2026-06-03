@@ -71,7 +71,7 @@ async function requireLogin() {
     if (!res || !res.ok) { window.location.href = '/login.html'; return null; }
     const me = await res.json();
     if (!['doctor', 'nurse', 'admin'].includes(me.role)) { window.location.href = '/login.html'; return null; }
-    if (me.password_expired) { window.location.href = '/change-password.html'; return null; }
+    if (me.password_expired || me.must_change_password) { window.location.href = '/change-password.html'; return null; }
     return me;
 }
 
@@ -89,7 +89,8 @@ async function renderSidebar(me) {
         'plus-circle': 'fa-plus-circle', 'hospital': 'fa-hospital',
         'users': 'fa-users', 'clipboard-list': 'fa-clipboard-list',
         'history': 'fa-history', 'key': 'fa-key', 'circle': 'fa-circle',
-        'stethoscope': 'fa-stethoscope',
+        'stethoscope': 'fa-stethoscope', 'user-plus': 'fa-user-plus',
+        'user-clock': 'fa-user-clock',
     };
 
     const currentPage = window.location.pathname.split('/').pop();
@@ -111,7 +112,7 @@ async function initPage() {
     const userInfo = document.getElementById('user-info');
     if (userInfo) {
         const ROLE_LABEL = { doctor: '의사', nurse: '원무과', admin: '관리자' };
-        userInfo.textContent = `${ROLE_LABEL[me.role] || me.role} · ${me.email}`;
+        userInfo.textContent = `${ROLE_LABEL[me.role] || me.role} · ${me.member_number}`;
     }
 
     const logoutBtn = document.getElementById('logoutBtn');

@@ -2,11 +2,9 @@
 // 로그인 성공 후 역할에 맞는 기본 페이지로 이동시킬 때 사용.
 
 const ROLE_HOME = {
-    doctor:   '/doctor-schedule.html',
-    nurse:    '/nurse-dashboard.html',
-    admin:    '/admin-users.html',
-    staff_op: '/staff_op/reception.html',  // by 김다정 — 원무과 기본 랜딩 페이지
-    manager:  '/manager/stats.html',        // by 김다정 — 운영관리자 기본 랜딩 페이지
+    doctor: '/doctor-schedule.html',
+    nurse:  '/nurse-dashboard.html',
+    admin:  '/admin-users.html',
 };
 
 // 역할에 맞는 홈 페이지로 이동. index.html 대시보드에서 직접 링크 클릭 시에도 활용 가능.
