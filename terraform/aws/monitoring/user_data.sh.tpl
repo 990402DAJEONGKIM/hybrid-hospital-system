@@ -84,6 +84,13 @@ scrape_configs:
       - targets: ['${wazuh_indexer_ip}:9100']
         labels:
           instance: 'wazuh-indexer-01'
+
+  # GCP RDS Proxy
+  - job_name: 'gcp-haproxy'
+    static_configs:
+      - targets: ['${gcp_proxy_ip}:9100']
+        labels:
+          instance: 'gcp-rds-proxy-01'
 PROMEOF
 
 chown prometheus:prometheus /etc/prometheus/prometheus.yml

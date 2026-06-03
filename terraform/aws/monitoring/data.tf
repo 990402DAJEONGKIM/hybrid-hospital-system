@@ -76,6 +76,15 @@ data "terraform_remote_state" "kms" {
   }
 }
 
+# GCP HAProxy IP — TC-gcp-proxy output에서 참조
+data "terraform_remote_state" "gcp_proxy" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-gcp-proxy" }
+  }
+}
+
 
 
 
