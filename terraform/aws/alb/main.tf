@@ -207,11 +207,6 @@ resource "aws_lb_target_group" "aws-grafana-tg" {
   tags = { Name = "aws-grafana-tg" }
 }
 
-resource "aws_lb_target_group_attachment" "aws-grafana-tg" {
-  target_group_arn = aws_lb_target_group.aws-grafana-tg.arn
-  target_id        = data.terraform_remote_state.monitoring.outputs.monitoring_instance_id
-  port             = 3000
-}
 
 
 
