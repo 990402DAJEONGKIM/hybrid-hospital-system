@@ -102,7 +102,6 @@ class User(Base):
 
     role_ref      = relationship("Role",         back_populates="users")
     sessions      = relationship("Session",      back_populates="user")
-    mfa           = relationship("UserMfa",      back_populates="user", uselist=False)
     login_history = relationship("LoginHistory", back_populates="user")
 
 
@@ -120,20 +119,6 @@ class Session(Base):
     is_revoked         = Column(Boolean, nullable=False, default=False)
 
     user = relationship("User", back_populates="sessions")
-
-
-class UserMfa(Base):
-    __tablename__ = "user_mfa"
-
-    mfa_id      = Column(Uuid,       primary_key=True, default=uuid.uuid4)
-    user_id     = Column(Uuid,       ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    mfa_type    = Column(String(10), nullable=False, default="totp")
-    secret      = Column(String(64), nullable=False)
-    is_active   = Column(Boolean,    nullable=False, default=False)
-    created_at  = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    verified_at = Column(DateTime(timezone=True))
-
-    user = relationship("User", back_populates="mfa")
 
 
 class PasswordPolicy(Base):

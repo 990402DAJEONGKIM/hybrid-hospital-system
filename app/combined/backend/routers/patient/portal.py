@@ -566,7 +566,7 @@ def update_my_profile(
     current_user: dict     = Depends(get_current_user),
     db:           DbSession = Depends(get_db),
 ):
-    """이메일(로그인 아이디) 변경."""
+    """이메일 변경."""
     user = db.query(User).filter(User.user_id == current_user["sub"]).first()
 
     if db.query(User).filter(

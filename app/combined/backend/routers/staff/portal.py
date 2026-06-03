@@ -181,7 +181,7 @@ def get_doctor_schedule(
     current_user: dict     = Depends(get_current_user),
     db:           DbSession = Depends(get_read_db),
 ):
-    """의사 본인의 예약 일정 조회."""
+    """의사 본인의 예약 일정 조회 (레거시 — /appointments/today 사용 권장)."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
 
     doctor_id = current_user.get("did")
@@ -195,6 +195,93 @@ def get_doctor_schedule(
         .all()
     )
     return [_appt_out(a) for a in appts]
+
+
+@router.get("/appointments/today")
+def get_doctor_appointments_today(
+    request:      Request,
+    mode:         str           = Query(default="today", description="today | week"),
+    status_code:  Optional[str] = Query(default=None),
+    current_user: dict          = Depends(get_current_user),
+    db:           DbSession     = Depends(get_db),
+):
+    """SFR-017 — AWS RDS appointments 기반 당일(또는 향후 7일) 진료 목록.
+
+    - 환자 실명 없음 (patient_id_hash만 반환)
+    - department_name, type_name, status_name, is_terminal 포함
+    - appointment_time 오름차순 정렬
+    - 조회 행위를 audit_logs에 SCHEDULE_VIEW로 기록
+    """
+    from datetime import timedelta
+    _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
+
+    doctor_id = current_user.get("did")
+    if not doctor_id:
+        raise HTTPException(status_code=400, detail="의사 정보가 연결되지 않은 계정입니다.")
+
+    today = date_type.today()
+    if mode == "week":
+        date_from = today + timedelta(days=1)
+        date_to   = today + timedelta(days=7)
+    else:
+        date_from = today
+        date_to   = today
+
+    query = (
+        db.query(Appointment)
+        .filter(
+            Appointment.doctor_id        == str(doctor_id),
+            Appointment.appointment_date >= date_from,
+            Appointment.appointment_date <= date_to,
+        )
+    )
+    if status_code:
+        query = query.join(AppointmentStatus).filter(
+            AppointmentStatus.status_code == status_code
+        )
+
+    appts = query.order_by(
+        Appointment.appointment_date.asc(),
+        Appointment.appointment_time.asc(),
+    ).all()
+
+    # 진료과 이름 매핑 (RDS sync_departments)
+    dept_codes = {a.department_code for a in appts if a.department_code}
+    dept_map   = {}
+    if dept_codes:
+        depts = db.query(SyncDepartment).filter(
+            SyncDepartment.department_code.in_(dept_codes)
+        ).all()
+        dept_map = {d.department_code: d.department_name for d in depts}
+
+    # 감사 로그 기록 (SFR-017)
+    db.add(AuditLog(
+        user_id     = uuid.UUID(current_user["sub"]),
+        action_type = "SCHEDULE_VIEW",
+        result_code = "200",
+        source_ip   = request.client.host if request.client else None,
+    ))
+    db.commit()
+
+    result = []
+    for a in appts:
+        s = a.appt_status
+        t = a.appt_type
+        result.append({
+            "appointment_id":   str(a.appointment_id),
+            "patient_id_hash":  a.patient_id_hash,
+            "appointment_date": str(a.appointment_date),
+            "appointment_time": a.appointment_time.strftime("%H:%M") if a.appointment_time else None,
+            "type_code":        t.type_code   if t else None,
+            "type_name":        t.type_name   if t else None,
+            "department_code":  a.department_code,
+            "department_name":  dept_map.get(a.department_code, a.department_code),
+            "status_code":      s.status_code if s else None,
+            "status_name":      s.status_name if s else None,
+            "is_terminal":      s.is_terminal if s else False,
+            "notes":            a.notes,
+        })
+    return result
 
 
 @router.get("/patients")

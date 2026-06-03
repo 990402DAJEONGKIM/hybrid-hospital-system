@@ -1,5 +1,5 @@
 import uuid as _uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session as DbSession
 from core.database import get_db
 from core.security import get_current_user, hash_password, verify_api_key
 from routers.staff.auth import validate_password
-from models.db import AuditLog, LoginHistory, Menu, PasswordPolicy, Permission, Role, RoleMenu, RolePermission, User
+from models.db import (
+    AuditLog, Appointment, LoginHistory, Menu, Notification,
+    PasswordPolicy, Permission, Role, RoleMenu, RolePermission, User,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -489,3 +492,106 @@ def set_role_menus(
 
     db.commit()
     return {"message": f"역할 '{role.role_name}'의 메뉴가 업데이트되었습니다."}
+
+
+# ── 운영자 통합 대시보드 (SFR-012) ────────────────────────────────
+
+@router.get("/dashboard")
+def get_dashboard(
+    db:           DbSession = Depends(get_db),
+    _:            str       = Depends(verify_api_key),
+    current_user: dict      = Depends(require_admin),
+):
+    """운영자 통합 대시보드 — 예약·보안·알림·온프레미스 상태 요약."""
+    now   = datetime.now(timezone.utc)
+    today = now.date()
+    ago24 = now - timedelta(hours=24)
+
+    # ── 예약 현황 ─────────────────────────────────────────────
+    appts_today = db.query(Appointment).filter(
+        Appointment.appointment_date == today
+    ).all()
+    appt_by_status: dict = {}
+    for a in appts_today:
+        code = a.status_code or "unknown"
+        appt_by_status[code] = appt_by_status.get(code, 0) + 1
+
+    # ── 보안 이벤트 ───────────────────────────────────────────
+    login_failures_24h = db.query(LoginHistory).filter(
+        LoginHistory.result.in_(["fail", "locked"]),
+        LoginHistory.event_at >= ago24,
+    ).count()
+
+    locked_accounts = db.query(User).filter(
+        User.locked_until > now,
+        User.is_active == True,
+    ).count()
+
+    audit_24h = db.query(AuditLog).filter(
+        AuditLog.event_at >= ago24,
+    ).count()
+
+    recent_events = db.query(AuditLog).order_by(
+        AuditLog.event_at.desc()
+    ).limit(10).all()
+
+    # ── 알림 현황 ─────────────────────────────────────────────
+    notif_sent   = db.query(Notification).filter(
+        Notification.status == "sent",
+        Notification.sent_at >= ago24,
+    ).count()
+    notif_failed = db.query(Notification).filter(
+        Notification.status == "failed",
+        Notification.sent_at >= ago24,
+    ).count()
+
+    notif_by_channel: dict = {}
+    for n in db.query(Notification).filter(Notification.sent_at >= ago24).all():
+        key = f"{n.channel}_{n.status}"
+        notif_by_channel[key] = notif_by_channel.get(key, 0) + 1
+
+    # ── 온프레미스 연결 상태 ──────────────────────────────────
+    onprem_status = "unknown"
+    onprem_detail = ""
+    try:
+        import os, httpx
+        base = os.getenv("ONPREM_API_URL", "").rstrip("/")
+        if base:
+            r = httpx.get(f"{base}/health", timeout=3.0)
+            onprem_status = "ok" if r.status_code == 200 else "degraded"
+        else:
+            onprem_status = "not_configured"
+    except Exception as e:
+        onprem_status = "error"
+        onprem_detail = str(e)[:80]
+
+    return {
+        "generated_at": now.isoformat(),
+        "appointments": {
+            "today_total": len(appts_today),
+            "by_status":   appt_by_status,
+        },
+        "security": {
+            "login_failures_24h": login_failures_24h,
+            "locked_accounts":    locked_accounts,
+            "audit_actions_24h":  audit_24h,
+        },
+        "notifications": {
+            "sent_24h":    notif_sent,
+            "failed_24h":  notif_failed,
+            "by_channel":  notif_by_channel,
+        },
+        "system": {
+            "onprem_api":  onprem_status,
+            "onprem_detail": onprem_detail,
+            "combined_api": "ok",
+        },
+        "recent_events": [
+            {
+                "action_type": e.action_type,
+                "result_code": e.result_code,
+                "event_at":    e.event_at.isoformat() if e.event_at else None,
+            }
+            for e in recent_events
+        ],
+    }

@@ -23,6 +23,7 @@ const _SHORTCUTS = {
         { url:'/encounter-new.html',    icon:'notes-medical', color:'#f59e0b', label:'진료 기록',    desc:'진료 내용·처방 입력' },
     ],
     admin: [
+        { url:'/admin-dashboard.html',     icon:'tachometer-alt', color:'#1d4ed8', label:'운영 대시보드',  desc:'예약·보안·알림·시스템 현황' },
         { url:'/admin-users.html',         icon:'users',          color:'#0ea5e9', label:'사용자 관리',   desc:'계정 생성·수정·잠금·삭제' },
         { url:'/admin-roles.html',         icon:'shield-alt',     color:'#10b981', label:'역할/권한 관리', desc:'역할 추가 및 권한 할당' },
         { url:'/admin-policy.html',        icon:'lock',           color:'#6366f1', label:'보안 정책',     desc:'비밀번호 복잡도·만료 설정' },

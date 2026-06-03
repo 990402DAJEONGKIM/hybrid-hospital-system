@@ -100,16 +100,6 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id    ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 
-CREATE TABLE IF NOT EXISTS user_mfa (
-    mfa_id      UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID         NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    mfa_type    VARCHAR(10)  NOT NULL DEFAULT 'totp',
-    secret      VARCHAR(64)  NOT NULL,
-    is_active   BOOLEAN      NOT NULL DEFAULT FALSE,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    verified_at TIMESTAMPTZ
-);
-
 CREATE TABLE IF NOT EXISTS password_policy (
     policy_id         SERIAL       PRIMARY KEY,
     min_length        INTEGER      NOT NULL DEFAULT 8,
@@ -392,7 +382,7 @@ END $$;
 -- =============================================================
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON roles, permissions, role_permissions, menus, role_menus TO api_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON users, sessions, user_mfa, login_history, password_policy TO api_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON users, sessions, login_history, password_policy TO api_user;
 GRANT SELECT, INSERT, UPDATE         ON appointment_types, appointments, appointment_history       TO api_user;
 GRANT SELECT                         ON appointment_statuses                                       TO api_user;
 GRANT SELECT, INSERT, UPDATE         ON notifications, notification_types                         TO api_user;

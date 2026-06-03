@@ -52,6 +52,11 @@ class AllergyCreate(BaseModel):
     allergy_code:  Optional[str] = None  # 미입력 시 allergy_name 기반 자동 생성
     severity_code: str  # LOW / MEDIUM / HIGH
 
+class ClinicalNoteCreate(BaseModel):
+    encounter_id: str
+    note_type:    str = "진료노트"   # 진료노트 / 간호기록 등
+    note_text:    str
+
 class PatientRegister(BaseModel):
     patient_name:          str
     birth_date:            str             # YYYY-MM-DD
@@ -134,6 +139,28 @@ def search_patients(
             }
             for p in patients
         ],
+    }
+
+
+@router.get("/patients/by-hash/{patient_id_hash}")
+def get_patient_by_hash(
+    patient_id_hash: str,
+    current_user:    dict      = Depends(require_roles("nurse", "doctor", "admin")),
+    db:              DbSession = Depends(get_db),
+):
+    """patient_id_hash로 환자 실명·patient_id 단건 조회 (의사 일정 화면 클릭 시 사용)."""
+    from models.db import Patient as PatientModel
+    p = db.query(PatientModel).filter(
+        PatientModel.patient_id_hash == patient_id_hash
+    ).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
+    record_audit(db, "VIEW_PATIENT_NAME", "200",
+                 user_id=current_user["sub"], patient_id=p.patient_id, target_table="patients")
+    db.commit()
+    return {
+        "patient_id":   str(p.patient_id),
+        "patient_name": p.patient_name,
     }
 
 
@@ -237,6 +264,30 @@ def get_patient_clinical_notes(
         }
         for n in notes
     ]
+
+
+@router.post("/patients/{patient_id}/clinical-notes", status_code=201)
+def create_clinical_note(
+    patient_id:   str,
+    body:         ClinicalNoteCreate,
+    current_user: dict = Depends(require_roles("doctor", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    _patient_or_404(patient_id, db)
+    note = ClinicalNote(
+        encounter_id = uuid.UUID(body.encounter_id),
+        patient_id   = uuid.UUID(patient_id),
+        author_type  = current_user.get("role", "doctor"),
+        note_type    = body.note_type,
+        note_text    = body.note_text,
+    )
+    db.add(note)
+    record_audit(db, "CREATE_CLINICAL_NOTE", "201",
+                 user_id=current_user["sub"], patient_id=uuid.UUID(patient_id),
+                 target_table="clinical_notes")
+    db.commit()
+    db.refresh(note)
+    return {"note_id": str(note.note_id)}
 
 
 @router.get("/patients/{patient_id}/allergies")
@@ -701,4 +752,265 @@ def register_patient(
         "member_number":    member_number,
         "internal_seq":     internal_seq,
         "initial_password": birth_str,
+    }
+
+
+# ============================================================
+# SFR-018 — 의사 전용 환자 검색 / EMR 조회 / Break-glass
+# ============================================================
+
+_SEVERITY_RANK = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+
+
+@router.get("/doctor/patients/search")
+def doctor_search_patients(
+    q:            str       = Query(..., min_length=1, description="환자명 또는 회원번호"),
+    current_user: dict      = Depends(require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-018 — 의사 담당 환자 검색 (patient_name OR member_number).
+    encounters.doctor_id 기준으로 본인 담당 환자만 반환.
+    """
+    doctor_id_str = current_user.get("did")
+    if not doctor_id_str:
+        raise HTTPException(status_code=400, detail="의사 계정에 doctor_id가 연결되어 있지 않습니다.")
+    try:
+        doctor_uuid = uuid.UUID(doctor_id_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 doctor_id입니다.")
+
+    rows = (
+        db.query(Patient, func.max(Encounter.visit_datetime).label("last_visit"))
+        .join(Encounter, Patient.patient_id == Encounter.patient_id)
+        .filter(
+            Encounter.doctor_id == doctor_uuid,
+            (Patient.patient_name.ilike(f"%{q}%")) | (Patient.member_number.ilike(f"%{q}%")),
+        )
+        .group_by(Patient.patient_id)
+        .order_by(func.max(Encounter.visit_datetime).desc())
+        .limit(50)
+        .all()
+    )
+
+    return [
+        {
+            "patient_id":    str(p.patient_id),
+            "member_number": p.member_number,
+            "patient_name":  p.patient_name,
+            "birth_date":    p.birth_date.isoformat() if p.birth_date else None,
+            "gender_code":   p.gender_code,
+            "last_visit":    last.isoformat() if last else None,
+        }
+        for p, last in rows
+    ]
+
+
+@router.get("/doctor/patients/{patient_id}/emr")
+def doctor_get_emr(
+    patient_id:   str,
+    current_user: dict      = Depends(require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-018 — 의사 EMR 전체 조회 (encounters·diagnoses·notes·allergies·surgeries).
+    담당 환자가 아니면 403 반환. audit_logs에 EMR_VIEW 기록.
+    """
+    doctor_id_str = current_user.get("did")
+    if not doctor_id_str:
+        raise HTTPException(status_code=400, detail="의사 계정에 doctor_id가 연결되어 있지 않습니다.")
+    try:
+        doctor_uuid  = uuid.UUID(doctor_id_str)
+        patient_uuid = uuid.UUID(patient_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 ID입니다.")
+
+    patient = db.query(Patient).filter(Patient.patient_id == patient_uuid).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
+
+    # 담당 여부 확인
+    is_assigned = db.query(Encounter).filter(
+        Encounter.patient_id == patient_uuid,
+        Encounter.doctor_id  == doctor_uuid,
+    ).first()
+    if not is_assigned:
+        raise HTTPException(status_code=403, detail="담당 환자가 아닙니다. Break-glass를 통해 접근하세요.")
+
+    # 내원 이력 (최신순)
+    encounters = (
+        db.query(Encounter)
+        .filter(Encounter.patient_id == patient_uuid)
+        .order_by(Encounter.visit_datetime.desc())
+        .all()
+    )
+
+    # 진단 (diagnosis_text 포함 — 온프레미스 전용, AWS 전송 금지)
+    diagnoses = (
+        db.query(Diagnosis)
+        .filter(Diagnosis.patient_id == patient_uuid)
+        .order_by(Diagnosis.diagnosed_at.desc())
+        .all()
+    )
+
+    # 임상 노트
+    notes = (
+        db.query(ClinicalNote)
+        .filter(ClinicalNote.patient_id == patient_uuid)
+        .order_by(ClinicalNote.created_at.desc())
+        .all()
+    )
+
+    # 알레르기 (is_active=True, severity HIGH→MEDIUM→LOW)
+    allergies = sorted(
+        db.query(Allergy).filter(
+            Allergy.patient_id == patient_uuid,
+            Allergy.is_active  == True,
+        ).all(),
+        key=lambda a: _SEVERITY_RANK.get(a.severity_code, 9),
+    )
+
+    # 수술 이력
+    surgeries = (
+        db.query(SurgeryHistory)
+        .filter(SurgeryHistory.patient_id == patient_uuid)
+        .order_by(SurgeryHistory.surgery_date.desc())
+        .all()
+    )
+
+    # 감사 로그 (SFR-018: EMR_VIEW)
+    record_audit(db, "EMR_VIEW", "200",
+                 user_id=current_user["sub"],
+                 patient_id=patient_uuid,
+                 target_table="encounters")
+    db.commit()
+
+    return {
+        "patient": {
+            "patient_id":    str(patient.patient_id),
+            "member_number": patient.member_number,
+            "patient_name":  patient.patient_name,
+            "birth_date":    patient.birth_date.isoformat() if patient.birth_date else None,
+            "gender_code":   patient.gender_code,
+            "phone_number":  patient.phone_number,
+        },
+        "encounters": [
+            {
+                "encounter_id":    str(e.encounter_id),
+                "encounter_type":  e.encounter_type,
+                "department_code": e.department_code,
+                "visit_datetime":  e.visit_datetime.isoformat() if e.visit_datetime else None,
+                "chief_complaint": e.chief_complaint,
+                "status_code":     e.status_code,
+            }
+            for e in encounters
+        ],
+        "diagnoses": [
+            {
+                "diagnosis_id":   str(d.diagnosis_id),
+                "encounter_id":   str(d.encounter_id),
+                "diagnosis_code": d.diagnosis_code,
+                "diagnosis_text": d.diagnosis_text,   # 온프레미스 전용 — AWS sync 금지
+                "is_primary":     d.is_primary,
+                "diagnosed_at":   d.diagnosed_at.isoformat() if d.diagnosed_at else None,
+            }
+            for d in diagnoses
+        ],
+        "clinical_notes": [
+            {
+                "note_id":     str(n.note_id),
+                "encounter_id": str(n.encounter_id),
+                "author_type": n.author_type,
+                "note_type":   n.note_type,
+                "note_text":   n.note_text,
+                "created_at":  n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in notes
+        ],
+        "allergies": [
+            {
+                "allergy_id":    str(a.allergy_id),
+                "allergy_name":  a.allergy_name,
+                "severity_code": a.severity_code,
+                "allergy_code":  a.allergy_code,
+                "recorded_at":   a.recorded_at.isoformat() if a.recorded_at else None,
+            }
+            for a in allergies
+        ],
+        "surgeries": [
+            {
+                "surgery_history_id": str(s.surgery_history_id),
+                "surgery_code":       s.surgery_code,
+                "surgery_name":       s.surgery_name,
+                "surgery_date":       s.surgery_date.isoformat() if s.surgery_date else None,
+            }
+            for s in surgeries
+        ],
+    }
+
+
+@router.post("/doctor/patients/{patient_id}/break-glass")
+def doctor_break_glass(
+    patient_id:   str,
+    current_user: dict      = Depends(require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-018 Break-glass — 비담당 환자 긴급 접근.
+    온프레미스 audit_logs에 BREAK_GLASS 기록 후 EMR 반환.
+    Combined 백엔드에서 AWS notifications 생성 (관리자 알림).
+    """
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 patient_id입니다.")
+
+    patient = db.query(Patient).filter(Patient.patient_id == patient_uuid).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
+
+    # Break-glass 감사 로그
+    record_audit(db, "BREAK_GLASS", "200",
+                 user_id=current_user["sub"],
+                 patient_id=patient_uuid,
+                 target_table="encounters")
+    db.commit()
+
+    # EMR 데이터 동일하게 반환 (break-glass 이후 접근 허용)
+    encounters = db.query(Encounter).filter(
+        Encounter.patient_id == patient_uuid
+    ).order_by(Encounter.visit_datetime.desc()).all()
+
+    diagnoses = db.query(Diagnosis).filter(
+        Diagnosis.patient_id == patient_uuid
+    ).order_by(Diagnosis.diagnosed_at.desc()).all()
+
+    notes = db.query(ClinicalNote).filter(
+        ClinicalNote.patient_id == patient_uuid
+    ).order_by(ClinicalNote.created_at.desc()).all()
+
+    allergies = sorted(
+        db.query(Allergy).filter(
+            Allergy.patient_id == patient_uuid,
+            Allergy.is_active  == True,
+        ).all(),
+        key=lambda a: _SEVERITY_RANK.get(a.severity_code, 9),
+    )
+
+    surgeries = db.query(SurgeryHistory).filter(
+        SurgeryHistory.patient_id == patient_uuid
+    ).order_by(SurgeryHistory.surgery_date.desc()).all()
+
+    return {
+        "break_glass": True,
+        "patient": {
+            "patient_id":    str(patient.patient_id),
+            "member_number": patient.member_number,
+            "patient_name":  patient.patient_name,
+            "birth_date":    patient.birth_date.isoformat() if patient.birth_date else None,
+            "gender_code":   patient.gender_code,
+            "phone_number":  patient.phone_number,
+        },
+        "encounters":     [{"encounter_id": str(e.encounter_id), "encounter_type": e.encounter_type, "department_code": e.department_code, "visit_datetime": e.visit_datetime.isoformat() if e.visit_datetime else None, "chief_complaint": e.chief_complaint, "status_code": e.status_code} for e in encounters],
+        "diagnoses":      [{"diagnosis_id": str(d.diagnosis_id), "encounter_id": str(d.encounter_id), "diagnosis_code": d.diagnosis_code, "diagnosis_text": d.diagnosis_text, "is_primary": d.is_primary, "diagnosed_at": d.diagnosed_at.isoformat() if d.diagnosed_at else None} for d in diagnoses],
+        "clinical_notes": [{"note_id": str(n.note_id), "encounter_id": str(n.encounter_id), "author_type": n.author_type, "note_type": n.note_type, "note_text": n.note_text, "created_at": n.created_at.isoformat() if n.created_at else None} for n in notes],
+        "allergies":      [{"allergy_id": str(a.allergy_id), "allergy_name": a.allergy_name, "severity_code": a.severity_code, "allergy_code": a.allergy_code} for a in allergies],
+        "surgeries":      [{"surgery_history_id": str(s.surgery_history_id), "surgery_code": s.surgery_code, "surgery_name": s.surgery_name, "surgery_date": s.surgery_date.isoformat() if s.surgery_date else None} for s in surgeries],
     }

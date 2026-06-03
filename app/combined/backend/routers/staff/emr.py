@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session as DbSession
 from core.database import get_db
 from core.onprem_client import OnpremClient
 from core.security import get_client_ip, get_current_user
-from models.db import Appointment, AppointmentHistory, AppointmentStatus, User
+from models.db import Appointment, AppointmentHistory, AppointmentStatus, Notification, Role, User
 
 router = APIRouter(prefix="/emr", tags=["emr"])
 
@@ -90,6 +90,18 @@ def search_patients(
 ):
     return _client(current_user, request).get(
         "/portal/patients", name=name, phone=phone, limit=limit, offset=offset
+    )
+
+
+@router.get("/patients/by-hash/{patient_id_hash}")
+def get_patient_name_by_hash(
+    patient_id_hash: str,
+    request:         Request,
+    current_user:    dict = Depends(_require_roles("nurse", "doctor", "admin")),
+):
+    """patient_id_hash → 온프레미스에서 patient_name·patient_id 조회 (의사 일정 클릭 시)."""
+    return _client(current_user, request).get(
+        f"/portal/patients/by-hash/{patient_id_hash}"
     )
 
 
@@ -182,10 +194,49 @@ class EncounterUpdate(BaseModel):
 def create_encounter(
     body:         EncounterCreate,
     request:      Request,
-    current_user: dict = Depends(_require_roles("nurse", "admin")),
+    current_user: dict = Depends(_require_roles("nurse", "doctor", "admin")),
 ):
     return _client(current_user, request).post(
         "/portal/encounters", body.model_dump(exclude_none=True)
+    )
+
+
+class DiagnosisCreate(BaseModel):
+    encounter_id:   str
+    diagnosis_code: str
+    diagnosis_text: str
+    is_primary:     bool = False
+
+
+class ClinicalNoteCreate(BaseModel):
+    encounter_id: str
+    note_type:    str = "진료노트"
+    note_text:    str
+
+
+@router.post("/patients/{patient_id}/diagnoses", status_code=201)
+def create_diagnosis(
+    patient_id:   str,
+    body:         DiagnosisCreate,
+    request:      Request,
+    current_user: dict = Depends(_require_roles("doctor", "admin")),
+):
+    return _client(current_user, request).post(
+        f"/portal/patients/{patient_id}/diagnoses",
+        {**body.model_dump(), "patient_id": patient_id},
+    )
+
+
+@router.post("/patients/{patient_id}/clinical-notes", status_code=201)
+def create_clinical_note(
+    patient_id:   str,
+    body:         ClinicalNoteCreate,
+    request:      Request,
+    current_user: dict = Depends(_require_roles("doctor", "admin")),
+):
+    return _client(current_user, request).post(
+        f"/portal/patients/{patient_id}/clinical-notes",
+        body.model_dump(),
     )
 
 
@@ -385,3 +436,69 @@ def my_encounters(
     return _client(current_user, request).get(
         "/portal/my/encounters", date=date_str
     )
+
+
+# ============================================================
+# SFR-018 — 의사 환자 검색 / EMR 조회 / Break-glass
+# ============================================================
+
+@router.get("/doctor/patients/search")
+def doctor_search_patients(
+    request:      Request,
+    q:            str  = Query(..., min_length=1),
+    current_user: dict = Depends(_require_roles("doctor")),
+):
+    """SFR-018 — 담당 환자 검색 (patient_name OR member_number)."""
+    return _client(current_user, request).get("/portal/doctor/patients/search", q=q)
+
+
+@router.get("/doctor/patients/{patient_id}/emr")
+def doctor_get_emr(
+    patient_id:   str,
+    request:      Request,
+    current_user: dict = Depends(_require_roles("doctor")),
+):
+    """SFR-018 — 담당 환자 EMR 전체 조회 (온프레미스 → VPN 경유)."""
+    return _client(current_user, request).get(
+        f"/portal/doctor/patients/{patient_id}/emr"
+    )
+
+
+@router.post("/doctor/patients/{patient_id}/break-glass")
+def doctor_break_glass(
+    patient_id:   str,
+    request:      Request,
+    current_user: dict      = Depends(_require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-018 Break-glass — 비담당 환자 긴급 접근.
+    온프레미스 audit_logs BREAK_GLASS + AWS notifications 관리자 알림.
+    """
+    # 온프레미스: BREAK_GLASS 로그 + EMR 데이터 반환
+    emr_data = _client(current_user, request).post(
+        f"/portal/doctor/patients/{patient_id}/break-glass", body={}
+    )
+
+    # AWS: 활성 관리자 전원에게 알림 레코드 생성
+    now = datetime.now(timezone.utc)
+    admins = (
+        db.query(User)
+        .join(Role, User.role_id == Role.role_id)
+        .filter(Role.role_code == "admin", User.is_active == True)
+        .all()
+    )
+    for admin in admins:
+        db.add(Notification(
+            user_id       = admin.user_id,
+            channel       = "system",
+            status        = "pending",
+            error_message = (
+                f"[Break-glass] 의사 {current_user['sub']} 가 "
+                f"비담당 환자 {patient_id} 의 EMR에 긴급 접근했습니다. "
+                f"({now.strftime('%Y-%m-%d %H:%M UTC')})"
+            ),
+        ))
+    if admins:
+        db.commit()
+
+    return emr_data
