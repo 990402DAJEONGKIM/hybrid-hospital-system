@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>김이박 클리닉 - 의료진 포털(임시.)</title>
+    <title>김이박 클리닉 - 의료진 포털</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <style>
@@ -18,11 +18,13 @@
             margin-bottom:20px;
         }
         .dash-icon-wrap i { font-size:30px; }
+
+        .pw-banner { display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:12px 18px; margin-bottom:20px; font-size:13px; color:#92400e; align-items:center; gap:10px; }
     </style>
 </head>
 <body>
 <div id="page-content">
-    <div id="pwBanner" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 18px;margin-bottom:20px;font-size:13px;color:#92400e;align-items:center;gap:10px;">
+    <div id="pwBanner" class="pw-banner">
         <i class="fas fa-exclamation-triangle"></i>
         비밀번호가 만료되었습니다.
         <a href="/change-password.html" style="margin-left:auto;font-weight:700;text-decoration:underline;">지금 변경하기</a>
@@ -35,53 +37,56 @@
 <script src="/js/layout.js"></script>
 <script src="/js/router.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-        const me = await initLayout();
-        if (!me) return;
+document.addEventListener('DOMContentLoaded', async () => {
+    const me = await initLayout();
+    if (!me) return;
 
-        if (me.password_expired) {
-            const b = document.getElementById('pwBanner');
-            if (b) b.style.display = 'flex';
-        }
+    if (me.password_expired) {
+        const b = document.getElementById('pwBanner');
+        if (b) b.style.display = 'flex';
+    }
 
-        const roleLabel  = _ROLE_LABELS[me.role]  || me.role;
-        const roleColor  = _ROLE_COLORS[me.role]  || '#1e88e5';
-        const roleBg     = _ROLE_BG[me.role]      || '#e3f2fd';
-        const shortcuts  = _SHORTCUTS[me.role]    || [];
+    if (me.role === 'nurse') {
+        window.location.replace('/nurse-dashboard.html');
+        return;
+    }
+    renderGenericDashboard(me);
+});
 
-        document.getElementById('dashboardContent').innerHTML = `
-            <div class="dash-welcome">
-                <div class="dash-icon-wrap" style="background:${roleBg};">
-                    <i class="fas fa-hospital-alt" style="color:${roleColor};"></i>
-                </div>
-                <h1 style="font-size:22px;font-weight:800;color:#1e293b;margin:0 0 8px;">
-                    ${roleLabel} 포털
-                </h1>
-                <p style="font-size:14px;color:#64748b;margin:0 0 4px;">
-                    <strong style="color:#1e293b;">${me.member_number}</strong> 님, 환영합니다.
-                </p>
-                <p style="font-size:12px;color:#94a3b8;margin:0 0 28px;">
-                    ISMS-P 보안 정책 적용 — 모든 접근이 감사 로그에 기록됩니다.
-                </p>
-                <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:420px;">
-                    ${shortcuts.map(s => `
-                        <a href="${s.url}" onclick="loadPage('${s.url}');return false;"
-                           style="display:inline-flex;align-items:center;gap:7px;
-                                  padding:8px 14px;border-radius:8px;font-size:13px;
-                                  font-weight:600;text-decoration:none;color:#1e293b;
-                                  background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08);
-                                  border-left:3px solid ${s.color};
-                                  transition:box-shadow .15s,transform .1s;"
-                           onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)';this.style.transform='translateY(-1px)'"
-                           onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.08)';this.style.transform=''">
-                            <i class="fas fa-${s.icon}" style="color:${s.color};font-size:12px;"></i>
-                            ${s.label}
-                        </a>
-                    `).join('')}
-                </div>
+// ── 일반 역할 대시보드 ───────────────────────────────────────
+
+function renderGenericDashboard(me) {
+    const roleLabel  = _ROLE_LABELS[me.role]  || me.role;
+    const roleColor  = _ROLE_COLORS[me.role]  || '#1e88e5';
+    const roleBg     = _ROLE_BG[me.role]      || '#e3f2fd';
+    const shortcuts  = _SHORTCUTS[me.role]    || [];
+
+    document.getElementById('dashboardContent').innerHTML = `
+        <div class="dash-welcome">
+            <div class="dash-icon-wrap" style="background:${roleBg};">
+                <i class="fas fa-hospital-alt" style="color:${roleColor};"></i>
             </div>
-        `;
-    });
+            <h1 style="font-size:22px;font-weight:800;color:#1e293b;margin:0 0 8px;">
+                ${roleLabel} 포털
+            </h1>
+            <p style="font-size:14px;color:#64748b;margin:0 0 4px;">
+                <strong style="color:#1e293b;">${me.member_number}</strong> 님, 환영합니다.
+            </p>
+            <p style="font-size:12px;color:#94a3b8;margin:0 0 28px;">
+                ISMS-P 보안 정책 적용 — 모든 접근이 감사 로그에 기록됩니다.
+            </p>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:420px;">
+                ${shortcuts.map(s => `
+                    <a href="${s.url}" onclick="loadPage('${s.url}');return false;"
+                       class="sc-btn" style="border-color:${s.color};">
+                        <i class="fas fa-${s.icon}" style="color:${s.color};font-size:12px;"></i>
+                        ${s.label}
+                    </a>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
 </script>
 </body>
 </html>

@@ -754,6 +754,9 @@ def register_patient(
 
     return {
         "patient_id":       str(patient.patient_id),
+        "patient_id_hash":  patient.patient_id_hash,   # DB 트리거로 계산된 hash — sync용
+        "birth_year":       birth.year,
+        "gender_code":      patient.gender_code,
         "member_number":    member_number,
         "internal_seq":     internal_seq,
         "initial_password": birth_str,
@@ -1227,3 +1230,259 @@ def doctor_get_latest_encounter(
 
 
     raise HTTPException(status_code=403, detail="Break-glass 기능이 비활성화되었습니다. 담당 의사에게 문의하세요.")
+
+
+# ============================================================
+# SFR-022/026/028 — 간호사 전용 엔드포인트
+# ============================================================
+
+class PatientHashesRequest(BaseModel):
+    hashes: list[str]
+
+
+@router.post("/patients/names-by-hashes")
+def get_names_by_hashes(
+    body:         PatientHashesRequest,
+    current_user: dict      = Depends(require_roles("nurse", "doctor", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """hash 배열 → {hash: patient_name} 맵 반환 (간호사 목록 실명 표시용)."""
+    if not body.hashes:
+        return {}
+    patients = (
+        db.query(Patient.patient_id_hash, Patient.patient_name)
+        .filter(Patient.patient_id_hash.in_(body.hashes))
+        .all()
+    )
+    record_audit(db, "PATIENT_NAMES_BULK", "200", user_id=current_user["sub"])
+    db.commit()
+    return {p.patient_id_hash: p.patient_name for p in patients}
+
+
+@router.get("/encounters/waiting-count")
+def get_waiting_count(
+    current_user: dict = Depends(require_roles("nurse", "admin")),
+    db: DbSession = Depends(get_db),
+):
+    """진료 대기 환자 수 (status_code='waiting')."""
+    count = (
+        db.query(func.count(Encounter.encounter_id))
+        .filter(Encounter.status_code == "waiting")
+        .scalar()
+    )
+    return {"waiting_count": count or 0}
+
+
+@router.get("/nurse/patients/search")
+def nurse_search_patients(
+    q:      str = Query(..., min_length=1, description="환자명 또는 회원번호"),
+    limit:  int = Query(default=20, le=100),
+    offset: int = Query(default=0),
+    current_user: dict = Depends(require_roles("nurse", "admin")),
+    db: DbSession = Depends(get_db),
+):
+    """SFR-026 — 간호사 전체 환자 검색 (담당 제한 없음, patient_name OR member_number)."""
+    base = (
+        db.query(Patient, func.max(Encounter.visit_datetime).label("last_visit"))
+        .outerjoin(Encounter, Patient.patient_id == Encounter.patient_id)
+        .filter(
+            (Patient.patient_name.ilike(f"%{q}%")) |
+            (Patient.member_number.ilike(f"%{q}%"))
+        )
+    )
+    total = base.with_entities(func.count(func.distinct(Patient.patient_id))).scalar()
+    rows = (
+        base.group_by(Patient.patient_id)
+        .order_by(Patient.patient_name)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    record_audit(db, "PATIENT_SEARCH", "200", user_id=current_user["sub"])
+    db.commit()
+    return {
+        "total": total,
+        "items": [
+            {
+                "patient_id":      str(p.patient_id),
+                "patient_id_hash": p.patient_id_hash,
+                "member_number":   p.member_number,
+                "patient_name":    p.patient_name,
+                "birth_date":      p.birth_date.isoformat() if p.birth_date else None,
+                "gender_code":     p.gender_code,
+                "last_visit":      last.isoformat() if last else None,
+            }
+            for p, last in rows
+        ],
+    }
+
+
+@router.get("/patients/{patient_id_hash}/verify")
+def verify_patient_by_hash(
+    patient_id_hash: str,
+    current_user: dict = Depends(require_roles("nurse", "admin")),
+    db: DbSession = Depends(get_db),
+):
+    """SFR-024 — hash로 환자 최소 정보 확인 (member_number, birth_date, gender_code만 반환)."""
+    p = db.query(Patient).filter(Patient.patient_id_hash == patient_id_hash).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
+    return {
+        "patient_id_hash": p.patient_id_hash,
+        "member_number":   p.member_number,
+        "birth_date":      p.birth_date.isoformat() if p.birth_date else None,
+        "gender_code":     p.gender_code,
+    }
+
+
+class CheckinRequest(BaseModel):
+    patient_id:      str
+    doctor_id:       str
+    department_code: str
+    appointment_id:  Optional[str] = None
+    chief_complaint: Optional[str] = None
+
+
+class AdmitRequest(BaseModel):
+    patient_id:      str
+    doctor_id:       str
+    department_code: str
+    ward_id:         Optional[str] = None
+    appointment_id:  Optional[str] = None
+    chief_complaint: Optional[str] = None
+
+
+class DischargeRequest(BaseModel):
+    patient_id: Optional[str] = None   # audit 기록용
+
+
+@router.patch("/encounters/{encounter_id}/discharge")
+def discharge_encounter(
+    encounter_id: str,
+    body:         DischargeRequest,
+    current_user: dict      = Depends(require_roles("nurse", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-027 — encounters.status_code = 'discharged' 업데이트."""
+    enc = db.query(Encounter).filter(Encounter.encounter_id == encounter_id).first()
+    if not enc:
+        raise HTTPException(status_code=404, detail="진료 기록을 찾을 수 없습니다.")
+    if enc.status_code == "discharged":
+        raise HTTPException(status_code=400, detail="이미 퇴원 처리된 환자입니다.")
+    if enc.encounter_type not in ("inpatient", "입원"):
+        raise HTTPException(status_code=400, detail="입원 환자만 퇴원 처리할 수 있습니다.")
+
+    enc.status_code = "discharged"
+    enc.updated_at  = datetime.now(timezone.utc)
+
+    pid = enc.patient_id
+    record_audit(db, "ENCOUNTER_DISCHARGE", "200",
+                 user_id=current_user["sub"], patient_id=pid,
+                 target_table="encounters")
+    db.commit()
+    return {
+        "encounter_id": str(enc.encounter_id),
+        "patient_id":   str(enc.patient_id),
+        "patient_id_hash": enc.patient.patient_id_hash if enc.patient else None,
+        "ward_id":      str(enc.patient.ward_assignments[-1].ward_id)
+                        if enc.patient and enc.patient.ward_assignments else None,
+        "status_code":  enc.status_code,
+    }
+
+
+@router.post("/encounters/checkin", status_code=201)
+def encounter_checkin(
+    body:         CheckinRequest,
+    current_user: dict = Depends(require_roles("nurse", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-028 — 외래 접수: encounters 레코드 생성 (status_code='waiting')."""
+    _patient_or_404(body.patient_id, db)
+    enc = Encounter(
+        patient_id      = uuid.UUID(body.patient_id),
+        doctor_id       = uuid.UUID(body.doctor_id),
+        department_code = body.department_code,
+        encounter_type  = "outpatient",
+        chief_complaint = body.chief_complaint,
+        visit_datetime  = datetime.now(timezone.utc),
+        status_code     = "waiting",
+    )
+    db.add(enc)
+    record_audit(db, "ENCOUNTER_CHECKIN", "201",
+                 user_id=current_user["sub"], patient_id=uuid.UUID(body.patient_id),
+                 target_table="encounters")
+    db.commit()
+    db.refresh(enc)
+    return {
+        "encounter_id":    str(enc.encounter_id),
+        "patient_id":      str(enc.patient_id),
+        "patient_id_hash": enc.patient.patient_id_hash,
+        "department_code": enc.department_code,
+        "doctor_id":       str(enc.doctor_id),
+        "encounter_type":  enc.encounter_type,
+        "status_code":     enc.status_code,
+        "visit_datetime":  enc.visit_datetime.isoformat() if enc.visit_datetime else None,
+    }
+
+
+@router.post("/encounters/admit", status_code=201)
+def encounter_admit(
+    body:         AdmitRequest,
+    current_user: dict = Depends(require_roles("nurse", "admin")),
+    db:           DbSession = Depends(get_db),
+):
+    """SFR-028 — 입원 접수: encounters 생성 (status_code='admitted') + 병상 배정."""
+    _patient_or_404(body.patient_id, db)
+
+    ward_id_uuid = None
+    if body.ward_id:
+        ward = db.query(Ward).filter(
+            Ward.ward_id == body.ward_id, Ward.is_active == True
+        ).first()
+        if not ward:
+            raise HTTPException(status_code=404, detail="병동을 찾을 수 없습니다.")
+        active_count = (
+            db.query(func.count(WardAssignment.assignment_id))
+            .filter(WardAssignment.ward_id == ward.ward_id, WardAssignment.status == "active")
+            .scalar()
+        )
+        if active_count >= ward.total_beds:
+            raise HTTPException(status_code=409, detail="가용 병상이 없습니다. (만실)")
+        ward_id_uuid = ward.ward_id
+
+    enc = Encounter(
+        patient_id      = uuid.UUID(body.patient_id),
+        doctor_id       = uuid.UUID(body.doctor_id),
+        department_code = body.department_code,
+        encounter_type  = "inpatient",
+        chief_complaint = body.chief_complaint,
+        visit_datetime  = datetime.now(timezone.utc),
+        status_code     = "admitted",
+    )
+    db.add(enc)
+    db.flush()
+
+    if ward_id_uuid:
+        assignment = WardAssignment(
+            patient_id = uuid.UUID(body.patient_id),
+            ward_id    = ward_id_uuid,
+            notes      = f"입원 접수 (encounter_id={enc.encounter_id})",
+        )
+        db.add(assignment)
+
+    record_audit(db, "ENCOUNTER_ADMIT", "201",
+                 user_id=current_user["sub"], patient_id=uuid.UUID(body.patient_id),
+                 target_table="encounters")
+    db.commit()
+    db.refresh(enc)
+    return {
+        "encounter_id":    str(enc.encounter_id),
+        "patient_id":      str(enc.patient_id),
+        "patient_id_hash": enc.patient.patient_id_hash,
+        "department_code": enc.department_code,
+        "doctor_id":       str(enc.doctor_id),
+        "encounter_type":  enc.encounter_type,
+        "status_code":     enc.status_code,
+        "ward_id":         str(ward_id_uuid) if ward_id_uuid else None,
+        "visit_datetime":  enc.visit_datetime.isoformat() if enc.visit_datetime else None,
+    }

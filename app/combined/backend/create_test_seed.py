@@ -107,52 +107,70 @@ role_patient = db.query(Role).filter(Role.role_code == "patient").first()
 test_users = [
     {
         "email":         "doctor@hospital.com",
+        "member_number": "dr-INTERNAL-1",
         "password":      "Doctor1234!",
         "role":          role_doctor,
         "doctor_id":     DOCTOR_UUID,
         "patient_hash":  None,
+        "must_change":   False,
     },
     {
         "email":         "nurse@hospital.com",
+        "member_number": "nurse-1",
         "password":      "Nurse1234!",
         "role":          role_nurse,
         "doctor_id":     None,
         "patient_hash":  None,
+        "must_change":   False,
     },
     {
         "email":         "patient@hospital.com",
+        "member_number": "21870195",
         "password":      "Patient1234!",
         "role":          role_patient,
         "doctor_id":     None,
         "patient_hash":  PATIENT_HASH,
+        "must_change":   False,
     },
 ]
 
 for u in test_users:
-    if db.query(User).filter(User.email == u["email"]).first():
-        print(f"  이미 존재: {u['email']}")
+    existing = db.query(User).filter(
+        (User.email == u["email"]) | (User.member_number == u["member_number"])
+    ).first()
+    if existing:
+        # member_number가 없으면 업데이트
+        if not existing.member_number:
+            existing.member_number        = u["member_number"]
+            existing.must_change_password = u["must_change"]
+            db.commit()
+            print(f"  🔄 member_number 업데이트: {u['email']} → {u['member_number']}")
+        else:
+            print(f"  이미 존재: {u['email']} ({u['member_number']})")
         continue
     db.add(User(
         email=u["email"],
+        member_number=u["member_number"],
         password_hash=hash_password(u["password"]),
-        role_id=u["role"].role_id,
+        role_id=u["role"].role_id if u["role"] else None,
         doctor_id=u["doctor_id"],
         patient_id_hash=u["patient_hash"],
         is_active=True,
+        must_change_password=u["must_change"],
         password_changed_at=now,
         created_at=now,
         updated_at=now,
     ))
     db.commit()
-    print(f"  ✅ 생성: {u['email']} / {u['password']}")
+    print(f"  ✅ 생성: {u['member_number']} / {u['password']}")
 
 db.close()
 
-print("\n=== 테스트 계정 목록 ===")
-print(f"  관리자  : admin@hospital.com   / Admin1234!")
-print(f"  의사    : doctor@hospital.com  / Doctor1234!")
-print(f"  간호사  : nurse@hospital.com   / Nurse1234!")
-print(f"  환자    : patient@hospital.com / Patient1234!")
+print("\n=== 테스트 계정 목록 (회원번호 / 비밀번호) ===")
+print(f"  관리자  : admin-1       / Admin1234!")
+print(f"  의사    : dr-INTERNAL-1 / Doctor1234!")
+print(f"  간호사  : nurse-1       / Nurse1234!")
+print(f"  환자    : 21870195      / Patient1234!")
 print()
 print("접속 URL:")
 print("  의료진 포털 : http://localhost:8002")

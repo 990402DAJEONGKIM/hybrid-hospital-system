@@ -152,11 +152,10 @@
         </div>
     </div>
 
-    <!-- 간호사/관리자 검색 (기존) -->
+    <!-- 간호사/관리자 검색 (SFR-026: 이름 또는 회원번호) -->
     <div id="nurseSearchBar" style="display:none;" class="nurse-search">
         <div class="search-bar">
-            <input id="nameInput"  type="text" placeholder="환자 이름" />
-            <input id="phoneInput" type="text" placeholder="전화번호 일부" />
+            <input id="nurseQuery" type="text" placeholder="환자 이름 또는 회원번호" />
             <button onclick="doNurseSearch()"><i class="fas fa-search" style="margin-right:5px;"></i>검색</button>
         </div>
     </div>
@@ -180,19 +179,20 @@
         </tbody>
     </table>
 
-    <!-- 간호사/관리자 결과 테이블 -->
+    <!-- 간호사/관리자 결과 테이블 (SFR-026) -->
     <table class="data-table" id="nurseResultTable" style="display:none;">
         <thead>
             <tr>
+                <th>회원번호</th>
                 <th>환자명</th>
                 <th>생년월일</th>
                 <th>성별</th>
-                <th>전화번호</th>
-                <th>상세 조회</th>
+                <th>마지막 방문</th>
+                <th>작업</th>
             </tr>
         </thead>
         <tbody id="nurseBody">
-            <tr><td colspan="5" class="empty-msg">검색어를 입력하고 검색 버튼을 누르세요.</td></tr>
+            <tr><td colspan="6" class="empty-msg">검색어를 입력하고 검색 버튼을 누르세요.</td></tr>
         </tbody>
     </table>
 
@@ -351,10 +351,18 @@
                     <ul class="sub-list" id="dSurgeries"><li>없음</li></ul>
                 </div>
             </div>
+            <!-- 퇴원 처리 (입원 중인 경우에만 표시) -->
+            <div id="dischargeArea" style="display:none;margin-top:16px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 16px;">
+                <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:8px;">
+                    <i class="fas fa-procedures" style="margin-right:6px;"></i>현재 입원 중
+                </div>
+                <button onclick="doDischarge()" style="padding:8px 18px;background:#ef4444;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">
+                    <i class="fas fa-sign-out-alt" style="margin-right:5px;"></i>퇴원 처리
+                </button>
+                <span style="font-size:11px;color:#94a3b8;margin-left:8px;">온프레미스 + 병동 병상 동시 업데이트</span>
+            </div>
+
             <div style="margin-top:16px;display:flex;gap:10px;">
-                <a id="newEncounterBtn" href="#" style="display:none;padding:8px 18px;background:#059669;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
-                    <i class="fas fa-plus" style="margin-right:5px;"></i>진료 등록
-                </a>
                 <button onclick="closeNurseModal()" style="padding:8px 18px;background:#eceff1;color:#546e7a;border:none;border-radius:6px;font-size:14px;cursor:pointer;">닫기</button>
             </div>
         </div>
@@ -746,18 +754,15 @@
         }
     }
 
-    // ── 간호사/관리자 검색 (기존 로직 유지) ───────────────────
+    // ── 간호사/관리자 검색 (SFR-026: 이름 또는 회원번호) ────────
 
     async function doNurseSearch() {
-        const name  = document.getElementById('nameInput').value.trim();
-        const phone = document.getElementById('phoneInput').value.trim();
+        const q = document.getElementById('nurseQuery').value.trim();
         const errEl = document.getElementById('errMsg');
         errEl.textContent = '';
-        if (!name && !phone) { errEl.textContent = '이름 또는 전화번호를 입력하세요.'; return; }
-        const params = new URLSearchParams();
-        if (name)  params.append('name',  name);
-        if (phone) params.append('phone', phone);
-        const res = await apiCall(`/emr/patients?${params}`);
+        if (!q) { errEl.textContent = '환자 이름 또는 회원번호를 입력하세요.'; return; }
+
+        const res = await apiCall(`/emr/nurse/patients/search?q=${encodeURIComponent(q)}`);
         if (!res || !res.ok) {
             errEl.textContent = res?.status === 503
                 ? '온프레미스 DB에 연결할 수 없습니다.' : '조회 실패. 권한을 확인하거나 다시 시도하세요.';
@@ -772,39 +777,64 @@
         const tbody = document.getElementById('nurseBody');
         _nursePatientMap.clear();
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">검색 결과가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">검색 결과가 없습니다.</td></tr>';
             return;
         }
         items.forEach(p => _nursePatientMap.set(p.patient_id, p));
         tbody.innerHTML = items.map(p => `
             <tr>
-                <td style="font-weight:600;">${_esc(_maskName(p.patient_name))}</td>
+                <td style="font-family:monospace;font-size:13px;font-weight:700;">${_esc(p.member_number || '-')}</td>
+                <td style="font-weight:600;">${_esc(p.patient_name)}</td>
                 <td>${p.birth_date ? _esc(p.birth_date.slice(0,4)) + '년생' : '-'}</td>
                 <td>${GENDER[p.gender_code] || '-'}</td>
-                <td>${_esc(_maskPhone(p.phone_number))}</td>
-                <td><button class="btn-emr" data-pid="${_esc(p.patient_id)}" onclick="openNurseDetail(this.dataset.pid)">
-                    <i class="fas fa-folder-open" style="margin-right:4px;"></i>상세
-                </button></td>
+                <td style="color:#64748b;font-size:12px;">${p.last_visit ? _esc(p.last_visit.slice(0,10)) : '-'}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn-emr" data-pid="${_esc(p.patient_id)}" data-hash="${_esc(p.patient_id_hash||'')}" onclick="openNurseDetail(this.dataset.pid)">
+                        <i class="fas fa-folder-open" style="margin-right:4px;"></i>상세
+                    </button>
+                    <a href="/nurse-appointment-new.html" onclick="goAppt('${_esc(p.patient_id_hash||'')}');return false;"
+                       style="margin-left:4px;padding:5px 10px;background:#dbeafe;color:#1e40af;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;">
+                        예약
+                    </a>
+                </td>
             </tr>
         `).join('');
+    }
+
+    function goAppt(patientHash) {
+        if (!patientHash) { alert('patient_id_hash가 없습니다.'); return; }
+        sessionStorage.setItem('appt_patient_hash', patientHash);
+        loadPage('/nurse-appointment-new.html');
     }
 
     async function openNurseDetail(patientId) {
         const res = await apiCall(`/emr/patients/${patientId}`);
         if (!res || !res.ok) { alert('상세 정보를 불러올 수 없습니다.'); return; }
         const p = await res.json();
-        document.getElementById('nurseModalTitle').textContent = `환자 상세 — ${_maskName(p.patient_name)}`;
+        document.getElementById('nurseModalTitle').textContent = `환자 상세 — ${p.patient_name || '-'}`;
         document.getElementById('auditTs').textContent  = new Date().toLocaleString('ko-KR');
-        document.getElementById('dName').textContent    = _maskName(p.patient_name);
+        document.getElementById('dName').textContent    = p.patient_name || '-';
         document.getElementById('dBirth').textContent   = p.birth_date ? p.birth_date.slice(0,4) + '년생' : '-';
         document.getElementById('dGender').textContent  = p.gender_code === 'M' ? '남' : p.gender_code === 'F' ? '여' : '-';
-        document.getElementById('dPhone').textContent   = _maskPhone(p.phone_number);
+        document.getElementById('dPhone').textContent   = p.phone_number || '-';
 
         const encRes  = await apiCall(`/emr/patients/${patientId}/encounters`);
         const encList = encRes?.ok ? await encRes.json() : [];
         document.getElementById('dEncounters').innerHTML = encList.length
-            ? encList.map(e => `<li>${_esc(e.visit_datetime?.slice(0,10)||'-')} · ${_esc(e.department_code||'-')} · ${_esc(e.encounter_type||'-')}</li>`).join('')
+            ? encList.map(e => `<li>${_esc(e.visit_datetime?.slice(0,10)||'-')} · ${_esc(e.department_code||'-')} · ${_esc(e.encounter_type||'-')} · ${_esc(e.status_code||'-')}</li>`).join('')
             : '<li>없음</li>';
+
+        // 입원 중(inpatient + admitted) 인 encounter 확인 → 퇴원 버튼 표시
+        const admittedEnc = encList.find(e =>
+            e.encounter_type === 'inpatient' && e.status_code === 'admitted'
+        );
+        const dischargeArea = document.getElementById('dischargeArea');
+        if (admittedEnc && dischargeArea) {
+            dischargeArea.style.display = '';
+            dischargeArea.dataset.encounterId = admittedEnc.encounter_id;
+        } else if (dischargeArea) {
+            dischargeArea.style.display = 'none';
+        }
 
         const algRes  = await apiCall(`/emr/patients/${patientId}/allergies`);
         const algList = algRes?.ok ? await algRes.json() : [];
@@ -825,15 +855,31 @@
                 : '<li>없음</li>';
         }
 
-        const encBtn = document.getElementById('newEncounterBtn');
-        if (['nurse', 'admin'].includes(_currentRole)) {
-            encBtn.href  = `/encounter-new.html?pid=${patientId}`;
-            encBtn.style.display = '';
-        } else {
-            encBtn.style.display = 'none';
-        }
         document.getElementById('nurseDetailModal').classList.add('open');
         document.body.style.overflow = 'hidden';
+    }
+
+    async function doDischarge() {
+        const area       = document.getElementById('dischargeArea');
+        const encounterId = area?.dataset.encounterId;
+        if (!encounterId) { alert('encounter_id를 찾을 수 없습니다.'); return; }
+        if (!confirm('퇴원 처리하시겠습니까?\n온프레미스 진료 상태와 병동 병상이 동시에 업데이트됩니다.')) return;
+
+        const res = await apiCall(`/emr/nurse/encounters/${encounterId}/discharge`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        if (res && res.ok) {
+            area.style.display = 'none';
+            area.innerHTML = '<div style="color:#059669;font-size:13px;font-weight:700;"><i class="fas fa-check-circle" style="margin-right:5px;"></i>퇴원 처리 완료</div>';
+            area.style.display = '';
+            area.style.background = '#f0fdf4';
+            area.style.borderColor = '#86efac';
+        } else {
+            const err = await res?.json().catch(() => ({}));
+            alert(err.detail || '퇴원 처리 중 오류가 발생했습니다.');
+        }
     }
 
     function closeNurseModal() {
@@ -845,10 +891,8 @@
     document.addEventListener('DOMContentLoaded', () => {
         const dq = document.getElementById('doctorQuery');
         if (dq) dq.addEventListener('keypress', e => { if (e.key === 'Enter') doSearch(); });
-        const ni = document.getElementById('nameInput');
-        const pi = document.getElementById('phoneInput');
-        if (ni) ni.addEventListener('keypress', e => { if (e.key === 'Enter') doNurseSearch(); });
-        if (pi) pi.addEventListener('keypress', e => { if (e.key === 'Enter') doNurseSearch(); });
+        const nq = document.getElementById('nurseQuery');
+        if (nq) nq.addEventListener('keypress', e => { if (e.key === 'Enter') doNurseSearch(); });
     });
 
     init();

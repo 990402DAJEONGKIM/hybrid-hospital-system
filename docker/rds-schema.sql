@@ -338,7 +338,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     audit_log_id    UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID         REFERENCES users(user_id) ON DELETE SET NULL,
     patient_id_hash VARCHAR(64),
-    action_type     VARCHAR(20)  NOT NULL,
+    action_type     VARCHAR(50)  NOT NULL,
     target_table    VARCHAR(50),
     target_id       UUID,
     source_ip       INET,

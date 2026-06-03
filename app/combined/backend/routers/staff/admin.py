@@ -2,17 +2,19 @@ import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db
-from core.security import get_current_user, hash_password, verify_api_key
+from core.security import get_current_user, get_client_ip, hash_password, verify_api_key
 from routers.staff.auth import validate_password
 from models.db import (
-    AuditLog, Appointment, LoginHistory, Menu, Notification,
-    PasswordPolicy, Permission, Role, RoleMenu, RolePermission, User,
+    AuditLog, Appointment, AppointmentStatus, LoginHistory, Menu, Notification,
+    PasswordPolicy, Permission, Role, RoleMenu, RolePermission,
+    Session as SessionModel, User,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -20,19 +22,31 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 ALLOWED_ROLES = ("patient", "doctor", "nurse", "admin")
 
 
-# ── 요청 스키마 ───────────────────────────────────────────────
+# ── 스키마 ─────────────────────────────────────────────────────
 
 class CreateUserRequest(BaseModel):
-    email:     EmailStr
-    password:  str
-    role_code: str
-    doctor_id: str | None = None
+    role_code:     str
+    password:      str
+    email:         Optional[str] = None          # 직원·의사 필수
+    member_number: Optional[str] = None          # 환자 필수
+    doctor_id:     Optional[str] = None          # 의사 계정 시
 
 
 class UpdateUserRequest(BaseModel):
-    role_code: Optional[str] = None
-    doctor_id: Optional[str] = None
-    is_active: Optional[bool] = None
+    role_code:     Optional[str]  = None
+    doctor_id:     Optional[str]  = None
+    is_active:     Optional[bool] = None
+    email:         Optional[str]  = None
+    member_number: Optional[str]  = None
+
+
+class LockUserRequest(BaseModel):
+    lock:  bool
+    hours: Optional[int] = None   # 잠금 시간 (기본 24h)
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
 
 
 class RoleCreateRequest(BaseModel):
@@ -60,7 +74,7 @@ class PasswordPolicyUpdate(BaseModel):
     lockout_minutes:   Optional[int]  = None
 
 
-# ── 의존성 ────────────────────────────────────────────────────
+# ── 의존성 ─────────────────────────────────────────────────────
 
 def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user.get("role") != "admin":
@@ -68,15 +82,28 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
-# ── 사용자 관리 ───────────────────────────────────────────────
+def _audit(db: DbSession, admin_id: str, action: str, target_id=None, request: Request = None):
+    db.add(AuditLog(
+        user_id     = _uuid.UUID(admin_id),
+        action_type = action,
+        target_id   = target_id,
+        source_ip   = get_client_ip(request) if request else None,
+        result_code = "200",
+    ))
+    db.commit()
+
+
+# ── 사용자 관리 (SFR-030) ─────────────────────────────────────
 
 @router.post("/users", status_code=201)
 def create_user(
     body:         CreateUserRequest,
+    request:      Request,
     db:           DbSession = Depends(get_db),
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
+    """계정 생성 — 직원(email 필수) / 환자(member_number 필수). SFR-030."""
     if body.role_code not in ALLOWED_ROLES:
         raise HTTPException(status_code=400, detail=f"role_code는 {ALLOWED_ROLES} 중 하나여야 합니다.")
 
@@ -84,14 +111,22 @@ def create_user(
     if pw_error:
         raise HTTPException(status_code=400, detail=pw_error)
 
-    role = db.query(Role).filter(
-        Role.role_code == body.role_code, Role.is_active == True
-    ).first()
+    role = db.query(Role).filter(Role.role_code == body.role_code, Role.is_active == True).first()
     if not role:
         raise HTTPException(status_code=400, detail="유효하지 않은 역할 코드입니다.")
 
-    if db.query(User).filter(User.email == body.email).first():
-        raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
+    is_patient = body.role_code == "patient"
+
+    if is_patient:
+        if not body.member_number:
+            raise HTTPException(status_code=400, detail="환자 계정은 member_number가 필수입니다.")
+        if db.query(User).filter(User.member_number == body.member_number).first():
+            raise HTTPException(status_code=400, detail="이미 사용 중인 회원번호입니다.")
+    else:
+        if not body.email:
+            raise HTTPException(status_code=400, detail="직원/의사 계정은 email이 필수입니다.")
+        if db.query(User).filter(User.email == body.email).first():
+            raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
 
     doctor_uuid = None
     if body.doctor_id:
@@ -101,10 +136,13 @@ def create_user(
             raise HTTPException(status_code=422, detail="유효하지 않은 doctor_id입니다.")
 
     user = User(
-        email         = body.email,
-        password_hash = hash_password(body.password),
-        role_id       = role.role_id,
-        doctor_id     = doctor_uuid,
+        email                = body.email if not is_patient else None,
+        member_number        = body.member_number,
+        password_hash        = hash_password(body.password),
+        role_id              = role.role_id,
+        doctor_id            = doctor_uuid,
+        is_active            = True,
+        must_change_password = True,
     )
     db.add(user)
     try:
@@ -114,6 +152,7 @@ def create_user(
         db.rollback()
         raise HTTPException(status_code=400, detail="이미 계정이 존재합니다.")
 
+    _audit(db, current_user["sub"], "USER_CREATE", user.user_id, request)
     return {"user_id": str(user.user_id), "role_code": role.role_code}
 
 
@@ -124,14 +163,17 @@ def list_users(
     current_user: dict      = Depends(require_admin),
 ):
     """전체 사용자 목록 조회."""
-    users = db.query(User).all()
+    now   = datetime.now(timezone.utc)
+    users = db.query(User).order_by(User.created_at.desc()).all()
     return [
         {
             "user_id":       str(u.user_id),
             "email":         u.email,
+            "member_number": u.member_number,
             "role_code":     u.role_ref.role_code if u.role_ref else None,
             "role_name":     u.role_ref.role_name if u.role_ref else None,
             "is_active":     u.is_active,
+            "is_locked":     bool(u.locked_until and u.locked_until > now),
             "locked_until":  u.locked_until.isoformat() if u.locked_until else None,
             "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
             "created_at":    u.created_at.isoformat() if u.created_at else None,
@@ -140,19 +182,20 @@ def list_users(
     ]
 
 
-@router.patch("/users/{user_id}/lock")
-def toggle_user_lock(
+@router.patch("/users/{user_id}")
+def update_user(
     user_id:      str,
+    body:         UpdateUserRequest,
+    request:      Request,
     db:           DbSession = Depends(get_db),
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """계정 활성/잠금 전환 (관리자 수동 조작)."""
+    """역할·이메일·회원번호·활성 상태 수정 (비밀번호 제외). SFR-030."""
     try:
         uid = _uuid.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=422, detail="유효하지 않은 사용자 ID입니다.")
-
     if str(uid) == current_user["sub"]:
         raise HTTPException(status_code=400, detail="자기 자신의 계정은 변경할 수 없습니다.")
 
@@ -160,17 +203,145 @@ def toggle_user_lock(
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
 
-    user.is_active = not user.is_active
-    if user.is_active:
-        user.locked_until      = None
-        user.failed_login_cnt  = 0
+    if body.role_code is not None:
+        role = db.query(Role).filter(Role.role_code == body.role_code, Role.is_active == True).first()
+        if not role:
+            raise HTTPException(status_code=400, detail="유효하지 않은 역할 코드입니다.")
+        user.role_id = role.role_id
+    if body.doctor_id is not None:
+        try:
+            user.doctor_id = _uuid.UUID(body.doctor_id) if body.doctor_id else None
+        except ValueError:
+            raise HTTPException(status_code=422, detail="유효하지 않은 doctor_id입니다.")
+    if body.email is not None:
+        user.email = body.email
+    if body.member_number is not None:
+        user.member_number = body.member_number
+    if body.is_active is not None:
+        user.is_active = body.is_active
+
     user.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(user)
-    return {"user_id": str(user.user_id), "is_active": user.is_active}
+    _audit(db, current_user["sub"], "USER_UPDATE", user.user_id, request)
+    return {"user_id": str(user.user_id), "role_code": user.role_ref.role_code, "is_active": user.is_active}
 
 
-# ── 감사 로그 ─────────────────────────────────────────────────
+@router.patch("/users/{user_id}/lock")
+def lock_user(
+    user_id:      str,
+    body:         LockUserRequest,
+    request:      Request,
+    db:           DbSession = Depends(get_db),
+    _:            str       = Depends(verify_api_key),
+    current_user: dict      = Depends(require_admin),
+):
+    """계정 잠금(locked_until 설정) / 잠금 해제(locked_until=null). SFR-030."""
+    try:
+        uid = _uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 사용자 ID입니다.")
+    if str(uid) == current_user["sub"]:
+        raise HTTPException(status_code=400, detail="자기 자신의 계정은 변경할 수 없습니다.")
+
+    user = db.query(User).filter(User.user_id == uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    now = datetime.now(timezone.utc)
+    if body.lock:
+        hours            = body.hours or 24
+        user.locked_until = now + timedelta(hours=hours)
+    else:
+        user.locked_until     = None
+        user.failed_login_cnt = 0
+
+    user.updated_at = now
+    db.commit()
+    db.refresh(user)
+    _audit(db, current_user["sub"], "USER_LOCK", user.user_id, request)
+    return {
+        "user_id":     str(user.user_id),
+        "is_locked":   bool(user.locked_until and user.locked_until > now),
+        "locked_until": user.locked_until.isoformat() if user.locked_until else None,
+    }
+
+
+@router.delete("/users/{user_id}", status_code=200)
+def delete_user(
+    user_id:      str,
+    request:      Request,
+    db:           DbSession = Depends(get_db),
+    _:            str       = Depends(verify_api_key),
+    current_user: dict      = Depends(require_admin),
+):
+    """계정 비활성화(is_active=false) + 활성 세션 즉시 폐기. SFR-030."""
+    try:
+        uid = _uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 사용자 ID입니다.")
+    if str(uid) == current_user["sub"]:
+        raise HTTPException(status_code=400, detail="자기 자신의 계정은 삭제할 수 없습니다.")
+
+    user = db.query(User).filter(User.user_id == uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    # 소프트 삭제
+    user.is_active   = False
+    user.updated_at  = datetime.now(timezone.utc)
+
+    # 활성 세션 즉시 폐기
+    db.query(SessionModel).filter(
+        SessionModel.user_id    == uid,
+        SessionModel.is_revoked == False,
+    ).update({"is_revoked": True})
+
+    db.commit()
+    _audit(db, current_user["sub"], "USER_DELETE", user.user_id, request)
+    return {"user_id": str(user.user_id), "is_active": False}
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_password(
+    user_id:      str,
+    body:         ResetPasswordRequest,
+    request:      Request,
+    db:           DbSession = Depends(get_db),
+    _:            str       = Depends(verify_api_key),
+    current_user: dict      = Depends(require_admin),
+):
+    """임시 비밀번호 발급 — must_change_password=true 강제. SFR-030."""
+    try:
+        uid = _uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 사용자 ID입니다.")
+
+    pw_error = validate_password(body.new_password)
+    if pw_error:
+        raise HTTPException(status_code=400, detail=pw_error)
+
+    user = db.query(User).filter(User.user_id == uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    user.password_hash        = hash_password(body.new_password)
+    user.must_change_password = True
+    user.password_changed_at  = datetime.now(timezone.utc)
+    user.updated_at           = datetime.now(timezone.utc)
+
+    # 기존 세션 폐기 (다음 로그인 시 비밀번호 변경 강제)
+    db.query(SessionModel).filter(
+        SessionModel.user_id    == uid,
+        SessionModel.is_revoked == False,
+    ).update({"is_revoked": True})
+
+    db.commit()
+    _audit(db, current_user["sub"], "USER_RESET_PW", user.user_id, request)
+    return {"user_id": str(user.user_id), "must_change_password": True}
+
+
+# ── 감사 로그 ──────────────────────────────────────────────────
 
 @router.get("/audit-logs")
 def list_audit_logs(
@@ -180,7 +351,6 @@ def list_audit_logs(
     _:            str           = Depends(verify_api_key),
     current_user: dict          = Depends(require_admin),
 ):
-    """감사 로그 조회 (최신순)."""
     query = db.query(AuditLog)
     if action_type:
         query = query.filter(AuditLog.action_type == action_type)
@@ -200,7 +370,7 @@ def list_audit_logs(
     ]
 
 
-# ── 비밀번호 정책 ──────────────────────────────────────────────
+# ── 비밀번호 정책 (SFR-032) ────────────────────────────────────
 
 @router.get("/password-policy")
 def get_password_policy_endpoint(
@@ -208,7 +378,6 @@ def get_password_policy_endpoint(
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """현재 비밀번호 정책 조회."""
     from core.security import get_password_policy
     policy = get_password_policy(db)
     return {
@@ -220,17 +389,19 @@ def get_password_policy_endpoint(
         "expire_days":       policy.expire_days,
         "max_failed_logins": policy.max_failed_logins,
         "lockout_minutes":   policy.lockout_minutes,
+        "updated_at":        policy.updated_at.isoformat() if policy.updated_at else None,
     }
 
 
 @router.patch("/password-policy")
 def update_password_policy(
     body:         PasswordPolicyUpdate,
+    request:      Request,
     db:           DbSession = Depends(get_db),
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """비밀번호 정책 업데이트."""
+    """보안 정책 업데이트 — 변경자·변경 일시 기록 + 감사 로그. SFR-032."""
     policy = db.query(PasswordPolicy).first()
     if not policy:
         policy = PasswordPolicy()
@@ -243,113 +414,11 @@ def update_password_policy(
 
     db.commit()
     db.refresh(policy)
+    _audit(db, current_user["sub"], "POLICY_UPDATE", None, request)
     return {"message": "보안 정책이 업데이트되었습니다."}
 
 
-# ── 사용자 수정 / 삭제 ────────────────────────────────────────────
-
-@router.patch("/users/{user_id}")
-def update_user(
-    user_id:      str,
-    body:         UpdateUserRequest,
-    db:           DbSession = Depends(get_db),
-    _:            str       = Depends(verify_api_key),
-    current_user: dict      = Depends(require_admin),
-):
-    """사용자 역할·활성 상태 수정 (ISMS-P 2.5.1)."""
-    try:
-        uid = _uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="유효하지 않은 사용자 ID입니다.")
-
-    if str(uid) == current_user["sub"]:
-        raise HTTPException(status_code=400, detail="자기 자신의 계정은 변경할 수 없습니다.")
-
-    user = db.query(User).filter(User.user_id == uid).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-
-    if body.role_code is not None:
-        role = db.query(Role).filter(Role.role_code == body.role_code, Role.is_active == True).first()
-        if not role:
-            raise HTTPException(status_code=400, detail="유효하지 않은 역할 코드입니다.")
-        user.role_id = role.role_id
-
-    if body.doctor_id is not None:
-        try:
-            user.doctor_id = _uuid.UUID(body.doctor_id) if body.doctor_id else None
-        except ValueError:
-            raise HTTPException(status_code=422, detail="유효하지 않은 doctor_id입니다.")
-
-    if body.is_active is not None:
-        user.is_active = body.is_active
-        if user.is_active:
-            user.locked_until     = None
-            user.failed_login_cnt = 0
-
-    user.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(user)
-    return {"user_id": str(user.user_id), "role_code": user.role_ref.role_code, "is_active": user.is_active}
-
-
-@router.delete("/users/{user_id}", status_code=204)
-def delete_user(
-    user_id:      str,
-    db:           DbSession = Depends(get_db),
-    _:            str       = Depends(verify_api_key),
-    current_user: dict      = Depends(require_admin),
-):
-    """사용자 삭제 (ISMS-P 2.5.1)."""
-    try:
-        uid = _uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="유효하지 않은 사용자 ID입니다.")
-
-    if str(uid) == current_user["sub"]:
-        raise HTTPException(status_code=400, detail="자기 자신의 계정은 삭제할 수 없습니다.")
-
-    user = db.query(User).filter(User.user_id == uid).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-
-    db.delete(user)
-    db.commit()
-
-
-# ── 로그인 이력 ───────────────────────────────────────────────────
-
-@router.get("/login-history")
-def list_login_history(
-    result:       Optional[str] = Query(default=None, description="success|fail|locked"),
-    email:        Optional[str] = Query(default=None),
-    limit:        int           = Query(default=100, le=500),
-    db:           DbSession     = Depends(get_db),
-    _:            str           = Depends(verify_api_key),
-    current_user: dict          = Depends(require_admin),
-):
-    """로그인 이력 조회 (ISMS-P 2.9.1)."""
-    query = db.query(LoginHistory)
-    if result:
-        query = query.filter(LoginHistory.result == result)
-    if email:
-        query = query.filter(LoginHistory.email.ilike(f"%{email}%"))
-    logs = query.order_by(LoginHistory.event_at.desc()).limit(limit).all()
-    return [
-        {
-            "history_id": str(log.history_id),
-            "user_id":    str(log.user_id) if log.user_id else None,
-            "email":      log.email,
-            "result":     log.result,
-            "ip_address": str(log.ip_address) if log.ip_address else None,
-            "user_agent": log.user_agent,
-            "event_at":   log.event_at.isoformat() if log.event_at else None,
-        }
-        for log in logs
-    ]
-
-
-# ── 역할 / 권한 관리 (ISMS-P 2.5.4) ──────────────────────────────
+# ── 역할 / 권한 관리 (SFR-031) ────────────────────────────────
 
 @router.get("/roles")
 def list_roles(
@@ -357,7 +426,6 @@ def list_roles(
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """전체 역할 목록 + 각 역할에 할당된 권한 반환."""
     roles = db.query(Role).order_by(Role.role_id).all()
     return [
         {
@@ -386,17 +454,18 @@ def list_roles(
 @router.post("/roles", status_code=201)
 def create_role(
     body:         RoleCreateRequest,
+    request:      Request,
     db:           DbSession = Depends(get_db),
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """새 역할 생성."""
     if db.query(Role).filter(Role.role_code == body.role_code).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 역할 코드입니다.")
     role = Role(role_code=body.role_code, role_name=body.role_name, description=body.description)
     db.add(role)
     db.commit()
     db.refresh(role)
+    _audit(db, current_user["sub"], "ROLE_UPDATE", None, request)
     return {"role_id": role.role_id, "role_code": role.role_code}
 
 
@@ -404,27 +473,23 @@ def create_role(
 def set_role_permissions(
     role_id:      int,
     body:         RolePermissionsUpdate,
+    request:      Request,
     db:           DbSession = Depends(get_db),
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """역할에 권한 일괄 설정 (기존 권한 전체 교체)."""
     role = db.query(Role).filter(Role.role_id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="역할을 찾을 수 없습니다.")
-
-    # 기존 권한 전체 삭제
     db.query(RolePermission).filter(RolePermission.role_id == role_id).delete()
-
-    # 새 권한 삽입
     for code in body.permission_codes:
         perm = db.query(Permission).filter(Permission.permission_code == code).first()
         if not perm:
             db.rollback()
             raise HTTPException(status_code=400, detail=f"권한 코드 '{code}'를 찾을 수 없습니다.")
         db.add(RolePermission(role_id=role_id, permission_id=perm.permission_id))
-
     db.commit()
+    _audit(db, current_user["sub"], "PERMISSION_UPDATE", None, request)
     return {"message": f"역할 '{role.role_name}'의 권한이 업데이트되었습니다."}
 
 
@@ -434,20 +499,15 @@ def list_permissions(
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """전체 권한 코드 목록 반환."""
     perms = db.query(Permission).order_by(Permission.category, Permission.permission_id).all()
     return [
-        {
-            "permission_id":   p.permission_id,
-            "permission_code": p.permission_code,
-            "permission_name": p.permission_name,
-            "category":        p.category,
-        }
+        {"permission_id":   p.permission_id,
+         "permission_code": p.permission_code,
+         "permission_name": p.permission_name,
+         "category":        p.category}
         for p in perms
     ]
 
-
-# ── 역할 메뉴 관리 (ISMS-P 2.5.4) ────────────────────────────────
 
 @router.get("/menus")
 def list_menus(
@@ -455,15 +515,10 @@ def list_menus(
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """전체 메뉴 목록 반환."""
     menus = db.query(Menu).filter(Menu.is_active == True).order_by(Menu.sort_order, Menu.menu_id).all()
     return [
-        {
-            "menu_id":   m.menu_id,
-            "menu_code": m.menu_code,
-            "menu_name": m.menu_name,
-            "menu_url":  m.menu_url,
-        }
+        {"menu_id":   m.menu_id, "menu_code": m.menu_code,
+         "menu_name": m.menu_name, "menu_url":  m.menu_url}
         for m in menus
     ]
 
@@ -472,29 +527,27 @@ def list_menus(
 def set_role_menus(
     role_id:      int,
     body:         RoleMenusUpdate,
+    request:      Request,
     db:           DbSession = Depends(get_db),
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """역할에 메뉴 일괄 설정 (기존 메뉴 전체 교체)."""
     role = db.query(Role).filter(Role.role_id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="역할을 찾을 수 없습니다.")
-
     db.query(RoleMenu).filter(RoleMenu.role_id == role_id).delete()
-
     for code in body.menu_codes:
         menu = db.query(Menu).filter(Menu.menu_code == code).first()
         if not menu:
             db.rollback()
             raise HTTPException(status_code=400, detail=f"메뉴 코드 '{code}'를 찾을 수 없습니다.")
         db.add(RoleMenu(role_id=role_id, menu_id=menu.menu_id))
-
     db.commit()
+    _audit(db, current_user["sub"], "ROLE_UPDATE", None, request)
     return {"message": f"역할 '{role.role_name}'의 메뉴가 업데이트되었습니다."}
 
 
-# ── 운영자 통합 대시보드 (SFR-012) ────────────────────────────────
+# ── 운영 대시보드 (SFR-029) ────────────────────────────────────
 
 @router.get("/dashboard")
 def get_dashboard(
@@ -502,57 +555,51 @@ def get_dashboard(
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """운영자 통합 대시보드 — 예약·보안·알림·온프레미스 상태 요약."""
+    """운영 대시보드 — 예약·보안 이벤트·미처리 알림·잠금 계정. SFR-029."""
     now   = datetime.now(timezone.utc)
     today = now.date()
     ago24 = now - timedelta(hours=24)
 
-    # ── 예약 현황 ─────────────────────────────────────────────
-    appts_today = db.query(Appointment).filter(
-        Appointment.appointment_date == today
-    ).all()
-    appt_by_status: dict = {}
-    for a in appts_today:
-        code = a.status_code or "unknown"
-        appt_by_status[code] = appt_by_status.get(code, 0) + 1
+    # 예약 현황 (상태별)
+    appt_rows = (
+        db.query(AppointmentStatus.status_code, func.count(Appointment.appointment_id).label("cnt"))
+        .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
+        .filter(Appointment.appointment_date == today)
+        .group_by(AppointmentStatus.status_code)
+        .all()
+    )
+    appt_by_status = {row.status_code: row.cnt for row in appt_rows}
+    appt_total = sum(appt_by_status.values())
 
-    # ── 보안 이벤트 ───────────────────────────────────────────
-    login_failures_24h = db.query(LoginHistory).filter(
-        LoginHistory.result.in_(["fail", "locked"]),
-        LoginHistory.event_at >= ago24,
-    ).count()
+    # 보안 이벤트 (24h, 타입별)
+    SECURITY_TYPES = ["BREAK_GLASS", "USER_LOCK", "POLICY_UPDATE", "ACCOUNT_LOCKED", "USER_DELETE", "USER_CREATE"]
+    sec_rows = (
+        db.query(AuditLog.action_type, func.count(AuditLog.audit_log_id).label("cnt"))
+        .filter(
+            AuditLog.event_at >= ago24,
+            AuditLog.action_type.in_(SECURITY_TYPES),
+        )
+        .group_by(AuditLog.action_type)
+        .all()
+    )
+    security_events = {row.action_type: row.cnt for row in sec_rows}
+    security_total  = sum(security_events.values())
 
-    locked_accounts = db.query(User).filter(
-        User.locked_until > now,
-        User.is_active == True,
-    ).count()
+    # 잠금 계정 수
+    locked_accounts = db.query(func.count(User.user_id)).filter(
+        User.locked_until > now, User.is_active == True,
+    ).scalar() or 0
 
-    audit_24h = db.query(AuditLog).filter(
-        AuditLog.event_at >= ago24,
-    ).count()
+    # 미처리 알림 (status='pending')
+    pending_notifications = db.query(func.count(Notification.notification_id)).filter(
+        Notification.status == "pending",
+    ).scalar() or 0
 
-    recent_events = db.query(AuditLog).order_by(
-        AuditLog.event_at.desc()
-    ).limit(10).all()
+    # 최근 감사 이벤트 10건
+    recent_events = db.query(AuditLog).order_by(AuditLog.event_at.desc()).limit(10).all()
 
-    # ── 알림 현황 ─────────────────────────────────────────────
-    notif_sent   = db.query(Notification).filter(
-        Notification.status == "sent",
-        Notification.sent_at >= ago24,
-    ).count()
-    notif_failed = db.query(Notification).filter(
-        Notification.status == "failed",
-        Notification.sent_at >= ago24,
-    ).count()
-
-    notif_by_channel: dict = {}
-    for n in db.query(Notification).filter(Notification.sent_at >= ago24).all():
-        key = f"{n.channel}_{n.status}"
-        notif_by_channel[key] = notif_by_channel.get(key, 0) + 1
-
-    # ── 온프레미스 연결 상태 ──────────────────────────────────
-    onprem_status = "unknown"
-    onprem_detail = ""
+    # 온프레미스 연결 상태
+    onprem_status, onprem_detail = "unknown", ""
     try:
         import os, httpx
         base = os.getenv("ONPREM_API_URL", "").rstrip("/")
@@ -562,29 +609,24 @@ def get_dashboard(
         else:
             onprem_status = "not_configured"
     except Exception as e:
-        onprem_status = "error"
-        onprem_detail = str(e)[:80]
+        onprem_status, onprem_detail = "error", str(e)[:80]
 
     return {
         "generated_at": now.isoformat(),
         "appointments": {
-            "today_total": len(appts_today),
+            "today_total": appt_total,
             "by_status":   appt_by_status,
         },
         "security": {
-            "login_failures_24h": login_failures_24h,
-            "locked_accounts":    locked_accounts,
-            "audit_actions_24h":  audit_24h,
+            "locked_accounts":  locked_accounts,
+            "security_total_24h": security_total,
+            "events_by_type":   security_events,
         },
-        "notifications": {
-            "sent_24h":    notif_sent,
-            "failed_24h":  notif_failed,
-            "by_channel":  notif_by_channel,
-        },
+        "pending_notifications": pending_notifications,
         "system": {
-            "onprem_api":  onprem_status,
+            "onprem_api":    onprem_status,
             "onprem_detail": onprem_detail,
-            "combined_api": "ok",
+            "combined_api":  "ok",
         },
         "recent_events": [
             {
