@@ -65,7 +65,59 @@ systemctl enable wazuh-agent
 systemctl start wazuh-agent || true
 %{ endif }
 
+
+# ── Node Exporter 설치 — Prometheus 메트릭 수집용 ────────
+# 공식문서: https://prometheus.io/docs/guides/node-exporter/
+NODE_EXPORTER_VERSION="1.8.1"
+cd /tmp
+curl -sLO "https://github.com/prometheus/node_exporter/releases/download/v$${NODE_EXPORTER_VERSION}/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" || true
+if [ -f /tmp/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz ]; then
+  tar -xzf node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
+  cp node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/
+  rm -rf /tmp/node_exporter*
+  useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
+  cat > /etc/systemd/system/node_exporter.service << 'NODEEOF'
+[Unit]
+Description=Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+NODEEOF
+  systemctl daemon-reload
+  systemctl enable node_exporter
+  systemctl start node_exporter || true
+fi
+
 # 260601 박경수  Wazuh 안정화 대기 후 ECS agent 시작
 
-sleep 30
+# sleep 30
+# systemctl start ecs
+
+
+# Wazuh agent active 상태 대기 (최대 120초)
+# Wazuh agent가 120초 내에 활성화되지 않더라도 ECS는 시작하도록 함 (모니터링은 되지만 보안 이벤트는 누락될 수 있음)
+# 30초는 불안해서 120초로 늘림 
+# agent가 활성화되면 ECS를 시작하도록 변경 - 260603 김강환
+echo "Waiting for wazuh-agent to become active..."
+for i in $(seq 1 24); do
+  if systemctl is-active --quiet wazuh-agent; then
+    echo "Wazuh agent is active after $((i*5))s, starting ECS..."
+    break
+  fi
+  if [ $i -eq 24 ]; then
+    echo "Wazuh agent did not start in 120s, starting ECS anyway..."
+  fi
+  sleep 5
+done
+
 systemctl start ecs
