@@ -46,6 +46,7 @@ resource "aws_security_group" "aws-monitoring-sg" {
 resource "aws_instance" "aws-monitoring-01" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
+  subnet_id              = data.aws_subnet.aws-app-sub-2b.id
   private_ip             = var.monitoring_private_ip
   vpc_security_group_ids = [aws_security_group.aws-monitoring-sg.id]
   iam_instance_profile   = aws_iam_instance_profile.aws-monitoring-profile.name
