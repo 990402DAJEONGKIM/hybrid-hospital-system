@@ -4,11 +4,19 @@ variable "aws_region" {
   default     = "ap-south-2"
 }
 
-variable "patient_alb_name" {
-  description = "환자 포털 ALB 이름"
+# by 김다정 20260604
+variable "base_domain" {
+  description = "베이스 도메인 (staff/admin host 매칭용)"
   type        = string
-  default     = "aws-patient-alb"
+  default     = "mzclinic.cloud"
 }
+
+# 주석 처리: patient-alb 삭제로 불필요 by 김다정 20260604
+# variable "patient_alb_name" {
+#   description = "환자 포털 ALB 이름"
+#   type        = string
+#   default     = "aws-patient-alb"
+# }
 
 variable "waf_log_retention_days" {
   description = "WAF 로그 보존 기간 (일) — ISMS-P 2.9.1 최소 1년"

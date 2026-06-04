@@ -1,37 +1,102 @@
 # =========================================================
 # WAF — AWS WAFv2 Web ACL
 #
-# patient-alb (Public):
-#   2.8.3  웹 취약점 대응       → CommonRuleSet, SQLiRuleSet, KnownBadInputs
-#   2.8.1  인터넷 접근 통제     → IP Reputation List
-#   2.5.4  로그인 시도 제한     → Rate limiting (/auth/ 엔드포인트)
-#   2.9.1  로그 관리            → WAF 로그 → CloudWatch (365일 보존)
+# 통합 staff-alb 1개에 WAF 1개 연결 by 김다정 20260604
 #
-# staff-alb (Public + IP 화이트리스트):
-#   2.6.1  네트워크 접근통제    → 허용 IP만 통과, 나머지 차단
-#   2.9.1  로그 관리            → WAF 로그 → CloudWatch (365일 보존)
+# 변경 전: WAF 2개 (patient-waf / staff-waf) — ALB 2개에 각각 연결
+# 변경 후: WAF 1개 (staff-waf 통합) — staff-alb 1개에 연결
+#   - patient.mzclinic.cloud : 공개 (OWASP + Rate limit만 적용)
+#   - staff.mzclinic.cloud   : 병원 IP만 허용 (ISMS-P 2.6.1)
+#   - admin.mzclinic.cloud   : 병원 IP만 허용 (ISMS-P 2.6.1)
+#
+# 룰 우선순위:
+#   0. Rate limit /auth/ (전체 도메인)
+#   1. IP 평판 목록 차단 (전체 도메인)
+#   2. OWASP CommonRuleSet (전체 도메인)
+#   3. SQL 인젝션 방어 (전체 도메인)
+#   4. 알려진 악성 입력값 차단 (전체 도메인)
+#   5. staff/admin 도메인 비허용 IP 차단 (ISMS-P 2.6.1)
+#   default: ALLOW (patient는 공개)
 # =========================================================
 
 
-# # ─────────────────────────────────────────────────────────
-# # CloudWatch Log Group — WAF 로그 (ISMS-P 2.9.1)
-# # WAF 로그 그룹명은 반드시 "aws-waf-logs-" 접두사 필요
-# # ─────────────────────────────────────────────────────────
-# resource "aws_cloudwatch_log_group" "waf" {
-#   name              = "aws-waf-logs-patient-alb"
-#   retention_in_days = var.waf_log_retention_days
-# }
+# ─────────────────────────────────────────────────────────
+# 주석 처리: patient WAF → patient-alb 연결 (ALB 통합으로 불필요)
+# by 김다정 20260604
+# ─────────────────────────────────────────────────────────
+# resource "aws_wafv2_web_acl" "patient" { ... }
+# resource "aws_wafv2_web_acl_association" "patient" { ... }
+# resource "aws_wafv2_web_acl_logging_configuration" "aws-waf-patient-logging" { ... }
+# resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-patient" { ... }
 
 
 # ─────────────────────────────────────────────────────────
-# Web ACL
+# IP Set — 허용 공인 IP 목록 (ISMS-P 2.6.1)
+# 병원 공인 IP 확정 시 staff_allowed_ips 변수에 추가
 # ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl" "patient" {
-  name  = "aws-patient-waf"
+resource "aws_wafv2_ip_set" "staff_allowed" {
+  name               = "staff-allowed-ips"
+  scope              = "REGIONAL"
+  ip_address_version = "IPV4"
+  addresses          = var.staff_allowed_ips
+
+  tags = {
+    Name    = "staff-allowed-ips"
+    Purpose = "ISMS-P 2.6.1 의료진/관리자 포털 접근 허용 IP"
+  }
+}
+
+
+# ─────────────────────────────────────────────────────────
+# Web ACL — 통합 (patient 공개 + staff/admin IP 제한)
+# by 김다정 20260604
+# ─────────────────────────────────────────────────────────
+resource "aws_wafv2_web_acl" "staff" {
+  name  = "aws-staff-waf"
   scope = "REGIONAL"
 
+  # 기본 동작: 허용 (patient는 공개 접근)
+  # staff/admin은 Rule 5에서 비허용 IP 차단
   default_action {
     allow {}
+  }
+
+  # ── Rule 0: 로그인 엔드포인트 Rate Limiting (전체 도메인) ────────
+  # ISMS-P 2.5.4 브루트포스 방어
+  rule {
+    name     = "RateLimitAuthEndpoint"
+    priority = 0
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = var.rate_limit_auth
+        aggregate_key_type = "IP"
+
+        scope_down_statement {
+          byte_match_statement {
+            search_string = "/auth/"
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
+            positional_constraint = "STARTS_WITH"
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "RateLimitAuth"
+      sampled_requests_enabled   = true
+    }
   }
 
   # ── Rule 1: IP 평판 목록 (알려진 악성 IP 차단) — ISMS-P 2.8.1 ──
@@ -126,10 +191,11 @@ resource "aws_wafv2_web_acl" "patient" {
     }
   }
 
-  # ── Rule 5: 로그인 엔드포인트 Rate Limiting — ISMS-P 2.5.4 ──────
-  # /auth/ 경로에 5분당 100회 초과 요청 시 차단 (브루트포스 방어)
+  # ── Rule 5: staff/admin 도메인 비허용 IP 차단 — ISMS-P 2.6.1 ───
+  # (staff.mzclinic.cloud OR admin.mzclinic.cloud) AND NOT 허용 IP → BLOCK
+  # by 김다정 20260604
   rule {
-    name     = "RateLimitAuthEndpoint"
+    name     = "BlockNonHospitalIPsForStaffAdmin"
     priority = 5
 
     action {
@@ -137,21 +203,44 @@ resource "aws_wafv2_web_acl" "patient" {
     }
 
     statement {
-      rate_based_statement {
-        limit              = var.rate_limit_auth
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string = "/auth/"
-            field_to_match {
-              uri_path {}
+      and_statement {
+        statement {
+          or_statement {
+            statement {
+              byte_match_statement {
+                search_string = "staff.${var.base_domain}"
+                field_to_match {
+                  single_header { name = "host" }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+                positional_constraint = "EXACTLY"
+              }
             }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
+            statement {
+              byte_match_statement {
+                search_string = "admin.${var.base_domain}"
+                field_to_match {
+                  single_header { name = "host" }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+                positional_constraint = "EXACTLY"
+              }
             }
-            positional_constraint = "STARTS_WITH"
+          }
+        }
+        statement {
+          not_statement {
+            statement {
+              ip_set_reference_statement {
+                arn = aws_wafv2_ip_set.staff_allowed.arn
+              }
+            }
           }
         }
       }
@@ -159,166 +248,7 @@ resource "aws_wafv2_web_acl" "patient" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "RateLimitAuth"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "PatientWAF"
-    sampled_requests_enabled   = true
-  }
-
-  tags = {
-    Name    = "aws-patient-waf"
-    Purpose = "ISMS-P 2.8.1 2.8.3 2.5.4"
-  }
-}
-
-
-# ─────────────────────────────────────────────────────────
-# WAF → 환자 포털 ALB 연결
-# ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl_association" "patient" {
-  resource_arn = data.aws_lb.patient.arn
-  web_acl_arn  = aws_wafv2_web_acl.patient.arn
-}
-
-
-# ─────────────────────────────────────────────────────────
-# WAF 로그 → CloudWatch 연결 (ISMS-P 2.9.1)
-# ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl_logging_configuration" "aws-waf-patient-logging" {
-  log_destination_configs = [
-    aws_kinesis_firehose_delivery_stream.aws-firehose-waf-patient.arn
-  ]
-  resource_arn = aws_wafv2_web_acl.patient.arn
-
-  logging_filter {
-    default_behavior = "DROP"
-    filter {
-      behavior    = "KEEP"
-      requirement = "MEETS_ANY"
-      condition {
-        action_condition {
-          action = "BLOCK"
-        }
-      }
-    }
-  }
-}
-
-# ─────────────────────────────────────────────────────────
-# CloudWatch Log Group — staff WAF 로그 (ISMS-P 2.9.1)
-# ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl_logging_configuration" "aws-waf-staff-logging" {
-  log_destination_configs = [
-    aws_kinesis_firehose_delivery_stream.aws-firehose-waf-staff.arn
-  ]
-  resource_arn = aws_wafv2_web_acl.staff.arn
-  
-  logging_filter {
-    default_behavior = "DROP"
-    filter {
-      behavior    = "KEEP"
-      requirement = "MEETS_ANY"
-      condition {
-        action_condition {
-          action = "BLOCK"
-        }
-      }
-    }
-  }
-}
-
-
-# ─────────────────────────────────────────────────────────
-# IP Set — 허용 공인 IP 목록 (ISMS-P 2.6.1)
-# 병원 공인 IP 확정 시 staff_allowed_ips 변수에 추가
-# ─────────────────────────────────────────────────────────
-resource "aws_wafv2_ip_set" "staff_allowed" {
-  name               = "staff-allowed-ips"
-  scope              = "REGIONAL"
-  ip_address_version = "IPV4"
-  addresses          = var.staff_allowed_ips
-
-  tags = {
-    Name    = "staff-allowed-ips"
-    Purpose = "ISMS-P 2.6.1 의료진 포털 접근 허용 IP"
-  }
-}
-
-
-# ─────────────────────────────────────────────────────────
-# Web ACL — 의료진 포털 (기본 차단, 허용 IP만 통과)
-# ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl" "staff" {
-  name  = "aws-staff-waf"
-  scope = "REGIONAL"
-
-  # 기본 동작: 차단 (허용 IP 외 모두 차단)
-  default_action {
-    block {}
-  }
-
-  # ── Rule 0: 로그인 엔드포인트 Rate Limiting — ISMS-P 2.5.4 ─────
-  # 허용 IP라도 /auth/ 에 5분당 100회 초과 시 차단 (내부 브루트포스 방어)
-  # 우선순위 0 — AllowStaffIPs(1)보다 먼저 평가되어 초과 IP를 차단
-  rule {
-    name     = "RateLimitAuthEndpoint"
-    priority = 0
-
-    action {
-      block {}
-    }
-
-    statement {
-      rate_based_statement {
-        limit              = var.rate_limit_auth
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string = "/auth/"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-            positional_constraint = "STARTS_WITH"
-          }
-        }
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "StaffRateLimitAuth"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # ── Rule 1: 허용 IP 통과 — ISMS-P 2.6.1 ────────────────
-  rule {
-    name     = "AllowStaffIPs"
-    priority = 1
-
-    action {
-      allow {}
-    }
-
-    statement {
-      ip_set_reference_statement {
-        arn = aws_wafv2_ip_set.staff_allowed.arn
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "StaffAllowedIPs"
+      metric_name                = "BlockNonHospitalIPs"
       sampled_requests_enabled   = true
     }
   }
@@ -331,13 +261,13 @@ resource "aws_wafv2_web_acl" "staff" {
 
   tags = {
     Name    = "aws-staff-waf"
-    Purpose = "ISMS-P 2.6.1 의료진 포털 IP 화이트리스트"
+    Purpose = "ISMS-P 2.6.1 2.8.1 2.8.3 2.5.4"
   }
 }
 
 
 # ─────────────────────────────────────────────────────────
-# WAF → 의료진 포털 ALB 연결
+# WAF → 통합 ALB 연결 (staff-alb)
 # ─────────────────────────────────────────────────────────
 resource "aws_wafv2_web_acl_association" "staff" {
   resource_arn = data.aws_lb.staff.arn
@@ -346,18 +276,32 @@ resource "aws_wafv2_web_acl_association" "staff" {
 
 
 # ─────────────────────────────────────────────────────────
-# WAF 로그 → CloudWatch 연결 (ISMS-P 2.9.1)
+# WAF 로그 → Firehose → S3 (ISMS-P 2.9.1)
 # ─────────────────────────────────────────────────────────
-# resource "aws_wafv2_web_acl_logging_configuration" "staff" {
-#   log_destination_configs = [aws_cloudwatch_log_group.waf_staff.arn]
-#   resource_arn            = aws_wafv2_web_acl.staff.arn
-# }
+resource "aws_wafv2_web_acl_logging_configuration" "aws-waf-staff-logging" {
+  log_destination_configs = [
+    aws_kinesis_firehose_delivery_stream.aws-firehose-waf-staff.arn
+  ]
+  resource_arn = aws_wafv2_web_acl.staff.arn
+
+  logging_filter {
+    default_behavior = "DROP"
+    filter {
+      behavior    = "KEEP"
+      requirement = "MEETS_ANY"
+      condition {
+        action_condition {
+          action = "BLOCK"
+        }
+      }
+    }
+  }
+}
 
 
-
-
-# ── Firehose IAM Role (ISMS-P 2.5.3 최소 권한) ───────────────
-# 공식문서: https://docs.aws.amazon.com/firehose/latest/dev/controlling-access.html
+# ─────────────────────────────────────────────────────────
+# Firehose IAM Role (ISMS-P 2.5.3 최소 권한)
+# ─────────────────────────────────────────────────────────
 resource "aws_iam_role" "aws-firehose-waf-role" {
   name = "aws-firehose-waf-role"
   assume_role_policy = jsonencode({
@@ -396,26 +340,22 @@ resource "aws_iam_role_policy" "aws-firehose-waf-policy" {
   })
 }
 
-# ── Firehose — patient WAF 로그 → S3 ─────────────────────────
+# 주석 처리: patient WAF Firehose 삭제 by 김다정 20260604
+# resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-patient" {
+#   name        = "aws-waf-logs-patient"
+#   destination = "extended_s3"
+#   extended_s3_configuration {
+#     role_arn            = aws_iam_role.aws-firehose-waf-role.arn
+#     bucket_arn          = "arn:aws:s3:::aws-k2p-storage-01"
+#     prefix              = "waf/patient/"
+#     error_output_prefix = "waf/patient/errors/"
+#     buffering_size      = 5
+#     buffering_interval  = 300
+#     kms_key_arn         = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
+#   }
+#   tags = { Name = "aws-firehose-waf-patient" }
+# }
 
-resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-patient" {
-  name        = "aws-waf-logs-patient"
-  destination = "extended_s3"
-
-  extended_s3_configuration {
-    role_arn            = aws_iam_role.aws-firehose-waf-role.arn
-    bucket_arn          = "arn:aws:s3:::aws-k2p-storage-01"
-    prefix              = "waf/patient/"
-    error_output_prefix = "waf/patient/errors/"
-    buffering_size      = 5
-    buffering_interval  = 300
-    kms_key_arn         = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
-  }
-
-  tags = { Name = "aws-firehose-waf-patient" }
-}
-
-# ── Firehose — staff WAF 로그 → S3 ───────────────────────────
 resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-staff" {
   name        = "aws-waf-logs-staff"
   destination = "extended_s3"
