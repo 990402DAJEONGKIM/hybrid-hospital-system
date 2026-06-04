@@ -48,8 +48,8 @@ resource "aws_ecs_task_definition" "hospital" {
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
-  cpu                      = "1024"
-  memory                   = "2048"
+  cpu                      = "512"   # t3.medium 1대에 태스크 2개 수용 가능하도록 축소 김다정 20260604
+  memory                   = "1536"  # t3.medium 1대에 태스크 2개 수용 가능하도록 축소 김다정 20260604
 
   container_definitions = jsonencode([
     {
