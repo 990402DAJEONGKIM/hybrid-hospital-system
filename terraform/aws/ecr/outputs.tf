@@ -3,28 +3,18 @@
 # 형식: <account_id>.dkr.ecr.<region>.amazonaws.com/<repo_name>
 # ─────────────────────────────────────────────────────────
 
-output "nginx_patient_repository_url" {
-  description = "NGINX Patient 리포지토리 URL"
-  value       = aws_ecr_repository.repos["aws-hospital-nginx-patient"].repository_url
+output "nginx_repository_url" {
+  description = "NGINX 리포지토리 URL"
+  value       = aws_ecr_repository.repos["aws-hospital-nginx"].repository_url
 }
 
-output "api_patient_repository_url" {
-  description = "API Patient 리포지토리 URL"
-  value       = aws_ecr_repository.repos["aws-hospital-api-patient"].repository_url
-}
-
-output "nginx_staff_repository_url" {
-  description = "NGINX Staff 리포지토리 URL"
-  value       = aws_ecr_repository.repos["aws-hospital-nginx-staff"].repository_url
-}
-
-output "api_staff_repository_url" {
-  description = "API Staff 리포지토리 URL"
-  value       = aws_ecr_repository.repos["aws-hospital-api-staff"].repository_url
+output "api_repository_url" {
+  description = "API 리포지토리 URL"
+  value       = aws_ecr_repository.repos["aws-hospital-api"].repository_url
 }
 
 output "repository_urls" {
-  description = "전체 리포지토리 URL 맵 (ECS Task Definition 참조용)"
+  description = "전체 리포지토리 URL 맵"
   value       = { for k, v in aws_ecr_repository.repos : k => v.repository_url }
 }
 
