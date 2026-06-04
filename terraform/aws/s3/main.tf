@@ -71,87 +71,149 @@ resource "aws_s3_bucket_versioning" "storage" {
 resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   bucket = aws_s3_bucket.storage.id
 
+  # ── 보안 감사 로그 365일 (ISMS-P 2.9.1 필수) ────────────
+  # ── 보안 감사 로그 365일 (ISMS-P 2.9.1 필수) ────────────
   rule {
-    id     = "wazuh-log-lifecycle"
+    id     = "cloudtrail-lifecycle"
     status = "Enabled"
-    filter {} 
-
-    # 90일 후 Glacier Instant Retrieval로 전환 (비용 절감)
+    filter { prefix = "cloudtrail/" }
     transition {
       days          = var.wazuh_log_glacier_days
       storage_class = "GLACIER_IR"
     }
-
-    # 1년 후 현재 버전 삭제
-    expiration {
-      days = var.wazuh_log_retention_days
-    }
-
-    # 이전 버전도 1년 후 삭제
-    noncurrent_version_expiration {
-      noncurrent_days = var.wazuh_log_retention_days
-    }
+    expiration { days = var.wazuh_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
-    # 추가: DB 덤프 30일 보존 - 20260526 st1 추가
+
+  rule {
+    id     = "guardduty-lifecycle"
+    status = "Enabled"
+    filter { prefix = "guardduty/" }
+    transition {
+      days          = var.wazuh_log_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.wazuh_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
+
+  rule {
+    id     = "wazuh-alerts-lifecycle"
+    status = "Enabled"
+    filter { prefix = "wazuh/alerts/" }
+    transition {
+      days          = var.wazuh_log_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.wazuh_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
+
+  rule {
+    id     = "wazuh-archives-lifecycle"
+    status = "Enabled"
+    filter { prefix = "wazuh/archives/" }
+    transition {
+      days          = var.wazuh_log_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.wazuh_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
+
+  rule {
+    id     = "vpn-lifecycle"
+    status = "Enabled"
+    filter { prefix = "vpn/" }
+    transition {
+      days          = var.wazuh_log_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.wazuh_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
+
+  # ── VPC Flow Log (REJECT만) 365일 ───────────────────────
+  rule {
+    id     = "flowlogs-lifecycle"
+    status = "Enabled"
+    filter { prefix = "flowlogs/" }
+    transition {
+      days          = var.wazuh_log_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.flowlogs_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
+
+  # ── WAF 로그 90일 ────────────────────────────────────────
+  # WAF는 이미 차단된 트래픽 — 장기 보존 불필요
+  rule {
+    id     = "waf-lifecycle"
+    status = "Enabled"
+    filter { prefix = "waf/" }
+    expiration { days = var.waf_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
+
+  # ── Wazuh DB 백업 7일 ────────────────────────────────────
+  # wodle 수집 위치 추적용 .db 파일 — 재생성 가능
+  rule {
+    id     = "wazuh-db-backup-lifecycle"
+    status = "Enabled"
+    filter { prefix = "wazuh/db-backup/" }
+    expiration { days = var.wazuh_db_backup_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 3 }
+  }
+
+  # ── Wazuh Indexer 스냅샷 7일 ────────────────────────────
+  # alerts/archives/ 에 원본 있으므로 단기 보존
+  rule {
+    id     = "wazuh-snapshots-lifecycle"
+    status = "Enabled"
+    filter { prefix = "wazuh/snapshots/" }
+    expiration { days = var.wazuh_snapshots_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 3 }
+  }
+
+  # ── DB 덤프 30일 ─────────────────────────────────────────
   rule {
     id     = "db-dump-lifecycle"
     status = "Enabled"
-    filter {
-      prefix = "db-dumps/"
-    }
-    expiration {
-      days = var.db_dump_retention_days
-    }
-    noncurrent_version_expiration {
-      noncurrent_days = 7
-    }
+    filter { prefix = "db-dumps/" }
+    expiration { days = var.db_dump_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # 추가: GitHub Actions 소스코드 백업 90일 보존 (20260530, by 김다정)
+  # ── GitHub 백업 소스/tfstate 90일 ────────────────────────
   rule {
     id     = "github-backup-source-lifecycle"
     status = "Enabled"
-    filter {
-      prefix = "github-backup/source/"
-    }
-    expiration {
-      days = var.github_backup_retention_days
-    }
-    noncurrent_version_expiration {
-      noncurrent_days = 7
-    }
+    filter { prefix = "github-backup/source/" }
+    expiration { days = var.github_backup_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # 추가: GitHub Actions tfstate 백업 90일 보존 (20260530, by 김다정)
   rule {
     id     = "github-backup-tfstate-lifecycle"
     status = "Enabled"
-    filter {
-      prefix = "github-backup/tfstate/"
-    }
-    expiration {
-      days = var.github_backup_retention_days
-    }
-    noncurrent_version_expiration {
-      noncurrent_days = 7
-    }
+    filter { prefix = "github-backup/tfstate/" }
+    expiration { days = var.github_backup_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # 추가: GitHub Actions 증적 로그 365일 보존 — ISMS-P 2.9.1 (20260530, by 김다정)
+  # ── GitHub 증적 로그 365일 (ISMS-P 2.9.1) ───────────────
   rule {
     id     = "github-backup-logs-lifecycle"
     status = "Enabled"
-    filter {
-      prefix = "github-backup/logs/"
-    }
-    expiration {
-      days = var.github_backup_log_retention_days
-    }
-    noncurrent_version_expiration {
-      noncurrent_days = 7
-    }
+    filter { prefix = "github-backup/logs/" }
+    expiration { days = var.github_backup_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 }
+
+
+
 
 
 # ─────────────────────────────────────────────────────────
@@ -352,8 +414,7 @@ resource "aws_s3_bucket_policy" "storage" {
 # ─────────────────────────────────────────────────────────
 # ALB 액세스 로그 전용 버킷
 # ALB 로그는 SSE-KMS 미지원 → SSE-S3만 가능 (AWS 제약)
-# 공식문서: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html
-# ISMS-P 2.9.1: 1년 보존
+# ISMS-P 2.9.1: 1년 보존   260602 김강환
 # ─────────────────────────────────────────────────────────
 resource "aws_s3_bucket" "aws-alb-logs-01" {
   bucket = "aws-k2p-alb-01"
