@@ -112,6 +112,15 @@ resource "aws_wafv2_web_acl" "staff" {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesAmazonIpReputationList"
+
+
+            # 260604 김강환 — Grafana 대시보드 import 시 52KB JSON body 차단 우회
+        rule_action_override {
+          name = "SizeRestrictions_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
 
