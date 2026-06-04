@@ -11,6 +11,9 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 
+data "aws_subnet" "aws-app-sub-2b" {
+  tags = { Name = "aws-app-sub-2b" }
+}
 
 
 # staff-alb 보안그룹 참조 (Grafana 인그레스 허용용)
