@@ -24,6 +24,7 @@ locals {
   staff_domain   = "${var.staff_subdomain}.${var.base_domain}"
   wazuh_domain   = "${var.wazuh_subdomain}.${var.base_domain}"
   grafana_domain = "${var.grafana_subdomain}.${var.base_domain}"
+  admin_domain   = "${var.admin_subdomain}.${var.base_domain}" # by 김다정 20260604
 }
 
 
@@ -175,4 +176,41 @@ resource "aws_route53_record" "grafana_validation" {
 resource "aws_acm_certificate_validation" "grafana" {
   certificate_arn         = aws_acm_certificate.grafana.arn
   validation_record_fqdns = [for r in aws_route53_record.grafana_validation : r.fqdn]
+}
+
+# ─────────────────────────────────────────────────────────
+# 5. 관리자 포털 인증서 (staff-alb SNI 추가용) by 김다정 20260604
+# ─────────────────────────────────────────────────────────
+resource "aws_acm_certificate" "admin" {
+  domain_name       = local.admin_domain
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = { Name = "aws-acm-admin-portal" }
+}
+
+resource "aws_route53_record" "admin_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.admin.domain_validation_options :
+    dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      record = dvo.resource_record_value
+    }
+  }
+
+  zone_id         = data.aws_route53_zone.main.zone_id
+  name            = each.value.name
+  type            = each.value.type
+  records         = [each.value.record]
+  ttl             = 60
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "admin" {
+  certificate_arn         = aws_acm_certificate.admin.arn
+  validation_record_fqdns = [for r in aws_route53_record.admin_validation : r.fqdn]
 }
