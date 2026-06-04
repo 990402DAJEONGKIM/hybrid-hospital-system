@@ -125,8 +125,15 @@ resource "aws_ecs_service" "hospital" {
     assign_public_ip = false
   }
 
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
+  # ALB 연결 by 김다정 20260604
+  load_balancer {
+    target_group_arn = data.aws_lb_target_group.hospital.arn
+    container_name   = "nginx"
+    container_port   = 80
+  }
+
+  deployment_minimum_healthy_percent = 100 # 변경: 0 → 100 (ALB 연결로 rolling update 보장) by 김다정 20260604
+  deployment_maximum_percent         = 200
   availability_zone_rebalancing      = "DISABLED"
 
   lifecycle {
