@@ -85,7 +85,12 @@ jobs:
               echo "$REPO:$TAG already exists, skipping"
             else
               docker push "$REGISTRY/$REPO:$TAG"
-              docker push "$REGISTRY/$REPO:latest"
+              aws ecr describe-images \
+                  --repository-name "$REPO" \
+                  --image-ids imageTag="latest" \
+                  --region $AWS_REGION > /dev/null 2>&1 \
+                && echo "$REPO:latest already exists (immutable), skipping" \
+                || docker push "$REGISTRY/$REPO:latest"
             fi
           }
 
