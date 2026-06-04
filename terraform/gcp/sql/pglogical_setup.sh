@@ -162,6 +162,7 @@ GRANT CREATE ON DATABASE hospital TO pglogical_repl;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO pglogical_repl;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO pglogical_repl;
 GRANT USAGE, CREATE ON SCHEMA public TO pglogical_repl;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS patient_id_hash VARCHAR(64);
 
 DO \$\$
 BEGIN
@@ -452,6 +453,7 @@ case "$MODE" in
         echo -e "모드: ${GREEN}reconnect${NC} (VPN 재연결 — subscription만 재생성)"
         echo ""
         resolve_config
+        setup_cloud_sql
         create_subscription "false"
         verify
         ;;

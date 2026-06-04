@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>입원 예약 - MZ Clinic</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .appt-form-wrap { max-width:560px; margin:100px auto 40px; padding:0 16px; }
+        .step-indicator { display:flex; gap:8px; margin-bottom:28px; }
+        .step-dot { flex:1; height:4px; border-radius:2px; background:#e0e0e0; }
+        .step-dot.active { background:var(--primary); }
+        .step-panel { display:none; }
+        .step-panel.active { display:block; }
+        .form-group { margin-bottom:18px; }
+        .form-group label { display:block; font-weight:600; margin-bottom:6px; font-size:14px; color:#546e7a; }
+        .form-group select, .form-group input { width:100%; padding:10px 12px; border:1px solid #cfd8dc; border-radius:6px; font-size:15px; box-sizing:border-box; }
+        .form-group select:focus, .form-group input:focus { outline:none; border-color:var(--primary); }
+        .radio-group { display:flex; gap:20px; padding:8px 0; }
+        .radio-group label { font-weight:400; font-size:15px; color:#263238; cursor:pointer; }
+        .btn-row { display:flex; gap:10px; margin-top:24px; }
+        .btn-primary { flex:1; padding:12px; background:var(--primary); color:#fff; border:none; border-radius:6px; font-size:15px; font-weight:600; cursor:pointer; }
+        .btn-primary:disabled { background:#b0bec5; cursor:not-allowed; }
+        .btn-secondary { flex:1; padding:12px; background:#eceff1; color:#546e7a; border:none; border-radius:6px; font-size:15px; font-weight:600; cursor:pointer; }
+        .confirm-box { background:#e3f2fd; border-radius:8px; padding:18px; font-size:14px; line-height:1.9; }
+        .confirm-box strong { color:var(--primary); }
+        .info-note { background:#fff8e1; border-radius:6px; padding:10px 14px; font-size:13px; color:#795548; margin-bottom:18px; }
+        #errMsg { color:#e53935; font-size:13px; margin-top:8px; min-height:18px; }
+    </style>
+</head>
+<body style="margin:0;">
+<div class="portal-layout">
+<aside class="portal-sidebar" id="portalSidebar"></aside>
+<main class="portal-content">
+<div class="appt-form-wrap" style="margin:0;max-width:560px;">
+    <h2 style="margin-bottom:8px;">입원 예약</h2>
+    <p style="color:#78909c;font-size:14px;margin-bottom:24px;">병동 입원 및 병상 배정 신청입니다.</p>
+
+    <div class="step-indicator">
+        <div class="step-dot active" id="dot1"></div>
+        <div class="step-dot" id="dot2"></div>
+        <div class="step-dot" id="dot3"></div>
+    </div>
+
+    <!-- Step 1: 진료과 / 의사 + 병실 유형 -->
+    <div class="step-panel active" id="step1">
+        <h3 style="margin-bottom:14px;">1. 진료과 및 입원 정보</h3>
+        <div class="info-note">입원 예약은 해당 진료과에 이전 내원 이력이 있어야 신청 가능합니다.</div>
+        <div class="form-group">
+            <label for="deptSelect">진료과 *</label>
+            <select id="deptSelect">
+                <option value="">진료과를 선택하세요</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="doctorSelect">담당의 (선택)</label>
+            <select id="doctorSelect" disabled>
+                <option value="">진료과를 먼저 선택하세요</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="roomTypePref">희망 병실 유형</label>
+            <select id="roomTypePref">
+                <option value="">선택 안함</option>
+                <option value="1인실">1인실</option>
+                <option value="2인실">2인실</option>
+                <option value="다인실">다인실</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>기저질환 유무 *</label>
+            <div class="radio-group">
+                <label><input type="radio" name="chronic" value="true" id="c_yes"> 있음</label>
+                <label><input type="radio" name="chronic" value="false" id="c_no" checked> 없음</label>
+            </div>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="location.href='appointment.html'">뒤로</button>
+            <button class="btn-primary" id="toStep2Btn" onclick="goToStep(2)" disabled>다음</button>
+        </div>
+    </div>
+
+    <!-- Step 2: 날짜 -->
+    <div class="step-panel" id="step2">
+        <h3 style="margin-bottom:18px;">2. 입원 희망일 선택</h3>
+        <div class="form-group">
+            <label for="apptDate">입원 희망일 *</label>
+            <input type="date" id="apptDate">
+        </div>
+        <div class="form-group">
+            <label for="apptNote">메모 (선택)</label>
+            <input type="text" id="apptNote" placeholder="특이사항이나 요청 사항을 간단히 적어주세요">
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="goToStep(1)">뒤로</button>
+            <button class="btn-primary" onclick="goToStep(3)">다음</button>
+        </div>
+    </div>
+
+    <!-- Step 3: 확인 -->
+    <div class="step-panel" id="step3">
+        <h3 style="margin-bottom:18px;">3. 신청 정보 확인</h3>
+        <div class="confirm-box" id="confirmBox"></div>
+        <div id="errMsg"></div>
+        <div class="btn-row" style="margin-top:20px;">
+            <button class="btn-secondary" onclick="goToStep(2)">수정</button>
+            <button class="btn-primary" id="submitBtn" onclick="submitAppointment()">입원 신청</button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/script.js"></script>
+<script>
+    let selectedDept = null, selectedDoctor = null;
+
+    async function init() {
+        const me = await requireLogin();
+        if (!me) return;
+
+        document.getElementById('apptDate').min = new Date().toISOString().split('T')[0];
+
+        const r = await apiCall('/portal/departments?visited_only=true');
+        if (!r || !r.ok) return;
+        const depts = await r.json();
+        const deptSel = document.getElementById('deptSelect');
+        if (!depts.length) {
+            deptSel.innerHTML = '<option value="">내원 이력이 없습니다</option>';
+            document.getElementById('toStep2Btn').disabled = true;
+            return;
+        }
+        depts.forEach(d => {
+            const o = document.createElement('option');
+            o.value = d.department_code;
+            o.textContent = d.department_name;
+            deptSel.appendChild(o);
+        });
+
+        deptSel.addEventListener('change', async () => {
+            const code = deptSel.value;
+            selectedDept = depts.find(d => d.department_code === code) || null;
+            document.getElementById('toStep2Btn').disabled = !code;
+            const docSel = document.getElementById('doctorSelect');
+            docSel.innerHTML = '<option value="">담당의 선택 안함 (배정)</option>';
+            docSel.disabled = !code;
+            if (!code) return;
+            const dr = await apiCall(`/portal/doctors?department_code=${code}`);
+            if (!dr || !dr.ok) return;
+            const docs = await dr.json();
+            docs.forEach(d => {
+                const o = document.createElement('option');
+                o.value = d.doctor_id;
+                o.textContent = d.doctor_name;
+                docSel.appendChild(o);
+            });
+        });
+
+        document.getElementById('doctorSelect').addEventListener('change', (e) => {
+            const docSel = e.target;
+            selectedDoctor = docSel.value
+                ? { doctor_id: docSel.value, doctor_name: docSel.options[docSel.selectedIndex].text }
+                : null;
+        });
+    }
+
+    function goToStep(step) {
+        if (step === 2) {
+            if (!document.getElementById('deptSelect').value) {
+                alert('진료과를 선택해주세요.');
+                return;
+            }
+        }
+        if (step === 3) {
+            const date = document.getElementById('apptDate').value;
+            if (!date) { alert('입원 희망일을 선택해주세요.'); return; }
+            const deptName = document.getElementById('deptSelect').options[document.getElementById('deptSelect').selectedIndex]?.text || '';
+            const docName  = selectedDoctor ? selectedDoctor.doctor_name : '미지정 (배정)';
+            const roomPref = document.getElementById('roomTypePref').value || '선택 안함';
+            const chronic  = document.getElementById('c_yes').checked ? '있음' : '없음';
+            document.getElementById('confirmBox').innerHTML =
+                `<strong>예약 유형</strong>: 입원<br>
+                 <strong>진료과</strong>: ${deptName}<br>
+                 <strong>담당의</strong>: ${docName}<br>
+                 <strong>입원 희망일</strong>: ${date}<br>
+                 <strong>희망 병실</strong>: ${roomPref}<br>
+                 <strong>기저질환</strong>: ${chronic}<br>
+                 <strong>메모</strong>: ${document.getElementById('apptNote').value || '없음'}`;
+            document.getElementById('errMsg').textContent = '';
+        }
+        [1, 2, 3].forEach(i => {
+            document.getElementById(`step${i}`).classList.toggle('active', i === step);
+            document.getElementById(`dot${i}`).classList.toggle('active', i <= step);
+        });
+    }
+
+    async function submitAppointment() {
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        document.getElementById('errMsg').textContent = '';
+
+        const roomPref = document.getElementById('roomTypePref').value;
+        const body = {
+            type_code:             'inpatient',
+            department_code:       document.getElementById('deptSelect').value,
+            appointment_date:      document.getElementById('apptDate').value,
+            appointment_time:      '14:00',
+            has_chronic_condition: document.getElementById('c_yes').checked,
+            notes:                 document.getElementById('apptNote').value || null,
+        };
+        if (roomPref) body.room_type_pref = roomPref;
+        if (selectedDoctor) body.doctor_id = selectedDoctor.doctor_id;
+
+        const res = await apiCall('/portal/appointments', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+
+        if (res && res.ok) {
+            alert('입원 신청이 접수되었습니다.\n원무과 확정 후 알림을 보내드립니다.');
+            location.href = 'my-appointments.html';
+        } else {
+            const err = await res?.json().catch(() => ({}));
+            document.getElementById('errMsg').textContent = err.detail || '예약 처리 중 오류가 발생했습니다.';
+            btn.disabled = false;
+        }
+    }
+
+    renderSidebar('appointment.html');
+    init();
+</script>
+</main>
+</div>
+</body>
+</html>
