@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# 네트워크 안정화 대기 (최대 5분)
+until curl -s --connect-timeout 5 https://packages.wazuh.com > /dev/null 2>&1; do
+  echo "Waiting for network..."
+  sleep 5
+done
+
 # ── ECS 클러스터 등록 ────────────────────────────────────
 mkdir -p /etc/ecs
 echo "ECS_CLUSTER=${cluster_name}" >> /etc/ecs/ecs.config
