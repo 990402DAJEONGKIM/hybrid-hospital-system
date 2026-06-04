@@ -121,7 +121,9 @@ async function requireLogin() {
         if (me.role !== 'patient') { window.location.href = 'login.html'; return null; }
         // must_change_password=true 또는 비밀번호 만료 시 변경 페이지 강제 이동 (SFR-038)
         if (me.must_change_password || me.password_expired) {
-            window.location.href = 'change-password.html';
+            if (!window.location.pathname.includes('change-password.html')) {
+                window.location.href = 'change-password.html';
+            }
             return null;
         }
         return me;
@@ -168,7 +170,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // must_change_password 또는 비밀번호 만료 시 변경 페이지 강제 이동 (SFR-038)
-    if (me.must_change_password || me.password_expired) { window.location.href = 'change-password.html'; return; }
+    // 이미 change-password.html이면 리다이렉트 생략 (무한루프 방지)
+    if (me.must_change_password || me.password_expired) {
+        if (!window.location.pathname.includes('change-password.html')) {
+            window.location.href = 'change-password.html';
+        }
+        return;
+    }
 
     const header           = document.querySelector('.sass-header');
     const mobileMenuBtn    = document.getElementById('sassMobileMenuBtn');
