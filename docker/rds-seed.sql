@@ -94,10 +94,10 @@ ON CONFLICT DO NOTHING;
 INSERT INTO appointment_types
     (type_code, type_name, requires_previous_visit, description, is_active, sort_order)
 VALUES
-    ('initial',   '초진', FALSE, '처음 방문하는 환자',         TRUE, 1),
-    ('return',    '재진', TRUE,  '이전 방문 이력이 있는 환자', TRUE, 2),
-    ('inpatient', '입원', TRUE,  '입원 예약',                   TRUE, 3),
-    ('surgery',   '수술', TRUE,  '수술 예약',                   TRUE, 4)
+    ('outpatient_new',    '초진',    FALSE, '처음 방문하는 신규 환자 외래 진료',        TRUE, 1),
+    ('outpatient_return', '재진',    TRUE,  '기존 내원 이력이 있는 환자의 재방문 진료', TRUE, 2),
+    ('inpatient',         '입원',    TRUE,  '병동 입원 및 병상 배정 신청',              TRUE, 3),
+    ('pre_surgery',       '수술 전', TRUE,  '수술 전 필수 검사 및 일정 확인',           TRUE, 4)
 ON CONFLICT (type_code) DO NOTHING;
 
 INSERT INTO appointment_statuses
@@ -376,7 +376,7 @@ VALUES
     ('f1000000-0000-0000-0000-000000000001',
      (SELECT user_id FROM users WHERE member_number = '21870195'),
      '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
-     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT type_id FROM appointment_types WHERE type_code = 'outpatient_return'),
      (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
      'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
      '2026-06-03', '09:00', '고혈압 경과 관찰'),
@@ -385,7 +385,7 @@ VALUES
     ('f1000000-0000-0000-0000-000000000002',
      (SELECT user_id FROM users WHERE member_number = '72897828'),
      'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
-     (SELECT type_id FROM appointment_types WHERE type_code = 'initial'),
+     (SELECT type_id FROM appointment_types WHERE type_code = 'outpatient_new'),
      (SELECT status_id FROM appointment_statuses WHERE status_code = 'pending'),
      'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
      '2026-06-03', '10:30', '두통 및 소화불량 호소'),
@@ -394,7 +394,7 @@ VALUES
     ('f1000000-0000-0000-0000-000000000003',
      (SELECT user_id FROM users WHERE member_number = '78124857'),
      'ba51ec150ee298ecb8cb30b4063cd6b5385877bccd3cf60be61e7581eba87d4f',
-     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT type_id FROM appointment_types WHERE type_code = 'outpatient_return'),
      (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
      'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
      '2026-06-03', '14:00', '우측 무릎 경과 관찰')
@@ -410,7 +410,7 @@ VALUES
     ('f1000000-0000-0000-0000-000000000004',
      (SELECT user_id FROM users WHERE member_number = '21870195'),
      '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
-     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT type_id FROM appointment_types WHERE type_code = 'outpatient_return'),
      (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
      'CARDIO', 'a1000000-0000-0000-0000-000000000002',
      '2026-06-03', '09:30', '부정맥 추적 관찰'),
@@ -419,7 +419,7 @@ VALUES
     ('f1000000-0000-0000-0000-000000000005',
      (SELECT user_id FROM users WHERE member_number = '72897828'),
      'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
-     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT type_id FROM appointment_types WHERE type_code = 'outpatient_return'),
      (SELECT status_id FROM appointment_statuses WHERE status_code = 'pending'),
      'CARDIO', 'a1000000-0000-0000-0000-000000000002',
      '2026-06-03', '11:00', '심장초음파 결과 확인')
@@ -435,7 +435,7 @@ VALUES
     ('f1000000-0000-0000-0000-000000000006',
      (SELECT user_id FROM users WHERE member_number = '21870195'),
      '64db8fd9cb076f1c2e0819c377d8f6ca3540d1b564a09a7c4c4756a151e990bc',
-     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT type_id FROM appointment_types WHERE type_code = 'outpatient_return'),
      (SELECT status_id FROM appointment_statuses WHERE status_code = 'pending'),
      'INTERNAL', 'a1000000-0000-0000-0000-000000000001',
      '2026-06-05', '09:00', '혈압약 처방 갱신'),
@@ -453,7 +453,7 @@ VALUES
     ('f1000000-0000-0000-0000-000000000008',
      (SELECT user_id FROM users WHERE member_number = '72897828'),
      'bf1ab4d81e623e4fb9cd0ee0d2a660978b327f9881a966b68fa0399194673e45',
-     (SELECT type_id FROM appointment_types WHERE type_code = 'return'),
+     (SELECT type_id FROM appointment_types WHERE type_code = 'outpatient_return'),
      (SELECT status_id FROM appointment_statuses WHERE status_code = 'confirmed'),
      'CARDIO', 'a1000000-0000-0000-0000-000000000002',
      '2026-06-07', '10:30', '심전도 검사 결과 확인')
