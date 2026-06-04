@@ -62,9 +62,9 @@ data "aws_acm_certificate" "grafana" {
   most_recent = true
 }
 
-# ACM 와일드카드 인증서 (*.mzclinic.cloud) — admin 도메인 커버용 by 김다정 20260604
+# ACM 인증서 (admin.mzclinic.cloud) — staff-alb SNI 추가용 by 김다정 20260604
 data "aws_acm_certificate" "admin" {
-  domain      = "*.${var.base_domain}"
+  domain      = "admin.${var.base_domain}"
   statuses    = ["ISSUED"]
   most_recent = true
 }
