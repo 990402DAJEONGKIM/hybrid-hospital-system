@@ -440,7 +440,37 @@ $$;
 
 
 -- =============================================================
--- 9. api_user 권한
+-- 9. DB 사용자 권한
+-- =============================================================
+
+-- ── ecs_patient_user (RDS Proxy 경유 환자 포털 앱 유저) ──────────
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ecs_patient_user') THEN
+        CREATE ROLE ecs_patient_user LOGIN PASSWORD 'CHANGE_ME_BEFORE_PROD';
+    END IF;
+END
+$$;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON roles, permissions, role_permissions, menus, role_menus TO ecs_patient_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON users          TO ecs_patient_user;
+GRANT SELECT, INSERT, UPDATE ON sessions, user_mfa, login_history, password_policy TO ecs_patient_user;
+GRANT SELECT, INSERT, UPDATE ON appointment_types      TO ecs_patient_user;
+GRANT SELECT                 ON appointment_statuses   TO ecs_patient_user;
+GRANT SELECT, INSERT, UPDATE ON appointments           TO ecs_patient_user;
+GRANT SELECT, INSERT         ON appointment_history    TO ecs_patient_user;
+GRANT SELECT                 ON notification_types     TO ecs_patient_user;
+GRANT SELECT, INSERT, UPDATE ON notifications          TO ecs_patient_user;
+GRANT SELECT, INSERT, UPDATE ON sync_patients, sync_doctors, sync_departments  TO ecs_patient_user;
+GRANT SELECT, INSERT, UPDATE ON sync_encounters, sync_diagnoses, sync_allergies TO ecs_patient_user;
+GRANT SELECT, INSERT, UPDATE ON sync_surgery_histories, sync_wards             TO ecs_patient_user;
+GRANT INSERT ON audit_logs TO ecs_patient_user;
+REVOKE UPDATE, DELETE ON audit_logs FROM ecs_patient_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ecs_patient_user;
+
+-- ── api_user (로컬 개발 / 레거시) ────────────────────────────────
+-- =============================================================
+-- (구) api_user 권한
 -- =============================================================
 -- RBAC 참조 (관리자 역할/권한/메뉴 CRUD 포함)
 GRANT SELECT, INSERT, UPDATE, DELETE ON roles              TO api_user;
