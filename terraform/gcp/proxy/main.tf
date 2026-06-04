@@ -27,6 +27,16 @@ data "google_service_account" "proxy" {
 }
 
 
+# ── CloudSQL 메트릭 수집용 IAM 권한 ─────────────────────────
+# Alloy prometheus.exporter.gcp가 GCP Cloud Monitoring API 호출 시 필요 - 260604 김강환
+
+resource "google_project_iam_member" "proxy-monitoring-viewer" {
+  project = var.project_id
+  role    = "roles/monitoring.viewer"
+  member  = "serviceAccount:${data.google_service_account.proxy.email}"
+}
+
+
 data "terraform_remote_state" "monitoring" {
   backend = "remote"
   config = {
@@ -309,7 +319,7 @@ discovery.relabel "local" {
   targets = prometheus.exporter.unix.local.targets
   rule {
     target_label = "instance"
-    replacement  = "gcp-proxy-$PRIVATE_IP"
+    replacement  = "gcp-proxy"
   }
 }
 prometheus.scrape "local" {
@@ -317,6 +327,25 @@ prometheus.scrape "local" {
   forward_to      = [prometheus.remote_write.prometheus.receiver]
   scrape_interval = "15s"
 }
+
+prometheus.exporter.gcp "cloudsql" {
+  project_ids      = ["${var.project_id}"]
+  metrics_prefixes = [
+    "cloudsql.googleapis.com/database/cpu/utilization",
+    "cloudsql.googleapis.com/database/memory/utilization",
+    "cloudsql.googleapis.com/database/disk/utilization",
+    "cloudsql.googleapis.com/database/disk/bytes_used",
+    "cloudsql.googleapis.com/database/network/connections",
+    "cloudsql.googleapis.com/database/postgresql/num_backends",
+    "cloudsql.googleapis.com/database/postgresql/transaction_count",
+  ]
+}
+prometheus.scrape "cloudsql" {
+  targets         = prometheus.exporter.gcp.cloudsql.targets
+  forward_to      = [prometheus.remote_write.prometheus.receiver]
+  scrape_interval = "60s"
+}
+
 prometheus.remote_write "prometheus" {
   endpoint {
     url = "http://${data.terraform_remote_state.monitoring.outputs.monitoring_private_ip}:9090/api/v1/write"
