@@ -103,9 +103,10 @@ async function _refreshTokens() {
             });
             if (!r.ok) return false;
         }
-        // AWS 세션 갱신 (비민감 API용)
-        const res = await fetch(`${BASE_URL}/auth/refresh`, { method: 'POST', ..._fetchDefaults });
-        return res.ok;
+        // AWS 세션 갱신 미사용 — staff는 온프레미스 데이터만 사용 by 김다정 20260605
+        // const res = await fetch(`${BASE_URL}/auth/refresh`, { method: 'POST', ..._fetchDefaults });
+        // return res.ok;
+        return true;
     } catch { return false; }
 }
 
@@ -171,13 +172,13 @@ async function apiCall(path, options = {}) {
 
 async function logout() {
     try {
-        // 온프레미스·AWS 양쪽 모두 로그아웃
+        // AWS 로그아웃 미사용 — staff는 온프레미스 데이터만 사용 by 김다정 20260605
+        // await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', ..._fetchDefaults });
         if (ONPREM_BASE_URL) {
             fetch(`${ONPREM_BASE_URL}/auth/logout`, {
                 method: 'POST', credentials: 'include', headers: _authHeaders,
             }).catch(() => {});
         }
-        await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', ..._fetchDefaults });
     } catch {}
     window.location.href = 'login.html';
 }

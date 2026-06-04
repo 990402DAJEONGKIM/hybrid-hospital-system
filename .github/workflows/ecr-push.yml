@@ -10,6 +10,7 @@ on:
       - 'app/portal/frontend/**'
       - 'docker/api/**'
       - 'docker/nginx/**'
+      - 'docker-compose.yml'
   workflow_dispatch:
 
 env:

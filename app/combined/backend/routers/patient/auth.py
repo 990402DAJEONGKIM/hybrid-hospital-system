@@ -182,7 +182,7 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
         secure=COOKIE_SECURE,
         samesite="strict",
         max_age=REFRESH_TOKEN_EXPIRE_HOURS * 3600,
-        path="/auth/refresh",
+        path="/api/patient/auth/refresh",
     )
 
 
@@ -258,7 +258,7 @@ def logout(
             db.commit()
 
     response.delete_cookie(key="access_token",  path="/")
-    response.delete_cookie(key="refresh_token", path="/auth/refresh")
+    response.delete_cookie(key="refresh_token", path="/api/patient/auth/refresh")
 
 
 @router.get("/me")
@@ -325,7 +325,7 @@ def change_password(
     db.commit()
 
     response.delete_cookie(key="access_token",  path="/")
-    response.delete_cookie(key="refresh_token", path="/auth/refresh")
+    response.delete_cookie(key="refresh_token", path="/api/patient/auth/refresh")
 
 
 @router.get("/session-status")
