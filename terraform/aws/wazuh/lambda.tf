@@ -86,7 +86,7 @@ resource "aws_lambda_function" "aws-wazuh-lambda-agent-cleanup" {
       WAZUH_API_URL           = "https://${aws_instance.aws-wazuh-01.private_ip}:55000"
       WAZUH_USER              = "wazuh"
       # 비밀번호는 Secrets Manager에서 가져옴 (하드코딩 금지)
-      WAZUH_SECRET_NAME       = "wazuh/api-password"
+      WAZUH_SECRET_NAME       = "aws-wazuh-api-password"
       REGION                  = var.aws_region
     }
   }

@@ -47,6 +47,26 @@
     <group>fim,critical_file,onprem</group>
   </rule>
 
+  <!-- USB 저장장치 연결 탐지 -->
+  <rule id="100039" level="12">
+    <if_sid>1002</if_sid>
+    <match>USB Mass Storage</match>
+    <description>온프레미스 USB 저장장치 연결 — 데이터 유출 의심</description>
+    <group>onprem,usb,insider_threat</group>
+    <mitre><id>T1091</id></mitre>
+  </rule>
+
+  <!-- 업무 시간 외 온프레미스 SSH 접근 -->
+  <rule id="100041" level="10">
+    <if_sid>5715</if_sid>
+    <time>09:00 - 00:00</time>
+    <weekday>saturday,sunday</weekday>
+    <field name="agent.name">onprem-mspserver</field>
+    <description>업무 시간 외 온프레미스 SSH 접근</description>
+    <group>onprem,after_hours,insider_threat</group>
+    <mitre><id>T1078</id></mitre>
+  </rule>
+
 
 
 </group>

@@ -90,6 +90,39 @@ resource "aws_sns_topic" "aws-wazuh-cw-alerts-01" {
 }
 
 
+
+
+# cloudwatch reboot/recover 알람 → SNS → Lambda → Slack 알림 흐름 구성
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-reboot-01" {
+  alarm_name          = "aws-wazuh-cw-reboot-01"
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed_Instance"
+  dimensions = { InstanceId = aws_instance.aws-wazuh-01.id }
+  period              = 60
+  evaluation_periods  = 3
+  statistic           = "Maximum"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  alarm_actions       = ["arn:aws:automate:ap-south-2:ec2:reboot"]
+  tags = { Name = "aws-wazuh-cw-reboot-01" }
+}
+
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-recover-01" {
+  alarm_name          = "aws-wazuh-cw-recover-01"
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed_System"
+  dimensions = { InstanceId = aws_instance.aws-wazuh-01.id }
+  period              = 60
+  evaluation_periods  = 3
+  statistic           = "Maximum"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  alarm_actions       = ["arn:aws:automate:ap-south-2:ec2:recover"]
+  tags = { Name = "aws-wazuh-cw-recover-01" }
+}
+
+
+
 # VPN OnPrem 터널 DOWN 알람
 # 공식문서: https://docs.aws.amazon.com/vpn/latest/s2svpn/monitoring-overview-vpn.html
 data "aws_vpn_connection" "aws-vpn-onprem-01" {

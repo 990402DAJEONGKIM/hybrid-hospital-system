@@ -27,7 +27,7 @@
     <!-- 예상치 못한 외부 IP 접속 (보안 이벤트) -->
     <rule id="100203" level="12">
         <if_sid>100200</if_sid>
-        <field name="source_ip" negate="yes">^127\.|^172\.29\.</field>
+        <field name="source_ip" negate="yes">^127\.|^172\.29\.|^10\.10\.1\.|^10\.0\.</field>
         <description>Cloud SQL 외부 IP 접속 탐지 — source_ip: $(source_ip)</description>
         <group>cloudsql,login,suspicious,</group>
     </rule>
@@ -47,11 +47,11 @@
     </rule>
 
     <!-- gcp-rds-proxy-01 내부 복제 연결 — 무시 -->
-    <rule id="100206" level="0">
-        <if_sid>100200</if_sid>
-        <field name="source_ip">^10\.10\.1\.26$</field>
-        <description>gcp-rds-proxy-01 내부 연결 — 무시</description>
-        <group>cloudsql,noise,</group>
-    </rule>
+        <rule id="100206" level="0">
+            <if_sid>100200</if_sid>
+            <field name="source_ip">^10\.10\.1\.</field>
+            <description>GCP 내부 서브넷 연결 — 무시</description>
+            <group>cloudsql,noise,</group>
+        </rule>
 
     </group>

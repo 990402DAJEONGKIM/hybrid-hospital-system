@@ -15,7 +15,7 @@
   <!-- 업무 시간 외 sudo -->
   <rule id="100002" level="8">
     <if_sid>100001</if_sid>
-    <time>18:00 - 09:00</time>
+    <time>09:00 - 00:00</time>
     <description>업무 시간 외 sudo 사용 탐지 - 사용자: $(srcuser)</description>
     <group>after_hours,sudo_usage</group>
   </rule>
@@ -173,7 +173,7 @@
  
   <rule id="100017" level="10">
     <if_sid>5715</if_sid>
-    <time>18:00 - 09:00</time>
+    <time>09:00 - 00:00</time>
     <description>업무 시간 외 SSH 로그인 성공 - 계정 탈취 의심</description>
     <group>after_hours,authentication_success</group>
   </rule>
@@ -282,6 +282,12 @@
     <group>fim,ssh_attack,persistence</group>
   </rule>
 
+<rule id="100039" level="0">
+    <if_sid>100003</if_sid>
+    <match>ssm-user</match>
+    <description>SSM root 전환 — 노이즈 제거</description>
+    <group>noise</group>
+</rule>
 
 
 </group>
@@ -316,6 +322,86 @@
     <description>AWS GuardDuty HIGH 포트스캔 — 대시보드 기록용 (Slack은 EventBridge 담당)</description>
     <group>guardduty,aws,</group>
   </rule>
+  
+  <!-- 랜섬웨어: 60초 내 파일 변조 20건 이상 -->
+  <rule id="100508" level="15" frequency="20" timeframe="60">
+    <if_matched_sid>550</if_matched_sid>
+    <description>랜섬웨어 의심 — 짧은 시간 내 대량 파일 변조</description>
+    <group>ransomware,malware,critical</group>
+    <mitre><id>T1486</id></mitre>
+  </rule>
+
+  <!-- /tmp, /dev/shm 실행파일 생성 — 드롭퍼 의심 -->
+  <rule id="100509" level="14">
+    <if_sid>554</if_sid>
+    <field name="syscheck.path" type="pcre2">^/(tmp|dev/shm)/</field>
+    <field name="syscheck.perm_after" type="pcre2">x</field>
+    <description>임시 디렉토리 실행파일 생성 — 랜섬웨어/드롭퍼 의심</description>
+    <group>ransomware,malware,persistence</group>
+    <mitre><id>T1059</id></mitre>
+  </rule>
+
+  <!-- DDoS: VPC Flow 동일 출발지 대량 패킷 -->
+  <rule id="100510" level="12" frequency="500" timeframe="60">
+    <if_matched_sid>80501</if_matched_sid>
+    <same_source_ip />
+    <description>DDoS 의심 — 동일 출발지 대량 패킷</description>
+    <group>ddos,network,attack</group>
+    <mitre><id>T1499</id></mitre>
+  </rule>
+
+  <!-- DDoS: WAF BLOCK 폭증 -->
+  <rule id="100511" level="13" frequency="50" timeframe="60">
+    <if_matched_sid>100401</if_matched_sid>
+    <description>DDoS 의심 — WAF 차단 이벤트 폭증</description>
+    <group>ddos,waf,attack</group>
+    <mitre><id>T1499</id></mitre>
+  </rule>
+
+  <!-- SQL Injection — nginx 로그 패턴 -->
+  <rule id="100504" level="12">
+    <if_sid>31103</if_sid>
+    <match>union.*select|select.*from|insert.*into|drop.*table|--</match>
+    <description>SQL Injection 시도 탐지</description>
+    <group>web_attack,sql_injection,attack</group>
+    <mitre><id>T1190</id></mitre>
+  </rule>
+
+  <!-- 디렉토리 traversal -->
+  <rule id="100505" level="12">
+    <if_sid>31103</if_sid>
+    <match>\.\./|\.\.\\|%2e%2e</match>
+    <description>디렉토리 탐색 공격 탐지</description>
+    <group>web_attack,attack</group>
+    <mitre><id>T1083</id></mitre>
+  </rule>
+
+  <!-- 웹 스캐너 탐지 -->
+  <rule id="100506" level="10">
+    <if_sid>31103</if_sid>
+    <match>nikto|sqlmap|nmap|masscan|dirbuster</match>
+    <description>웹 취약점 스캐너 탐지</description>
+    <group>web_attack,recon,attack</group>
+    <mitre><id>T1595</id></mitre>
+  </rule>
+
+  <!-- 비정상 HTTP 메서드 -->
+  <rule id="100507" level="10">
+    <if_sid>31103</if_sid>
+    <match>^TRACE |^TRACK |^DEBUG |^CONNECT </match>
+    <description>비정상 HTTP 메서드 탐지</description>
+    <group>web_attack,attack</group>
+    <mitre><id>T1190</id></mitre>
+  </rule>
+
+  <!-- VPC Flow ACCEPT 노이즈 제거 — 정상 트래픽은 대시보드 불필요 -->
+  <rule id="100512" level="0" overwrite="yes">
+    <if_sid>80401</if_sid>
+    <description>VPC Flow ACCEPT — 노이즈 제거</description>
+    <group>noise</group>
+  </rule>
+
+
 
 </group>
 
