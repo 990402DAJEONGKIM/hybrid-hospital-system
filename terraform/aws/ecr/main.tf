@@ -1,6 +1,6 @@
 # =========================================================
 # ECR — Elastic Container Registry
-# 4개 리포지토리: nginx-patient, api-patient, nginx-staff, api-staff
+# 2개 리포지토리: aws-hospital-nginx, aws-hospital-api
 #
 # 보안 설정:
 #   - 이미지 태그 불변(IMMUTABLE): 동일 태그 덮어쓰기 방지
@@ -15,13 +15,10 @@ data "aws_kms_key" "ecr" {
 
 locals {
   repositories = [
-    "aws-hospital-nginx-patient",
-    "aws-hospital-api-patient",
-    "aws-hospital-nginx-staff",
-    "aws-hospital-api-staff",
+    "aws-hospital-nginx",
+    "aws-hospital-api",
   ]
 
-  # 이미지 유지 개수 기반 Lifecycle Policy (공통)
   lifecycle_policy = jsonencode({
     rules = [
       {
@@ -40,7 +37,7 @@ locals {
 
 
 # ─────────────────────────────────────────────────────────
-# ECR 리포지토리 (4개)
+# ECR 리포지토리
 # ─────────────────────────────────────────────────────────
 resource "aws_ecr_repository" "repos" {
   for_each = toset(local.repositories)
@@ -52,10 +49,9 @@ resource "aws_ecr_repository" "repos" {
     scan_on_push = true
   }
 
-  # 저장 데이터 암호화 (AES-256 기본 — KMS CMK 미사용, ECR 관리형 키)
   encryption_configuration {
-      encryption_type = "KMS"
-      kms_key         = data.aws_kms_key.ecr.arn
+    encryption_type = "KMS"
+    kms_key         = data.aws_kms_key.ecr.arn
   }
 
   tags = { Name = each.key }
@@ -63,7 +59,7 @@ resource "aws_ecr_repository" "repos" {
 
 
 # ─────────────────────────────────────────────────────────
-# Lifecycle Policy (4개 리포지토리에 동일 적용)
+# Lifecycle Policy
 # ─────────────────────────────────────────────────────────
 resource "aws_ecr_lifecycle_policy" "repos" {
   for_each   = aws_ecr_repository.repos

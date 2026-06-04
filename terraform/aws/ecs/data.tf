@@ -75,17 +75,6 @@ data "aws_rds_cluster" "main" {
   cluster_identifier = "aws-aurora-01"
 }
 
-# ─────────────────────────────────────────────────────────
-# ALB Target Group (alb 모듈 apply 후 자동 조회)
-# ─────────────────────────────────────────────────────────
-data "aws_lb_target_group" "patient" {
-  name = "aws-patient-tg"
-}
-
-data "aws_lb_target_group" "staff" {
-  name = "aws-staff-tg"
-}
-
 # monitoring EC2 Private IP — Alloy remote write 대상
 data "terraform_remote_state" "monitoring" {
   backend = "remote"
