@@ -61,3 +61,18 @@ variable "alert_email" {
   description = "CloudWatch 알람 수신 이메일 (rotation 실패 시 알림)"
   type        = string
 }
+
+# ── 프론트엔드 도메인 ─────────────────────────────────────
+variable "frontend_domain" {
+  description = "AWS 프론트엔드 도메인 (ALLOWED_HOSTS·ALLOWED_ORIGINS에 사용)"
+  type        = string
+  default     = "mzclinic.cloud"
+}
+
+# ── 온프레미스 API ────────────────────────────────────────
+variable "onprem_base_url" {
+  description = "온프레미스 API 주소 — nginx 컨테이너의 ONPREM_BASE_URL로 주입됨. 병원 내부 PC에서 직접 접근하는 URL."
+  type        = string
+  default     = ""   # 빈 문자열 → 온프레미스 기능 비활성화 (config.js의 ONPREM_BASE_URL = '' 와 동일)
+}
+
