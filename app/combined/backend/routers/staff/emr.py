@@ -755,6 +755,18 @@ def nurse_verify_patient(
     )
 
 
+@router.get("/nurse/patients/{patient_id_hash}/diagnoses")
+def nurse_patient_diagnoses(
+    patient_id_hash: str,
+    request:         Request,
+    current_user:    dict = Depends(_require_roles("nurse", "admin")),
+):
+    """접수 업무용 진단 목록 — 온프레미스 실시간 조회, diagnosis_text 포함."""
+    return _client(current_user, request).get(
+        f"/portal/patients/by-hash/{patient_id_hash}/diagnoses"
+    )
+
+
 class NurseCheckinRequest(BaseModel):
     patient_id:      str
     doctor_id:       str

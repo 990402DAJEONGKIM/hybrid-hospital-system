@@ -201,6 +201,13 @@
             });
         }
 
+        // 의사 목록 로드
+        const docr = await apiCall('/portal/doctor/staff/doctors');
+        if (docr && docr.ok) {
+            const docs = await docr.json();
+            docs.forEach(d => { doctorMap[d.doctor_id] = d.doctor_name; });
+        }
+
         // 예약 유형 로드
         const tr = await apiCall('/portal/doctor/appointment-types');
         if (tr && tr.ok) {
@@ -286,14 +293,14 @@
             const isPreOp   = a.type_code === 'PRE_OP';
             const typeBadge = `<span class="type-badge ${isPreOp ? 'type-PRE_OP' : 'type-normal'}">${_esc(a.type_name || a.type_code || '-')}${isPreOp ? ' ⚠' : ''}</span>`;
             const patientName = _nameCache[a.patient_id_hash] || '—';
-            const doctorId  = a.doctor_id || '-';
+            const doctorName = doctorMap[a.doctor_id] || '-';
             const actions   = buildActions(a);
             return `
             <tr>
                 <td>${_esc(a.appointment_date)} ${_esc(a.appointment_time || '')}</td>
                 <td>${typeBadge}</td>
                 <td>${_esc(dept)}</td>
-                <td style="font-size:12px;color:#64748b;">${_esc(doctorId.slice(0,8))}…</td>
+                <td>${_esc(doctorName)}</td>
                 <td style="font-weight:600;">${_esc(patientName)}</td>
                 <td><span class="status-badge ${statusCls}">${_esc(statusLbl)}</span></td>
                 <td><div class="action-btns">${actions}</div></td>

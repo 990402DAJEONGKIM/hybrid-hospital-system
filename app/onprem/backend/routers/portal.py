@@ -216,6 +216,36 @@ def get_patient_encounters(
     ]
 
 
+@router.get("/patients/by-hash/{patient_id_hash}/diagnoses")
+def get_patient_diagnoses_by_hash(
+    patient_id_hash: str,
+    current_user:    dict      = Depends(require_roles("nurse", "doctor", "admin")),
+    db:              DbSession = Depends(get_db),
+):
+    """patient_id_hash로 진단 목록 조회 — diagnosis_text 포함 (간호사 접수 업무용)."""
+    from models.db import Patient as PatientModel
+    p = db.query(PatientModel).filter(
+        PatientModel.patient_id_hash == patient_id_hash
+    ).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
+    try:
+        record_audit(db, "VIEW_DIAGNOSES", "200",
+                     user_id=current_user["sub"], patient_id=p.patient_id, target_table="diagnoses")
+        db.commit()
+    except Exception:
+        db.rollback()
+    diags = db.query(Diagnosis).filter(Diagnosis.patient_id == p.patient_id).all()
+    return [
+        {
+            "diagnosis_code": d.diagnosis_code,
+            "diagnosis_text": d.diagnosis_text,
+            "is_primary":     d.is_primary,
+        }
+        for d in diags
+    ]
+
+
 @router.get("/patients/{patient_id}/diagnoses")
 def get_patient_diagnoses(
     patient_id:   str,

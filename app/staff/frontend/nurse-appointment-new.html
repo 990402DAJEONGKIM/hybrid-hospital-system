@@ -272,7 +272,7 @@
         document.getElementById('pName').textContent   = p.patient_name  || '-';
         document.getElementById('pBirth').textContent  = p.birth_date ? p.birth_date.slice(0,4) + '년생' : '-';
         document.getElementById('pGender').textContent = GENDER[p.gender_code] || '-';
-        document.getElementById('patientBox').style.display = '';
+        document.getElementById('patientBox').style.display = 'block';
         loadReceptionInfo(p.patient_id_hash);
     }
 
@@ -293,7 +293,10 @@
         diagEl.innerHTML = diags.length
             ? diags.map(d => {
                 const isSensitive = d.diagnosis_code === '[민감]';
-                return `<span class="badge badge-diag${isSensitive ? ' sensitive' : ''}">${_esc(d.diagnosis_code)}${d.is_primary ? ' ★' : ''}</span>`;
+                const label = isSensitive
+                    ? '[민감]'
+                    : `${_esc(d.diagnosis_code)}${d.diagnosis_text ? ' ' + _esc(d.diagnosis_text) : ''}${d.is_primary ? ' ★' : ''}`;
+                return `<span class="badge badge-diag${isSensitive ? ' sensitive' : ''}">${label}</span>`;
               }).join('')
             : '<span style="font-size:11px;color:#94a3b8;">없음</span>';
 
@@ -301,7 +304,7 @@
             ? allergies.map(a => `<span class="badge badge-allergy">${_esc(a.allergy_name)}${a.severity ? ' (' + _esc(a.severity) + ')' : ''}</span>`).join('')
             : '<span style="font-size:11px;color:#94a3b8;">없음</span>';
 
-        infoEl.style.display = '';
+        infoEl.style.display = 'block';
     }
 
     function clearPatient() {
