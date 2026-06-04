@@ -34,3 +34,10 @@ variable "grafana_subdomain" {
   type        = string
   default     = "grafana"
 }
+
+# by 김다정 20260604
+variable "admin_subdomain" {
+  description = "관리자 포털 서브도메인 prefix"
+  type        = string
+  default     = "admin"
+}
