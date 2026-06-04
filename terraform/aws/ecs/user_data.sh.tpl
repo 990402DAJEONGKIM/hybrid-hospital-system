@@ -67,8 +67,23 @@ systemctl start wazuh-agent || true
 
 
 # ── Grafana Alloy 설치 — AL2023 RPM 방식 ─────────────────
-# 공식문서: https://grafana.com/docs/alloy/latest/set-up/install/linux/
-curl -fsSL https://rpm.grafana.com/gpg.key | rpm --import -
+wget -q -O /tmp/grafana-gpg.key https://rpm.grafana.com/gpg.key
+rpm --import /tmp/grafana-gpg.key
+rm -f /tmp/grafana-gpg.key
+
+cat > /etc/yum.repos.d/grafana.repo << 'EOF'
+[grafana]
+name=grafana
+baseurl=https://rpm.grafana.com
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+EOF
+
+dnf install -y alloy 
 
 TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
   -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
@@ -117,6 +132,7 @@ systemctl start alloy || true
 # Wazuh agent가 120초 내에 활성화되지 않더라도 ECS는 시작하도록 함 (모니터링은 되지만 보안 이벤트는 누락될 수 있음)
 # 30초는 불안해서 120초로 늘림 
 # agent가 활성화되면 ECS를 시작하도록 변경 - 260603 김강환
+%{ if wazuh_server_ip != "" }
 echo "Waiting for wazuh-agent to become active..."
 for i in $(seq 1 24); do
   if systemctl is-active --quiet wazuh-agent; then
@@ -128,5 +144,8 @@ for i in $(seq 1 24); do
   fi
   sleep 5
 done
+%{ else }
+echo "Wazuh not configured, starting ECS immediately..."
+%{ endif }
 
 systemctl start ecs
