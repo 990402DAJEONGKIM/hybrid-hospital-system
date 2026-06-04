@@ -93,11 +93,7 @@ resource "aws_ecs_task_definition" "hospital" {
         { name = "ALLOWED_HOSTS",   value = "${var.frontend_domain},localhost" },
         { name = "ALLOWED_ORIGINS", value = "https://${var.frontend_domain}" },
         { name = "TZ",              value = "Asia/Seoul" },
-        # Vault — JWT_SECRET 등 시크릿을 런타임에 주입 (vault_loader.py 참고)
-        { name = "VAULT_ADDR",      value = var.vault_addr },
-        { name = "VAULT_ROLE",      value = var.vault_role },
-        { name = "VAULT_PATH",      value = "hospital/deident" },
-        { name = "VAULT_MOUNT",     value = "secret" },
+        # Vault 미사용 — ECS는 AWS Secrets Manager에서 시크릿 직접 주입 (hospital_secrets 참고) by 김다정 20260605
       ]
       secrets = local.hospital_secrets
       logConfiguration = {
