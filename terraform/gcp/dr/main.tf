@@ -114,6 +114,7 @@ resource "google_storage_bucket_object" "monitor_script" {
     gcp_dns_rrdatas     = join(",", [google_compute_global_address.dr_lb.address])
     failover_mode       = var.failover_mode
     enable_ops_agent    = var.enable_ops_agent
+    slack_webhook_url   = var.slack_webhook_url
   })
 }
 
