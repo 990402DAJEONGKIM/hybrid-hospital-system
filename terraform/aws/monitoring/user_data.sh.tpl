@@ -18,7 +18,7 @@ unzip -q /tmp/awscliv2.zip -d /tmp/
 rm -rf /tmp/aws /tmp/awscliv2.zip
 
 # ── Prometheus 설치 (공식 바이너리) ──────────────────────
-PROMETHEUS_VERSION="2.51.2"
+PROMETHEUS_VERSION="2.53.5"
 
 useradd --no-create-home --shell /bin/false prometheus
 
@@ -173,11 +173,125 @@ apiVersion: 1
 datasources:
   - name: prometheus
     type: prometheus
-    access: proxy
+    uid: prometheus
     url: http://localhost:9090
     isDefault: true
     editable: false
 EOF
+
+# ── Grafana Provisioning — Alerting ──────────────────────
+mkdir -p /etc/grafana/provisioning/alerting
+
+cat > /etc/grafana/provisioning/alerting/contactpoints.yaml <<EOF
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: slack-alerts
+    receivers:
+      - uid: slack-receiver
+        type: slack
+        settings:
+          url: ${slack_webhook_url}
+          title: "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+          text: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}"
+EOF
+
+cat > /etc/grafana/provisioning/alerting/policy.yaml <<'EOF'
+apiVersion: 1
+policies:
+  - orgId: 1
+    receiver: slack-alerts
+    group_by: ['alertname', 'instance']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+EOF
+
+cat > /etc/grafana/provisioning/alerting/rules.yaml <<'EOF'
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: system-alerts
+    folder: Alerts
+    interval: 1m
+    rules:
+      - uid: cpu-high
+        title: CPU Usage High
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 100 * (1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])))
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [70]
+                    type: gt
+              refId: C
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "CPU {{ $labels.instance }} 사용률 높음"
+        labels:
+          severity: warning
+        isPaused: false
+      - uid: memory-high
+        title: Memory Usage High
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [70]
+                    type: gt
+              refId: C
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Memory {{ $labels.instance }} 사용률 높음"
+        labels:
+          severity: warning
+        isPaused: false
+EOF
+
+
 
 # CloudWatch Data Source — RDS/ALB/ECS AWS 인프라 메트릭
 # IAM Role 기반 인증 (EC2 Instance Profile)

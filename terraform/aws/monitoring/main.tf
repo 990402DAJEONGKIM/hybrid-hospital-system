@@ -53,6 +53,7 @@ resource "aws_instance" "aws-monitoring-01" {
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
     aws_region       = data.aws_region.current.region
     base_domain      = var.base_domain
+    slack_webhook_url = var.slack_webhook_url
   }))
 
   root_block_device {
