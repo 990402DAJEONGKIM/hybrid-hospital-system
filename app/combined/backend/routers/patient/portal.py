@@ -682,15 +682,17 @@ def get_my_profile(
         # 환자 실명은 onprem에만 있으므로 서비스 간 호출로 조회
         try:
             from core.onprem_client import OnpremClient, ONPREM_API_URL
-            if ONPREM_API_URL:
+            if not ONPREM_API_URL:
+                logger.warning("ONPREM_API_URL 미설정 — 환자 이름 조회 불가 (patient_id_hash=%s)", user.patient_id_hash)
+            else:
                 client = OnpremClient(
                     user_id   = current_user["sub"],
                     user_role = "nurse",   # 서비스 간 호출 — 환자 본인 정보 조회
                 )
                 data = client.get(f"/portal/patients/by-hash/{user.patient_id_hash}")
                 result["patient_name"] = data.get("patient_name")
-        except Exception:
-            pass   # onprem 미연결 시 이름 없이 반환
+        except Exception as exc:
+            logger.warning("onprem 환자 이름 조회 실패 (patient_id_hash=%s): %s", user.patient_id_hash, exc)
 
     return result
 
