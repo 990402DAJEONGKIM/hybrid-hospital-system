@@ -1,152 +1,98 @@
 # tasks.tf
 
 # =========================================================
-# ECS Task Definitions + Services
+# ECS Task Definition + Service
 #
 # 패턴: sidecar (NGINX + FastAPI 동일 Task)
 #   - network_mode = "awsvpc" → 동일 Task 내 컨테이너가 localhost 공유
 #   - NGINX(port 80) → localhost:8000 → FastAPI
 #
-# Task 2개:
-#   - patient-task : nginx-patient + api-patient
-#   - staff-task   : nginx-staff  + api-staff
-#
-# ECS Service 2개 (ALB Target Group ARN이 입력된 경우에만 생성):
-#   - patient-service (Public ALB)
-#   - staff-service   (Internal ALB)
+# Task 1개:
+#   - hospital-task : nginx + api (staff/patient/portal 전체 서빙)
 # =========================================================
 
-# ─────────────────────────────────────────────────────────
-# ECR 최신 이미지 자동 조회 (하드코딩 불필요)
-# ─────────────────────────────────────────────────────────
-data "aws_ecr_image" "nginx_patient" {
-  repository_name = "aws-hospital-nginx-patient"
-  most_recent     = true
-}
-
-data "aws_ecr_image" "api_patient" {
-  repository_name = "aws-hospital-api-patient"
-  most_recent     = true
-}
-
-data "aws_ecr_image" "nginx_staff" {
-  repository_name = "aws-hospital-nginx-staff"
-  most_recent     = true
-}
-
-data "aws_ecr_image" "api_staff" {
-  repository_name = "aws-hospital-api-staff"
-  most_recent     = true
-}
-
-# 260528 박경수, 시크릿 네이밍 규칙에 맞추면서 주석화 및 수정본 추가
-# locals {
-#   # FastAPI 공통 secrets (Secrets Manager → 컨테이너 환경변수)
-#   api_secrets = [
-#     { name = "DATABASE_URL", valueFrom = data.aws_secretsmanager_secret.db_url.arn     },
-#     { name = "JWT_SECRET",   valueFrom = data.aws_secretsmanager_secret.jwt_secret.arn },
-#     { name = "API_KEY",      valueFrom = data.aws_secretsmanager_secret.api_key.arn    },
-#   ]
-#   # NGINX secrets — envsubst로 nginx.conf에 API_KEY 주입 (프론트엔드 노출 방지)
-#   nginx_secrets = [
-#     { name = "API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn },
-#   ]
-# }
 locals {
-  # db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
-  patient_secrets = [
-    { name = "DATABASE_URL", valueFrom = data.tfe_outputs.secrets.values.db_url_patient_secret_arn },
-    { name = "JWT_SECRET",          valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSCURRENT:" },
-    { name = "JWT_SECRET_PREVIOUS", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSPREVIOUS:" },  # 260601 박경수 추가
-    { name = "API_KEY",      valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
-  ]
-  # db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
-  staff_secrets = [
-    { name = "DATABASE_URL", valueFrom = data.tfe_outputs.secrets.values.db_url_staff_secret_arn },
-    { name = "JWT_SECRET",          valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSCURRENT:" },
-    { name = "JWT_SECRET_PREVIOUS", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSPREVIOUS:" },  # 260601 박경수 추가
-    { name = "API_KEY",      valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
-  ]
-    nginx_secrets = [
+  ecr_base = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+
+  nginx_secrets = [
     { name = "API_KEY", valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
   ]
+
+  hospital_secrets = [
+    { name = "DATABASE_URL",        valueFrom = data.tfe_outputs.secrets.values.db_url_patient_secret_arn },
+    { name = "JWT_SECRET",          valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSCURRENT:" },
+    { name = "JWT_SECRET_PREVIOUS", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSPREVIOUS:" },
+    { name = "API_KEY",             valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
+  ]
 }
 
 
-
-
 # ─────────────────────────────────────────────────────────
-# CloudWatch Log Groups
+# CloudWatch Log Group
 # ─────────────────────────────────────────────────────────
-resource "aws_cloudwatch_log_group" "patient" {
-  name              = "/ecs/patient"
+resource "aws_cloudwatch_log_group" "hospital" {
+  name              = "/ecs/hospital"
   retention_in_days = 90
 }
 
-resource "aws_cloudwatch_log_group" "staff" {
-  name              = "/ecs/staff"
-  retention_in_days = 90
-}
-
 
 # ─────────────────────────────────────────────────────────
-# Task Definition — 환자 포털 (nginx-patient + api-patient)
+# Task Definition — 통합 병원 (nginx + api)
+# nginx: staff/patient/portal 전체 서빙 (server_name 분기)
+# api:   app/combined/backend (FastAPI, port 8000)
+# CI/CD가 이미지 태그를 교체하므로 :latest는 초기값
 # ─────────────────────────────────────────────────────────
-resource "aws_ecs_task_definition" "patient" {
-  family                   = "patient-task"
+resource "aws_ecs_task_definition" "hospital" {
+  family                   = "hospital-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
-  cpu                      = "512"
-  memory                   = "1536"
+  cpu                      = "1024"
+  memory                   = "2048"
 
   container_definitions = jsonencode([
     {
-      name      = "nginx-patient"
-      image     = data.aws_ecr_image.nginx_patient.image_uri
+      name      = "nginx"
+      image     = "${local.ecr_base}/aws-hospital-nginx:latest"
       essential = true
       portMappings = [{
         containerPort = 80
         protocol      = "tcp"
       }]
       secrets = local.nginx_secrets
-      dockerLabels = {
-        container_name = "nginx-patient"
-      }
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/ecs/patient"
+          "awslogs-group"         = "/ecs/hospital"
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "nginx"
         }
       }
-
       dependsOn = [{
-        containerName = "api-patient"
+        containerName = "api"
         condition     = "START"
       }]
     },
     {
-      name      = "api-patient"
-      image     = data.aws_ecr_image.api_patient.image_uri
+      name      = "api"
+      image     = "${local.ecr_base}/aws-hospital-api:latest"
       essential = true
       portMappings = [{
         containerPort = 8000
         protocol      = "tcp"
       }]
       environment = [
-        { name = "COOKIE_SECURE",    value = "true"                    },
-        { name = "ALLOWED_HOSTS",    value = var.patient_allowed_hosts },
-        { name = "ALLOWED_ORIGINS",  value = "https://${var.patient_allowed_hosts}" },
-        { name = "TZ",               value = "Asia/Seoul"              },
+        { name = "COOKIE_SECURE",   value = "true" },
+        { name = "ALLOWED_HOSTS",   value = "staff.mzclinic.cloud,patient.mzclinic.cloud,portal.mzclinic.cloud,localhost" },
+        { name = "ALLOWED_ORIGINS", value = "https://staff.mzclinic.cloud,https://patient.mzclinic.cloud,https://portal.mzclinic.cloud" },
+        { name = "TZ",              value = "Asia/Seoul" },
       ]
-      secrets = local.patient_secrets
+      secrets = local.hospital_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/ecs/patient"
+          "awslogs-group"         = "/ecs/hospital"
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "api"
         }
@@ -157,121 +103,14 @@ resource "aws_ecs_task_definition" "patient" {
 
 
 # ─────────────────────────────────────────────────────────
-# Task Definition — 의료진 포털 (nginx-staff + api-staff)
+# ECS Service — 통합 병원
+# 테스트 단계: ALB 없이 실행 (Task 정상 기동 확인 후 ALB 연결)
+# ALB 연결 시: load_balancer 블록 추가 + deployment_minimum_healthy_percent = 100
 # ─────────────────────────────────────────────────────────
-resource "aws_ecs_task_definition" "staff" {
-  family                   = "staff-task"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["EC2"]
-  execution_role_arn       = aws_iam_role.task_execution.arn
-  task_role_arn            = aws_iam_role.task.arn
-  cpu                      = "512"
-  memory                   = "1536"
-
-  container_definitions = jsonencode([
-    {
-      name      = "nginx-staff"
-      image     = data.aws_ecr_image.nginx_staff.image_uri
-      essential = true
-      portMappings = [{
-        containerPort = 80
-        protocol      = "tcp"
-      }]
-      secrets = local.nginx_secrets
-      dockerLabels = {
-        container_name = "nginx-staff"
-      }
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/staff"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "nginx"
-        }
-      }
-
-      dependsOn = [{
-        containerName = "api-staff"
-        condition     = "START"
-      }]
-    },
-    {
-      name      = "api-staff"
-      image     = data.aws_ecr_image.api_staff.image_uri
-      essential = true
-      portMappings = [{
-        containerPort = 8000
-        protocol      = "tcp"
-      }]
-      environment = [
-        { name = "COOKIE_SECURE",   value = "true"                   },
-        { name = "ALLOWED_HOSTS",   value = var.staff_allowed_hosts  },
-        { name = "ALLOWED_ORIGINS", value = "https://${var.staff_allowed_hosts}" },
-        { name = "TZ",              value = "Asia/Seoul"             },
-      ]
-      secrets = local.staff_secrets
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/staff"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "api"
-        }
-      }
-    }
-  ])
-}
-
-
-# ─────────────────────────────────────────────────────────
-# ECS Service — 환자 포털
-# ─────────────────────────────────────────────────────────
-resource "aws_ecs_service" "patient" {
-  name            = "patient-service"
+resource "aws_ecs_service" "hospital" {
+  name            = "hospital-service"
   cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.patient.arn
-  desired_count   = 1
-
-
-  capacity_provider_strategy {
-    capacity_provider = aws_ecs_capacity_provider.main.name
-    weight            = 1
-    base              = 1
-  }
-
-  network_configuration {
-    subnets          = data.aws_subnets.app.ids
-    security_groups  = [aws_security_group.ecs_ec2.id]
-    assign_public_ip = false
-  }
-
-  load_balancer {
-    target_group_arn = data.aws_lb_target_group.patient.arn
-    container_name   = "nginx-patient"
-    container_port   = 80
-  }
-
-  deployment_minimum_healthy_percent = 100
-  deployment_maximum_percent         = 200
-  availability_zone_rebalancing      = "DISABLED"
-
-  lifecycle {
-    # desired_count: 오토스케일링이 변경하므로 Terraform이 덮어쓰지 않음
-    # task_definition: CI/CD(GitHub Actions)가 관리하므로 Terraform이 덮어쓰지 않음
-    ignore_changes = [desired_count, task_definition]
-  }
-
-  depends_on = [aws_ecs_cluster_capacity_providers.main]
-}
-
-
-# ─────────────────────────────────────────────────────────
-# ECS Service — 의료진 포털
-# ─────────────────────────────────────────────────────────
-resource "aws_ecs_service" "staff" {
-  name            = "staff-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.staff.arn
+  task_definition = aws_ecs_task_definition.hospital.arn
   desired_count   = 1
 
   capacity_provider_strategy {
@@ -286,14 +125,8 @@ resource "aws_ecs_service" "staff" {
     assign_public_ip = false
   }
 
-  load_balancer {
-    target_group_arn = data.aws_lb_target_group.staff.arn
-    container_name   = "nginx-staff"
-    container_port   = 80
-  }
-
-  deployment_minimum_healthy_percent = 100
-  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
   availability_zone_rebalancing      = "DISABLED"
 
   lifecycle {
@@ -301,72 +134,4 @@ resource "aws_ecs_service" "staff" {
   }
 
   depends_on = [aws_ecs_cluster_capacity_providers.main]
-}
-
-
-# ─────────────────────────────────────────────────────────
-# ECS Service Auto Scaling — 환자 포털 (CPU 70% 기준)
-# EC2 1대 기준: Task 512 CPU × 4개 수용 가능 (2048 CPU)
-# min:1 → max:4, EC2 용량 초과 시 Capacity Provider가 EC2 추가
-# ─────────────────────────────────────────────────────────
-resource "aws_appautoscaling_target" "patient" {
-  max_capacity       = 4
-  min_capacity       = 1
-  resource_id        = "service/${aws_ecs_cluster.main.name}/patient-service"
-  scalable_dimension = "ecs:service:DesiredCount"
-  service_namespace  = "ecs"
-
-  depends_on = [aws_ecs_service.patient]
-}
-
-resource "aws_appautoscaling_policy" "patient_cpu" {
-  name               = "patient-cpu-scaling"
-  policy_type        = "TargetTrackingScaling"
-  resource_id        = aws_appautoscaling_target.patient.resource_id
-  scalable_dimension = aws_appautoscaling_target.patient.scalable_dimension
-  service_namespace  = aws_appautoscaling_target.patient.service_namespace
-
-  target_tracking_scaling_policy_configuration {
-    target_value       = 70.0
-    scale_in_cooldown  = 300
-    scale_out_cooldown = 60
-
-    predefined_metric_specification {
-      predefined_metric_type = "ECSServiceAverageCPUUtilization"
-    }
-  }
-}
-
-
-# ─────────────────────────────────────────────────────────
-# ECS Service Auto Scaling — 의료진 포털 (CPU 70% 기준)
-# EC2 1대 기준: Task 512 CPU × 4개 수용 가능 (2048 CPU)
-# min:1 → max:4, EC2 용량 초과 시 Capacity Provider가 EC2 추가
-# ─────────────────────────────────────────────────────────
-resource "aws_appautoscaling_target" "staff" {
-  max_capacity       = 4
-  min_capacity       = 1
-  resource_id        = "service/${aws_ecs_cluster.main.name}/staff-service"
-  scalable_dimension = "ecs:service:DesiredCount"
-  service_namespace  = "ecs"
-
-  depends_on = [aws_ecs_service.staff]
-}
-
-resource "aws_appautoscaling_policy" "staff_cpu" {
-  name               = "staff-cpu-scaling"
-  policy_type        = "TargetTrackingScaling"
-  resource_id        = aws_appautoscaling_target.staff.resource_id
-  scalable_dimension = aws_appautoscaling_target.staff.scalable_dimension
-  service_namespace  = aws_appautoscaling_target.staff.service_namespace
-
-  target_tracking_scaling_policy_configuration {
-    target_value       = 70.0
-    scale_in_cooldown  = 300
-    scale_out_cooldown = 60
-
-    predefined_metric_specification {
-      predefined_metric_type = "ECSServiceAverageCPUUtilization"
-    }
-  }
 }
