@@ -9,7 +9,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db, get_read_db
-from core.security import get_current_user, has_permission
+from core.onprem_client import OnpremClient
+from core.security import get_client_ip, get_current_user, has_permission
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
@@ -389,15 +390,13 @@ def get_patient_detail(
     }
 
 
-# ── 접수 전용 제한적 환자 정보 (방향 A) ──────────────────────────
-# 간호사·원무과는 진단 코드만 열람 가능. 민감 상병(F*, B20*, Z21*)은 "[민감]" 마스킹.
+# ── 접수 전용 환자 정보 ────────────────────────────────────────────
+# 민감 상병(F*, B20*, Z21*)은 코드·진단명 모두 "[민감]" 마스킹.
 _SENSITIVE_PREFIXES = ("F", "B20", "Z21")
 
 
-def _mask_code(code: str) -> str:
-    if any(code.upper().startswith(p) for p in _SENSITIVE_PREFIXES):
-        return "[민감]"
-    return code
+def _is_sensitive(code: str) -> bool:
+    return any(code.upper().startswith(p) for p in _SENSITIVE_PREFIXES)
 
 
 @router.get("/nurse/patients/{patient_id_hash}/reception-info")
@@ -407,7 +406,8 @@ def nurse_reception_info(
     current_user:    dict     = Depends(get_current_user),
     db:              DbSession = Depends(get_db),
 ):
-    """접수 업무용 제한적 환자 정보 — 최근 내원 이력·진단 코드(민감 마스킹)·알레르기."""
+    """접수 업무용 환자 정보 — 내원 이력·진단명(온프레미스 실시간)·알레르기.
+    민감 상병(정신과·HIV 등)은 코드·진단명 모두 마스킹."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
 
     if current_user.get("role") not in ("nurse", "admin"):
@@ -421,15 +421,26 @@ def nurse_reception_info(
         .all()
     )
 
-    diagnoses = db.query(SyncDiagnosis).filter(
-        SyncDiagnosis.patient_id_hash == patient_id_hash
-    ).all()
-
     allergies = db.query(SyncAllergy).filter(
         SyncAllergy.patient_id_hash == patient_id_hash
     ).all()
 
+    # 온프레미스 실시간 조회 — diagnosis_text 포함
+    onprem = OnpremClient(
+        user_id   = current_user["sub"],
+        user_role = current_user.get("role", "nurse"),
+        source_ip = get_client_ip(request),
+    )
+    onprem_resp = onprem.get(f"/portal/patients/by-hash/{patient_id_hash}/diagnoses")
+    raw_diags = onprem_resp if isinstance(onprem_resp, list) else []
+
     _record_audit(db, current_user["sub"], "READ_RECEPTION_INFO", "200", request)
+
+    def _build_diag(d: dict) -> dict:
+        code = d.get("diagnosis_code", "")
+        if _is_sensitive(code):
+            return {"diagnosis_code": "[민감]", "diagnosis_text": "[민감]", "is_primary": d.get("is_primary")}
+        return {"diagnosis_code": code, "diagnosis_text": d.get("diagnosis_text"), "is_primary": d.get("is_primary")}
 
     return {
         "recent_encounters": [
@@ -440,13 +451,7 @@ def nurse_reception_info(
             }
             for e in encounters
         ],
-        "diagnoses": [
-            {
-                "diagnosis_code": _mask_code(d.diagnosis_code),
-                "is_primary":     d.is_primary,
-            }
-            for d in diagnoses
-        ],
+        "diagnoses": [_build_diag(d) for d in raw_diags],
         "allergies": [
             {
                 "allergy_name": a.allergy_name,
