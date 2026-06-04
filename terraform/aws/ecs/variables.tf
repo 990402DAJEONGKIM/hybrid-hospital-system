@@ -73,6 +73,6 @@ variable "frontend_domain" {
 variable "onprem_base_url" {
   description = "온프레미스 API 주소 — nginx 컨테이너의 ONPREM_BASE_URL로 주입됨. 병원 내부 PC에서 직접 접근하는 URL."
   type        = string
-  default     = ""   # 빈 문자열 → 온프레미스 기능 비활성화 (config.js의 ONPREM_BASE_URL = '' 와 동일)
+  default     = "https://172.30.1.76"
 }
 

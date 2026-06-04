@@ -8,9 +8,8 @@
   └─ RDS_SECRET_ID
 
 지원 인증 방법:
-  1. AWS IAM (VAULT_ROLE 설정 시)  — ECS 운영 환경 (태스크 IAM 역할 사용)
-  2. Token   (VAULT_TOKEN 설정 시) — 로컬 개발 / CI / 온프레미스 폴백
-  3. 미설정  (VAULT_ADDR 없을 때)  — 기존 환경변수 직접 사용 (하위 호환)
+  1. Token   (VAULT_TOKEN 설정 시) — 로컬 개발 / CI
+  2. 미설정  (VAULT_ADDR 없을 때)  — 기존 환경변수 직접 사용 (하위 호환)
 
 실패 시 RuntimeError → 앱 기동 중단 (시크릿 없이 기동하는 것보다 안전).
 """
@@ -21,11 +20,11 @@ import os
 logger = logging.getLogger(__name__)
 
 VAULT_ADDR  = os.getenv("VAULT_ADDR",  "")
-VAULT_ROLE  = os.getenv("VAULT_ROLE",  "")          # AWS IAM auth: ECS 태스크 IAM 역할
+# VAULT_ROLE  = os.getenv("VAULT_ROLE",  "")        # AWS IAM auth 미사용 — 온프레미스 DB는 온프레미스 내부에서 연결
 VAULT_TOKEN = os.getenv("VAULT_TOKEN", "")          # Token auth: 로컬·CI·온프레미스 폴백
 VAULT_PATH  = os.getenv("VAULT_PATH",  "hospital/deident")
 VAULT_MOUNT = os.getenv("VAULT_MOUNT", "secret")
-AWS_REGION  = os.getenv("AWS_REGION",  "ap-south-2")
+# AWS_REGION  = os.getenv("AWS_REGION",  "ap-south-2")  # AWS IAM auth 미사용
 
 # secret/data/hospital/deident 경로에서 읽어올 키 목록
 _VAULT_KEYS = {
@@ -57,20 +56,22 @@ def load_vault_secrets() -> None:
     client = hvac.Client(url=VAULT_ADDR)
 
     # ── 인증 ────────────────────────────────────────────────
-    if VAULT_ROLE:
-        logger.info("Vault AWS IAM 인증 시작 (role=%s, region=%s)", VAULT_ROLE, AWS_REGION)
-        try:
-            client.auth.aws.iam_login(role=VAULT_ROLE)
-        except Exception as exc:
-            raise RuntimeError(f"Vault AWS IAM 인증 실패 (role={VAULT_ROLE}): {exc}") from exc
+    # AWS IAM auth 미사용 — 온프레미스 DB는 온프레미스 내부에서 연결
+    # if VAULT_ROLE:
+    #     logger.info("Vault AWS IAM 인증 시작 (role=%s, region=%s)", VAULT_ROLE, AWS_REGION)
+    #     try:
+    #         client.auth.aws.iam_login(role=VAULT_ROLE)
+    #     except Exception as exc:
+    #         raise RuntimeError(f"Vault AWS IAM 인증 실패 (role={VAULT_ROLE}): {exc}") from exc
+    # elif VAULT_TOKEN:
 
-    elif VAULT_TOKEN:
+    if VAULT_TOKEN:
         logger.info("Vault Token 인증 사용")
         client.token = VAULT_TOKEN
 
     else:
         raise RuntimeError(
-            "Vault 인증 정보 없음. VAULT_ROLE(ECS IAM) 또는 VAULT_TOKEN을 설정하세요."
+            "Vault 인증 정보 없음. VAULT_TOKEN을 설정하세요."
         )
 
     if not client.is_authenticated():
