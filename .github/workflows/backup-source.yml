@@ -37,7 +37,16 @@ jobs:
           TIMESTAMP=$(date -u '+%Y-%m-%dT%H-%M-%SZ')
           SHORT_SHA=${GITHUB_SHA::7}
           FILENAME="source-${TIMESTAMP}-${SHORT_SHA}.tar.gz"
-          tar --exclude='.git' -czf "/tmp/${FILENAME}" .
+          tar \
+            --exclude='.git' \
+            --exclude='.terraform' \
+            --exclude='**/.terraform' \
+            --exclude='*.tfstate' \
+            --exclude='*.tfstate.backup' \
+            --exclude='**/__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='session-manager-plugin.deb' \
+            -czf "/tmp/${FILENAME}" .
           SIZE=$(du -sh "/tmp/${FILENAME}" | cut -f1)
           echo "filename=${FILENAME}" >> $GITHUB_OUTPUT
           echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT

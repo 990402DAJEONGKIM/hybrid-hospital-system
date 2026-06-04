@@ -44,16 +44,30 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Pull cache images
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker pull $REGISTRY/aws-hospital-api:latest || true &
+          PID1=$!
+          docker pull $REGISTRY/aws-hospital-nginx:latest || true &
+          PID2=$!
+          wait $PID1 $PID2
+
       - name: Build images (parallel)
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ github.sha }}
         run: |
           docker build -f docker/api/Dockerfile \
-            -t $REGISTRY/aws-hospital-api:$TAG . &
+            --cache-from $REGISTRY/aws-hospital-api:latest \
+            -t $REGISTRY/aws-hospital-api:$TAG \
+            -t $REGISTRY/aws-hospital-api:latest . &
           PID1=$!
           docker build -f docker/nginx/Dockerfile \
-            -t $REGISTRY/aws-hospital-nginx:$TAG . &
+            --cache-from $REGISTRY/aws-hospital-nginx:latest \
+            -t $REGISTRY/aws-hospital-nginx:$TAG \
+            -t $REGISTRY/aws-hospital-nginx:latest . &
           PID2=$!
           wait $PID1 $PID2
 
@@ -71,6 +85,7 @@ jobs:
               echo "$REPO:$TAG already exists, skipping"
             else
               docker push "$REGISTRY/$REPO:$TAG"
+              docker push "$REGISTRY/$REPO:latest"
             fi
           }
 
