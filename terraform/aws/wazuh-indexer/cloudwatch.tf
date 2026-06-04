@@ -45,5 +45,39 @@ resource "aws_sns_topic_subscription" "aws-wazuh-indexer-to-lambda" {
   depends_on = [aws_lambda_permission.aws-wazuh-lambda-sns-indexer]
 }
 
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-reboot" {
+  alarm_name          = "aws-wazuh-indexer-reboot"
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed_Instance"
+  dimensions = {
+    InstanceId = aws_instance.aws-wazuh-indexer.id
+  }
+  period              = 60
+  evaluation_periods  = 3
+  statistic           = "Maximum"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  alarm_actions = [
+    "arn:aws:automate:${var.aws_region}:ec2:reboot"
+  ]
+  tags = { Name = "aws-wazuh-indexer-reboot" }
+}
 
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-recover" {
+  alarm_name          = "aws-wazuh-indexer-recover"
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed_System"
+  dimensions = {
+    InstanceId = aws_instance.aws-wazuh-indexer.id
+  }
+  period              = 60
+  evaluation_periods  = 3
+  statistic           = "Maximum"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  alarm_actions = [
+    "arn:aws:automate:${var.aws_region}:ec2:recover"
+  ]
+  tags = { Name = "aws-wazuh-indexer-recover" }
+}
 

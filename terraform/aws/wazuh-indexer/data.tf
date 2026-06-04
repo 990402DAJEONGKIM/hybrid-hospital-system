@@ -32,6 +32,7 @@ data "terraform_remote_state" "kms" {
 
 output "indexer_instance_id" {
   value = aws_instance.aws-wazuh-indexer.id
+  sensitive   = true
 }
 
 output "indexer_private_ip" {
