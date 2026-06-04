@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+
 apt-get update -y
 apt-get install -y curl jq
 
@@ -9,11 +10,13 @@ if [[ "${enable_ops_agent}" == "true" ]]; then
   bash add-google-cloud-ops-agent-repo.sh --also-install
 fi
 
+#SLACK_WEBHOOK_URL="${slack_webhook_url}" 추가 -> 260602 김강환
 cat > /usr/local/bin/gcp-dr-failover.sh <<'SCRIPT'
 #!/bin/bash
 set -euo pipefail
 
 PROJECT_ID="${project_id}"
+SLACK_WEBHOOK_URL="${slack_webhook_url}"
 ZONE="${zone}"
 MIG_NAME="${mig_name}"
 AWS_HEALTHCHECK_URL="${aws_healthcheck_url}"
@@ -41,6 +44,15 @@ log_event() {
     "$now" "$event" "$FAILOVER_MODE" "$(current_state)" "$message" >> "$EVENT_FILE"
   logger -t gcp-dr-failover "event=$event mode=$FAILOVER_MODE state=$(current_state) $message"
 }
+
+send_slack() {
+  local message="$1"
+  curl -s -X POST "$SLACK_WEBHOOK_URL" \
+    -H "Content-Type: application/json" \
+    -d "{\"text\": \"$message\"}" || true
+}
+
+
 
 read_state() {
   if [[ -f "$STATE_FILE" ]]; then
@@ -111,6 +123,7 @@ dns_switch() {
 }
 
 failover_to_gcp() {
+  send_slack "🚨 DR Failover — AWS 장애 감지. GCP로 전환합니다."
   log_event "aws_unhealthy" "failure_threshold=$FAILURE_THRESHOLD gcp_rrdatas=$GCP_DNS_RRDATAS"
   if [[ "$FAILOVER_MODE" == "manual" ]]; then
     log_event "manual_mode_skip_failover" "MIG resize and DNS switch skipped"
@@ -123,6 +136,7 @@ failover_to_gcp() {
 }
 
 return_to_aws() {
+  send_slack "✅ DR Recovery — AWS 복구됨. AWS로 복귀합니다."
   log_event "aws_recovered" "recovery_threshold=$RECOVERY_THRESHOLD aws_rrdatas=$AWS_DNS_RRDATAS"
   if [[ "$FAILOVER_MODE" == "manual" ]]; then
     log_event "manual_mode_skip_return" "DNS switch and MIG resize skipped"
