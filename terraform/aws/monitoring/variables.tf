@@ -24,3 +24,10 @@ variable "monitoring_private_ip" {
   description = "monitoring EC2 고정 Private IP — TFC Variables에서 관리"
   type        = string
 }
+
+
+variable "slack_webhook_url" {
+  description = "Slack webhook URL for Grafana alerts"
+  type        = string
+  sensitive   = true
+}
