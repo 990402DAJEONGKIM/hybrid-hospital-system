@@ -27,7 +27,7 @@ resource "cloudflare_record" "patient" {
   zone_id = var.cloudflare_zone_id
   name    = "patient"
   type    = "CNAME"
-  content = "aws-patient-alb-1753693648.ap-south-2.elb.amazonaws.com"
+  content = "aws-staff-alb-622767637.ap-south-2.elb.amazonaws.com"
   ttl     = 60
   proxied = false
 }

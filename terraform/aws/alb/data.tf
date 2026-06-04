@@ -62,12 +62,12 @@ data "aws_acm_certificate" "grafana" {
   most_recent = true
 }
 
-# ACM 인증서 (admin.mzclinic.cloud) — staff-alb SNI 추가용 by 김다정 20260604
-data "aws_acm_certificate" "admin" {
-  domain      = "admin.${var.base_domain}"
-  statuses    = ["ISSUED"]
-  most_recent = true
-}
+# ACM 인증서 (admin.mzclinic.cloud) 삭제 — admin.mzclinic.cloud 제거, staff로 통합
+# data "aws_acm_certificate" "admin" {
+#   domain      = "admin.${var.base_domain}"
+#   statuses    = ["ISSUED"]
+#   most_recent = true
+# }
 
 
 

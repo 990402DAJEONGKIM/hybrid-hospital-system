@@ -35,9 +35,9 @@ variable "grafana_subdomain" {
   default     = "grafana"
 }
 
-# by 김다정 20260604
-variable "admin_subdomain" {
-  description = "관리자 포털 서브도메인 prefix"
-  type        = string
-  default     = "admin"
-}
+# admin_subdomain 삭제 — admin.mzclinic.cloud 제거, staff로 통합
+# variable "admin_subdomain" {
+#   description = "관리자 포털 서브도메인 prefix"
+#   type        = string
+#   default     = "admin"
+# }
