@@ -143,12 +143,12 @@ def get_appointment_types(
     current_user: dict     = Depends(get_current_user),
     db:           DbSession = Depends(get_read_db),
 ):
-    """환자 예약 화면용 예약 유형 목록 — 초진(initial) 제외."""
+    """환자 예약 화면용 예약 유형 목록 — 초진(outpatient_new) 제외."""
     types = (
         db.query(AppointmentType)
         .filter(
             AppointmentType.is_active == True,
-            AppointmentType.type_code != "initial",   # SFR-035: 초진 미노출
+            AppointmentType.type_code != "outpatient_new",   # SFR-035: 초진 미노출
         )
         .order_by(AppointmentType.sort_order)
         .all()
@@ -396,7 +396,7 @@ def create_appointment(
     now = datetime.now(timezone.utc)
 
     # 초진 예약 유형 차단 (SFR-035)
-    if body.type_code.lower() in ("initial", "first_visit"):
+    if body.type_code.lower() in ("initial", "first_visit", "outpatient_new"):
         raise HTTPException(status_code=400, detail="초진 예약은 온라인으로 신청할 수 없습니다.")
 
     # 예약 유형 검증
