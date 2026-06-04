@@ -25,8 +25,10 @@
       args:
         creates: /swapfile
 
-    - name: Timezone KST 설정
-      shell: timedatectl set-timezone Asia/Seoul
+    - name: Ensure Timezone is set to UTC
+      community.general.timezone:
+        name: Etc/UTC
+      tags: system
 
     - name: vm.swappiness 설정
       sysctl:
@@ -324,13 +326,91 @@
       retries: 5
       delay: 10
 
-    # - name: CloudWatch Agent 시작
-    #   shell: |
-    #     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-    #     -a fetch-config -m ec2 \
-    #     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-    #   args:
-    #     creates: /var/run/amazon-cloudwatch-agent.pid
+    # ──────────────────────────────────────────
+    # Grafana Alloy 설치
+    # 공식문서: https://grafana.com/docs/alloy/latest/set-up/install/linux/
+    # ──────────────────────────────────────────
+    - name: /etc/apt/keyrings 디렉토리 생성
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      tags: alloy
+
+    - name: Grafana GPG 키 다운로드
+      get_url:
+        url: https://apt.grafana.com/gpg-full.key
+        dest: /etc/apt/keyrings/grafana.asc
+        mode: '0644'
+      tags: alloy
+
+    - name: Grafana APT 레포지토리 추가
+      copy:
+        dest: /etc/apt/sources.list.d/grafana.list
+        content: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main\n"
+        mode: '0644'
+      tags: alloy
+
+    - name: APT 캐시 업데이트 및 Alloy 설치
+      apt:
+        name: alloy
+        state: present
+        update_cache: yes
+      tags: alloy
+
+    - name: Alloy 설정 배포
+      copy:
+        dest: /etc/alloy/config.alloy
+        owner: alloy
+        group: alloy
+        mode: '0644'
+        content: |
+          // Wazuh Indexer 시스템 메트릭 수집
+          // node exporter 내장 — 별도 설치 불필요
+          prometheus.exporter.unix "local" {
+            include_exporter_metrics = true
+          }
+          discovery.relabel "local" {
+            targets = prometheus.exporter.unix.local.targets
+            rule {
+              target_label = "instance"
+              replacement  = "wazuh-indexer"
+            }
+          }
+          prometheus.scrape "local" {
+            targets         = discovery.relabel.local.output
+            forward_to      = [prometheus.remote_write.prometheus.receiver]
+            scrape_interval = "15s"
+          }
+          prometheus.remote_write "prometheus" {
+            endpoint {
+              url = "http://10.0.12.128:9090/api/v1/write"
+            }
+            wal {
+              truncate_frequency = "2h"
+              min_keepalive_time = "5m"
+              max_keepalive_time = "8h"
+            }
+          }
+      tags: alloy
+
+    - name: Alloy 서비스 시작
+      systemd:
+        name: alloy
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      tags: alloy
+
+    - name: Alloy 상태 확인
+      shell: systemctl is-active alloy
+      register: alloy_status
+      tags: alloy
+
+    - name: Alloy 상태 출력
+      debug:
+        var: alloy_status.stdout
+      tags: alloy
 
     - name: ISM 90일 보존 정책 설정
       uri:
