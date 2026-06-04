@@ -67,7 +67,7 @@ systemctl start wazuh-agent || true
 
 
 # ── Grafana Alloy 설치 — AL2023 RPM 방식 ─────────────────
-wget -q -O /tmp/grafana-gpg.key https://rpm.grafana.com/gpg.key
+curl -s -o /tmp/grafana-gpg.key https://rpm.grafana.com/gpg.key
 rpm --import /tmp/grafana-gpg.key
 rm -f /tmp/grafana-gpg.key
 
