@@ -16,7 +16,7 @@ variable "vpc_id" {
 variable "ec2_instance_type" {
   description = "ECS EC2 인스턴스 타입"
   type        = string
-  default     = "t3.large"
+  default = "t3.medium"  # 2026.0604 t3.large → t3.medium
 }
 
 variable "ec2_ami_id" {
