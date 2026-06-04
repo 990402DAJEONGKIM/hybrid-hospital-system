@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'app/combined/**'
+      - 'app/staff/frontend/**'
+      - 'app/patient/frontend/**'
+      - 'app/portal/frontend/**'
       - 'docker/api/**'
       - 'docker/nginx/**'
   workflow_dispatch:
@@ -14,7 +17,7 @@ env:
   ECS_CLUSTER: aws-ecs-cluster-01
 
 jobs:
-  # ── 1단계: 이미지 빌드 & ECR 푸시 (2개 병렬) ─────────────────
+  # ── 1단계: 이미지 빌드 & ECR 푸시 ────────────────────────────
   build:
     name: Build & Push Images
     runs-on: ubuntu-latest
@@ -41,7 +44,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build all images (parallel)
+      - name: Build images (parallel)
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ github.sha }}
@@ -54,18 +57,30 @@ jobs:
           PID2=$!
           wait $PID1 $PID2
 
-      - name: Push all images (parallel)
+      - name: Push images (IMMUTABLE 태그 중복 방지)
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ github.sha }}
         run: |
-          docker push $REGISTRY/aws-hospital-api:$TAG &
+          push_if_not_exists() {
+            REPO=$1
+            if aws ecr describe-images \
+                --repository-name "$REPO" \
+                --image-ids imageTag="$TAG" \
+                --region $AWS_REGION > /dev/null 2>&1; then
+              echo "$REPO:$TAG already exists, skipping"
+            else
+              docker push "$REGISTRY/$REPO:$TAG"
+            fi
+          }
+
+          push_if_not_exists aws-hospital-api &
           PID1=$!
-          docker push $REGISTRY/aws-hospital-nginx:$TAG &
+          push_if_not_exists aws-hospital-nginx &
           PID2=$!
           wait $PID1 $PID2
 
-  # ── 2단계: hospital-service 배포 ─────────────────────────────
+  # ── 2단계: hospital-service 배포 ──────────────────────────────
   deploy:
     name: Deploy hospital-service
     needs: build
@@ -94,12 +109,12 @@ jobs:
         run: |
           aws ecs describe-task-definition \
             --task-definition hospital-task \
-            --query taskDefinition > hospital-task-def.json
+            --query taskDefinition > task-def.json
 
           python3 - <<'EOF'
           import json, os
 
-          with open('hospital-task-def.json') as f:
+          with open('task-def.json') as f:
               td = json.load(f)
 
           registry = os.environ['REGISTRY']
@@ -111,19 +126,19 @@ jobs:
               elif c['name'] == 'api':
                   c['image'] = f"{registry}/aws-hospital-api:{tag}"
 
-          for key in ['taskDefinitionArn','revision','status','requiresAttributes',
-                      'compatibilities','registeredAt','registeredBy',
+          for key in ['taskDefinitionArn', 'revision', 'status', 'requiresAttributes',
+                      'compatibilities', 'registeredAt', 'registeredBy',
                       'enableFaultInjection']:
               td.pop(key, None)
 
-          with open('new-hospital-task-def.json', 'w') as f:
+          with open('new-task-def.json', 'w') as f:
               json.dump(td, f)
           EOF
 
           NEW_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://new-hospital-task-def.json \
+            --cli-input-json file://new-task-def.json \
             --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "Registered task definition: $NEW_ARN"
+          echo "Registered: $NEW_ARN"
 
           aws ecs update-service \
             --cluster $ECS_CLUSTER \
@@ -138,7 +153,7 @@ jobs:
               --services hospital-service \
               --query 'services[0].deployments[?status==`PRIMARY`].[rolloutState,desiredCount,runningCount]' \
               --output text)
-            STATE=$(echo "$RESULT" | awk '{print $1}')
+            STATE=$(echo "$RESULT"  | awk '{print $1}')
             DESIRED=$(echo "$RESULT" | awk '{print $2}')
             RUNNING=$(echo "$RESULT" | awk '{print $3}')
             echo "[${i}/60] hospital-service: state=$STATE desired=$DESIRED running=$RUNNING"
@@ -150,7 +165,7 @@ jobs:
               exit 1
             fi
             if [ $i -eq 60 ]; then
-              echo "Timed out waiting for hospital-service. Check ECS console."
+              echo "Timed out. Check ECS console for hospital-service."
               exit 1
             fi
             sleep 30

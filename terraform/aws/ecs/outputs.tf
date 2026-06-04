@@ -15,14 +15,9 @@ output "ecs_ec2_sg_id" {
   value       = aws_security_group.ecs_ec2.id
 }
 
-output "patient_task_definition_arn" {
-  description = "환자 포털 Task Definition ARN"
-  value       = aws_ecs_task_definition.patient.arn
-}
-
-output "staff_task_definition_arn" {
-  description = "의료진 포털 Task Definition ARN"
-  value       = aws_ecs_task_definition.staff.arn
+output "hospital_task_definition_arn" {
+  description = "통합 병원 Task Definition ARN"
+  value       = aws_ecs_task_definition.hospital.arn
 }
 
 output "asg_arn" {

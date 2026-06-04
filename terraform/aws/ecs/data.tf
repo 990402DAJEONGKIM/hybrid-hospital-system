@@ -75,6 +75,11 @@ data "aws_rds_cluster" "main" {
   cluster_identifier = "aws-aurora-01"
 }
 
+# 통합 hospital Target Group — alb 모듈 apply 후 자동 조회 by 김다정 20260604
+data "aws_lb_target_group" "hospital" {
+  name = "aws-hospital-tg"
+}
+
 # monitoring EC2 Private IP — Alloy remote write 대상
 data "terraform_remote_state" "monitoring" {
   backend = "remote"

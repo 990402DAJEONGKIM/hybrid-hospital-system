@@ -19,6 +19,12 @@ output "grafana_certificate_arn" {
   value       = aws_acm_certificate_validation.grafana.certificate_arn
 }
 
+# by 김다정 20260604
+output "admin_certificate_arn" {
+  description = "관리자 포털 인증서 ARN (staff-alb SNI용)"
+  value       = aws_acm_certificate_validation.admin.certificate_arn
+}
+
 output "patient_domain" {
   description = "환자 포털 도메인"
   value       = local.patient_domain
