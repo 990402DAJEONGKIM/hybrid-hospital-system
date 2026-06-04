@@ -17,6 +17,6 @@ async function extendSession() {
         alert("세션이 연장되었습니다.");
         startSessionTimer();
     } else {
-        location.href = '/login.html';
+        location.href = 'login.html';
     }
 }

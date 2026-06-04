@@ -252,6 +252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (userWelcomeItem) userWelcomeItem.classList.remove('hidden');
     if (logoutBtn)       logoutBtn.classList.remove('hidden');
     if (logoutBtn)       logoutBtn.addEventListener('click', logout);
+    if (appointmentSection) { appointmentSection.classList.remove('hidden'); appointmentSection.classList.add('flex'); }
 
     // ── 달력 ────────────────────────────────────────────────
     let currentDate   = new Date();
@@ -312,7 +313,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const appts = appointmentsMap[dateString];
             if (appts && appts.length > 0) {
                 const badge = document.createElement('div');
-                badge.className = 'mt-1 w-full text-[10px] px-2 py-1 bg-blue-100 text-blue-700 rounded-md font-bold truncate';
+                badge.className = 'mt-1 w-full text-[10px] px-2 bg-blue-100 text-blue-700 rounded-md font-bold truncate';
+                badge.style.paddingTop = '2px';
+                badge.style.paddingBottom = '2px';
                 badge.innerText = `예약 ${appts.length}건`;
                 dayCell.appendChild(badge);
             }
@@ -437,7 +440,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (r && r.ok) {
                 const depts = await r.json();
                 deptDropdown.innerHTML = depts.map(d =>
-                    `<a href="/department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`
+                    `<a href="department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`
                 ).join('');
             }
         } catch (_) { /* 드롭다운 실패 시 무시 */ }

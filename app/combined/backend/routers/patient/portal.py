@@ -679,20 +679,9 @@ def get_my_profile(
             result["birth_year"]  = patient.birth_year
             result["gender_code"] = patient.gender_code
 
-        # 환자 실명은 onprem에만 있으므로 서비스 간 호출로 조회
-        try:
-            from core.onprem_client import OnpremClient, ONPREM_API_URL
-            if not ONPREM_API_URL:
-                logger.warning("ONPREM_API_URL 미설정 — 환자 이름 조회 불가 (patient_id_hash=%s)", user.patient_id_hash)
-            else:
-                client = OnpremClient(
-                    user_id   = current_user["sub"],
-                    user_role = "nurse",   # 서비스 간 호출 — 환자 본인 정보 조회
-                )
-                data = client.get(f"/portal/patients/by-hash/{user.patient_id_hash}")
-                result["patient_name"] = data.get("patient_name")
-        except Exception as exc:
-            logger.warning("onprem 환자 이름 조회 실패 (patient_id_hash=%s): %s", user.patient_id_hash, exc)
+        # 환자 실명(patient_name)은 온프레미스에만 있음.
+        # 브라우저가 병원 내부망에서 온프레미스 API를 직접 호출해야 합니다.
+        # result["patient_name"] = None (기본값 유지)
 
     return result
 

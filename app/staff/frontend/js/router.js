@@ -23,7 +23,6 @@ async function loadPage(url) {
         document.querySelectorAll('style[data-spa]').forEach(function(el) { el.remove(); });
 
         // 현재 페이지의 <head style> 태그를 document.head 에 주입
-        // → 페이지 고유 CSS (.toolbar, .data-table, .form-card 등)가 SPA 전환 시에도 유지됨
         doc.querySelectorAll('head style').forEach(function(s) {
             var el = document.createElement('style');
             el.textContent = s.textContent;
@@ -34,17 +33,14 @@ async function loadPage(url) {
         const pc = doc.getElementById('page-content');
         main.innerHTML = '<div id="page-content">' + (pc ? pc.innerHTML : '') + '</div>';
 
-        // 사이드바 active 상태 갱신
-        const pageName = url.startsWith('/') ? url : '/' + url.split('/').pop();
+        // 사이드바 active 상태 갱신 — 파일명만 비교
+        const pageName = url.split('/').pop() || '';
         document.querySelectorAll('.sidebar-item').forEach(function(el) {
-            var href = el.getAttribute('href') || '';
+            var href = (el.getAttribute('href') || '').split('/').pop();
             el.classList.toggle('sidebar-item--active', href === pageName);
         });
 
         // 인라인 스크립트 실행
-        // - DOMContentLoaded → IIFE 변환 (index.html 전용 패턴)
-        // - initLayout() → 캐시된 me
-        // - 전체 스크립트를 IIFE로 감싸 const/let/function 전역 오염 방지
         doc.querySelectorAll('body > script:not([src])').forEach(function(s) {
             var code = s.textContent.trim();
 
@@ -53,8 +49,6 @@ async function loadPage(url) {
                 'const me = window._cachedMe;'
             );
 
-            // DOMContentLoaded 패턴이 있을 때만 변환 (없는 페이지에서 lastIndexOf가
-            // forEach/fetch 내부의 }); 를 잘못 교체하는 버그 방지)
             var hasDCL = false;
             code = code.replace(
                 /document\.addEventListener\(\s*['"]DOMContentLoaded['"]\s*,\s*async\s*\(\s*\)\s*=>\s*\{/,
@@ -65,10 +59,6 @@ async function loadPage(url) {
                 if (li !== -1) code = code.slice(0, li) + '})();' + code.slice(li + 3);
             }
 
-            // ── IIFE 래핑 ───────────────────────────────────────
-            // const/let 선언의 전역 오염을 막되,
-            // onclick="fn()" 형태의 이벤트 핸들러가 함수를 찾을 수 있도록
-            // 스크립트 내 모든 named function 선언을 window.* 에 노출한다.
             var exposed = [];
             var fnRe = /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
             var fm;

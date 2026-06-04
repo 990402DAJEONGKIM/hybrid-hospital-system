@@ -1,11 +1,109 @@
+// ── 인증 기준 URL ─────────────────────────────────────────
+// ONPREM_BASE_URL 설정 시: 온프레미스에서 로그인·인증 처리 (병원 내부망)
+// 미설정 시: AWS 백엔드로 폴백
+const AUTH_BASE = ONPREM_BASE_URL || BASE_URL;
+const _authHeaders = ONPREM_BASE_URL
+    ? { 'Content-Type': 'application/json' }
+    : { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
+
 // ── 공통 fetch 옵션 ────────────────────────────────────────
 const _fetchDefaults = {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
 };
 
+// ── 온프레미스 경로 번역 테이블 ──────────────────────────────
+// ONPREM_BASE_URL 설정 시 apiCall()이 이 매핑을 통해 경로를 자동 변환.
+// AWS combined backend 경로 → 온프레미스 FastAPI 경로
+const _ONPREM_PATH_MAP = [
+    // ── /emr/nurse/* ──────────────────────────────────────
+    ['/emr/nurse/patients/names-by-hashes',   '/portal/patients/names-by-hashes'],
+    ['/emr/nurse/patients/search',             '/portal/nurse/patients/search'],
+    ['/emr/nurse/patients/',                   '/portal/patients/'],      // verify, diagnoses 등
+    ['/emr/nurse/encounters/',                 '/portal/encounters/'],    // discharge 등
+    // ── /emr/doctor/* ─────────────────────────────────────
+    ['/emr/doctor/patients/search',            '/portal/doctor/patients/search'],
+    ['/emr/doctor/patients/',                  '/portal/doctor/patients/'],
+    ['/emr/doctor/encounters',                 '/portal/doctor/encounters'],
+    // ── /emr/* (기타 공통) ─────────────────────────────────
+    ['/emr/departments',                       '/portal/departments'],
+    ['/emr/encounters',                        '/portal/encounters'],
+    ['/emr/patients/',                         '/portal/patients/'],
+    // ── /portal/doctor/staff/* → /portal/* ────────────────
+    ['/portal/doctor/staff/departments',       '/portal/departments'],
+    ['/portal/doctor/staff/doctors',           '/portal/doctors'],
+    ['/portal/doctor/staff/wards',             '/portal/wards'],
+    ['/portal/doctor/staff/appointments',      '/portal/appointments'],  // 온프레미스에 없음 → 404
+    // ── /portal/doctor/* 특수 경로 ───────────────────────
+    ['/portal/doctor/schedule',                '/portal/my/encounters'],
+    ['/portal/doctor/appointment-types',       '/portal/departments'],   // fallback
+    // ── /portal/doctor/nurse/* ───────────────────────────
+    ['/portal/doctor/nurse/patients/',         '/portal/patients/'],     // reception-info 등
+];
+
+function _toOnpremPath(path) {
+    // 쿼리스트링 분리
+    const qIdx = path.indexOf('?');
+    const base  = qIdx >= 0 ? path.slice(0, qIdx) : path;
+    const query = qIdx >= 0 ? path.slice(qIdx) : '';
+
+    // ── 정규식이 필요한 특수 케이스 ───────────────────────────
+    // /portal/doctor/patients/${hash} (단건 hash 조회) → /portal/patients/by-hash/${hash}
+    const byHashM = base.match(/^\/portal\/doctor\/patients\/([^/]+)$/);
+    if (byHashM && byHashM[1] !== 'search') {
+        return `/portal/patients/by-hash/${byHashM[1]}${query}`;
+    }
+    // /portal/doctor/appointments/today → /portal/my/encounters (의사 당일 진료 목록)
+    if (base === '/portal/doctor/appointments/today') {
+        return '/portal/my/encounters' + query;
+    }
+
+    // ── 문자열 prefix 치환 (순서 중요: 구체적인 것 먼저) ─────
+    for (const [from, to] of _ONPREM_PATH_MAP) {
+        if (base.startsWith(from)) {
+            return base.replace(from, to) + query;
+        }
+    }
+    return path;
+}
+
+// ── 온프레미스 API 호출 (민감 데이터 — 병원 내부망 전용) ────
+// 환자 실명·진료기록·EMR 등 1등급 데이터는 이 함수로 온프레미스를 직접 호출.
+// ONPREM_BASE_URL이 빈 문자열이면 병원 내부망 접속 안내 오류를 반환.
+async function onpremApiCall(path, options = {}) {
+    if (!ONPREM_BASE_URL) {
+        const err = new Error('병원 내부망에서만 사용 가능한 기능입니다.');
+        err.isOnpremUnavailable = true;
+        throw err;
+    }
+    try {
+        const res = await fetch(`${ONPREM_BASE_URL}${path}`, {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+            ...options,
+        });
+        if (res.status === 401) { logout(); return null; }
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.detail || `온프레미스 API 오류 (${res.status})`);
+        }
+        return res;
+    } catch (e) {
+        if (e.isOnpremUnavailable) throw e;
+        throw new Error('병원 내부망에서만 사용 가능한 기능입니다.');
+    }
+}
+
 async function _refreshTokens() {
     try {
+        // 온프레미스 세션 갱신 (설정된 경우)
+        if (ONPREM_BASE_URL) {
+            const r = await fetch(`${ONPREM_BASE_URL}/auth/refresh`, {
+                method: 'POST', credentials: 'include', headers: _authHeaders,
+            });
+            if (!r.ok) return false;
+        }
+        // AWS 세션 갱신 (비민감 API용)
         const res = await fetch(`${BASE_URL}/auth/refresh`, { method: 'POST', ..._fetchDefaults });
         return res.ok;
     } catch { return false; }
@@ -41,39 +139,62 @@ async function extendSession() {
 }
 
 async function apiCall(path, options = {}) {
-    const res = await fetch(`${BASE_URL}${path}`, {
-        ..._fetchDefaults,
+    // ONPREM_BASE_URL 설정 시: 온프레미스로 라우팅 (모든 DB 호출)
+    // 미설정 시: AWS 백엔드 폴백
+    const useOnprem = !!ONPREM_BASE_URL;
+    const base      = useOnprem ? ONPREM_BASE_URL : BASE_URL;
+    const translated = useOnprem ? _toOnpremPath(path) : path;
+    const headers   = useOnprem
+        ? { 'Content-Type': 'application/json', ...(options.headers || {}) }
+        : { ..._fetchDefaults.headers, ...(options.headers || {}) };
+
+    const res = await fetch(`${base}${translated}`, {
+        credentials: 'include',
         ...options,
-        headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
+        headers,
     });
+
     if (res && res.headers.get('X-Session-Expiring-Soon') === 'true') {
         _showSessionWarning(parseInt(res.headers.get('X-Session-Remaining-Seconds') || '300'));
     }
     if (res.status === 401) {
         const ok = await _refreshTokens();
         if (!ok) { logout(); return null; }
-        return fetch(`${BASE_URL}${path}`, {
-            ..._fetchDefaults,
+        return fetch(`${base}${translated}`, {
+            credentials: 'include',
             ...options,
-            headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
+            headers,
         });
     }
     return res;
 }
 
 async function logout() {
-    try { await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', ..._fetchDefaults }); } catch {}
+    try {
+        // 온프레미스·AWS 양쪽 모두 로그아웃
+        if (ONPREM_BASE_URL) {
+            fetch(`${ONPREM_BASE_URL}/auth/logout`, {
+                method: 'POST', credentials: 'include', headers: _authHeaders,
+            }).catch(() => {});
+        }
+        await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', ..._fetchDefaults });
+    } catch {}
     window.location.href = 'login.html';
 }
 
 async function requireLogin() {
-    const res = await apiCall('/auth/me');
+    // AUTH_BASE: 온프레미스 설정 시 온프레미스 /auth/me, 아니면 AWS
+    const res = await fetch(`${AUTH_BASE}/auth/me`, {
+        credentials: 'include', headers: _authHeaders,
+    });
     if (!res || !res.ok) { window.location.href = 'login.html'; return null; }
     const me = await res.json();
     if (!['doctor', 'nurse', 'admin'].includes(me.role)) {
         window.location.href = 'login.html'; return null;
     }
-    if (me.password_expired) { window.location.href = 'change-password.html'; return null; }
+    if (me.must_change_password || me.password_expired) {
+        window.location.href = 'change-password.html'; return null;
+    }
     return me;
 }
 

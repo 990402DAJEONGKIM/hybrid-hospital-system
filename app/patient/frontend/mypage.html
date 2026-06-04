@@ -77,11 +77,6 @@
         <div class="info-card">
             <h3><i class="fas fa-id-card"></i>기본 정보</h3>
 
-            <div class="field-group">
-                <label>이름</label>
-                <input type="text" id="patientName" readonly placeholder="불러오는 중...">
-            </div>
-
             <div class="field-row">
                 <div class="field-group">
                     <label>출생연도</label>
@@ -95,7 +90,7 @@
 
             <div class="info-note">
                 <i class="fas fa-info-circle" style="margin-top:1px;flex-shrink:0;"></i>
-                <span>이름·출생연도·성별·연락처 변경은 <strong>원무과에 직접 문의</strong>해주세요.</span>
+                <span>출생연도·성별·연락처 변경은 <strong>원무과에 직접 문의</strong>해주세요.</span>
             </div>
         </div>
 
@@ -138,7 +133,6 @@
         });
         if (profileRes.ok) {
             const p = await profileRes.json();
-            document.getElementById('patientName').value = p.patient_name || '-';
             document.getElementById('birthYear').value   = p.birth_year ? p.birth_year + '년생' : '-';
             document.getElementById('gender').value      = GENDER_KR[p.gender_code] || p.gender_code || '-';
             document.getElementById('emailInput').value  = p.email || '';

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>진료 등록 — 김이박 병원</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         .page-wrap { max-width:640px; margin:80px auto 40px; padding:0 16px; }
         .form-card { background:#fff; border-radius:12px; padding:28px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
@@ -43,7 +43,7 @@
 <body>
 <div id="page-content">
 <div class="page-wrap">
-    <a class="back-link" href="/patient-search.html"><i class="fas fa-arrow-left"></i> 환자 검색으로 돌아가기</a>
+    <a class="back-link" href="patient-search.html"><i class="fas fa-arrow-left"></i> 환자 검색으로 돌아가기</a>
     <h2 style="margin-bottom:4px;">진료 등록 <span id="walkinBadge" class="walkin-badge" style="display:none;">Walk-in</span></h2>
     <p style="color:#78909c;font-size:13px;margin-bottom:14px;">외래·입원 접수 처리 — 원무과·관리자 전용</p>
 
@@ -114,10 +114,10 @@
 </div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
     const params     = new URLSearchParams(window.location.search);
     const patientId  = params.get('pid');
@@ -133,13 +133,13 @@
 
         if (!['nurse', 'admin'].includes(me.role)) {
             alert('원무과·관리자만 진료를 등록할 수 있습니다.');
-            window.location.href = '/index.html';
+            window.location.href = 'index.html';
             return;
         }
 
         if (!patientId) {
             alert('환자 정보가 없습니다. 환자 검색 화면으로 이동합니다.');
-            window.location.href = '/patient-search.html';
+            window.location.href = 'patient-search.html';
             return;
         }
 
@@ -310,7 +310,7 @@
             msgEl.style.display = 'block';
             document.getElementById('encounterForm').reset();
 
-            setTimeout(() => { window.location.href = '/patient-search.html'; }, 2000);
+            setTimeout(() => { window.location.href = 'patient-search.html'; }, 2000);
         } finally {
             btn.disabled = false;
         }

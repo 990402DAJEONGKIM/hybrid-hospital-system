@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>운영 대시보드 - MZ Clinic 관리자</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         .page-wrap { max-width:1200px; margin:80px auto 40px; padding:0 16px; }
         .dash-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
@@ -149,10 +149,10 @@
 </div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
     const STATUS_LBL = { pending:'대기', confirmed:'확정', completed:'완료', cancelled:'취소', no_show:'미내원' };
     const STATUS_CLS = { pending:'s-pending', confirmed:'s-confirmed', completed:'s-completed', cancelled:'s-cancelled', no_show:'s-no_show' };
@@ -170,7 +170,7 @@
     async function init() {
         const me = await initLayout();
         if (!me) return;
-        if (me.role !== 'admin') { alert('관리자 권한이 필요합니다.'); location.href = '/index.html'; return; }
+        if (me.role !== 'admin') { alert('관리자 권한이 필요합니다.'); location.href = 'index.html'; return; }
         await load();
         if (_refreshTimer) clearInterval(_refreshTimer);
         _refreshTimer = setInterval(load, 60000);

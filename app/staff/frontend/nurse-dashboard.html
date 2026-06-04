@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>예약 현황 관리 - MZ Clinic 원무과</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         .page-wrap { max-width:1200px; margin:80px auto 40px; padding:0 16px; }
         .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
@@ -115,7 +115,7 @@
 <div class="page-wrap">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <h2 style="margin:0;">예약 현황 관리</h2>
-        <a class="new-btn" href="/nurse-appointment-new.html" onclick="loadPage('/nurse-appointment-new.html');return false;">
+        <a class="new-btn" href="nurse-appointment-new.html" onclick="loadPage('nurse-appointment-new.html');return false;">
             <i class="fas fa-plus"></i> 접수
         </a>
     </div>
@@ -164,10 +164,10 @@
 </div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
     const STATUS_LBL = {
         pending:'대기', confirmed:'확정', cancelled:'취소', completed:'완료', no_show:'미내원',

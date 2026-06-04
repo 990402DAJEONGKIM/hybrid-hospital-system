@@ -9,38 +9,40 @@ const _ROLE_BG     = { doctor: '#ede9fe', nurse: '#d1fae5', admin: '#fee2e2' };
 // 역할별 사이드바 바로가기 카드 (대시보드 카드와 동일 소스)
 const _SHORTCUTS = {
     nurse: [
-        { url:'/nurse-dashboard.html',      icon:'calendar-alt',   color:'#0ea5e9', label:'예약 현황',    desc:'날짜·상태별 예약 목록' },
-        { url:'/nurse-appointment-new.html', icon:'plus-circle',    color:'#10b981', label:'접수',         desc:'방문 환자 직접 접수' },
-        { url:'/patient-register.html',      icon:'user-plus',      color:'#6366f1', label:'환자 등록',    desc:'신규 환자 등록·회원번호 발급' },
-        { url:'/patient-search.html',        icon:'search',         color:'#f59e0b', label:'환자 검색',    desc:'이름·회원번호로 조회' },
-        { url:'/ward-status.html',           icon:'hospital',       color:'#ec4899', label:'병동 현황',    desc:'병동별 가용 병상' },
+        { url:'nurse-dashboard.html',      icon:'calendar-alt',   color:'#0ea5e9', label:'예약 현황',    desc:'날짜·상태별 예약 목록' },
+        { url:'nurse-appointment-new.html', icon:'plus-circle',    color:'#10b981', label:'접수',         desc:'방문 환자 직접 접수' },
+        { url:'patient-register.html',      icon:'user-plus',      color:'#6366f1', label:'환자 등록',    desc:'신규 환자 등록·회원번호 발급' },
+        { url:'patient-search.html',        icon:'search',         color:'#f59e0b', label:'환자 검색',    desc:'이름·회원번호로 조회' },
+        { url:'ward-status.html',           icon:'hospital',       color:'#ec4899', label:'병동 현황',    desc:'병동별 가용 병상' },
     ],
     doctor: [
-        { url:'/doctor-schedule.html',  icon:'stethoscope',   color:'#0ea5e9', label:'오늘 진료',    desc:'확정된 진료 일정 확인' },
-        { url:'/my-patients.html',      icon:'user-injured',  color:'#6366f1', label:'내 환자 목록', desc:'담당 환자 목록 · EMR · 진료 기록' },
+        { url:'doctor-schedule.html',  icon:'stethoscope',   color:'#0ea5e9', label:'오늘 진료',    desc:'확정된 진료 일정 확인' },
+        { url:'my-patients.html',      icon:'user-injured',  color:'#6366f1', label:'내 환자 목록', desc:'담당 환자 목록 · EMR · 진료 기록' },
     ],
     admin: [
-        { url:'/admin-users.html',  icon:'users',        color:'#0ea5e9', label:'사용자 관리',   desc:'계정 생성·수정·잠금·비활성화' },
-        { url:'/admin-roles.html',  icon:'shield-alt',   color:'#10b981', label:'역할/권한 관리', desc:'역할 추가 및 권한 할당' },
-        { url:'/admin-policy.html', icon:'lock',         color:'#6366f1', label:'보안 정책',     desc:'비밀번호 복잡도·만료 설정' },
-        { url:'/admin-wazuh.html',  icon:'shield-virus', color:'#dc2626', label:'Wazuh',         desc:'보안 이벤트 모니터링 대시보드' },
+        { url:'admin-users.html',  icon:'users',        color:'#0ea5e9', label:'사용자 관리',   desc:'계정 생성·수정·잠금·비활성화' },
+        { url:'admin-roles.html',  icon:'shield-alt',   color:'#10b981', label:'역할/권한 관리', desc:'역할 추가 및 권한 할당' },
+        { url:'admin-policy.html', icon:'lock',         color:'#6366f1', label:'보안 정책',     desc:'비밀번호 복잡도·만료 설정' },
+        { url:'admin-wazuh.html',  icon:'shield-virus', color:'#dc2626', label:'Wazuh',         desc:'보안 이벤트 모니터링 대시보드' },
     ],
 };
 
 async function initLayout() {
-    // 인증 확인
-    const res = await apiCall('/auth/me');
-    if (!res || !res.ok) { window.location.href = '/login.html'; return null; }
+    // 인증 확인 — AUTH_BASE(온프레미스 우선) 사용
+    const res = await fetch(`${AUTH_BASE}/auth/me`, {
+        credentials: 'include', headers: _authHeaders,
+    });
+    if (!res || !res.ok) { window.location.href = 'login.html'; return null; }
     const me = await res.json();
     if (!['doctor', 'nurse', 'admin'].includes(me.role)) {
-        window.location.href = '/login.html'; return null;
+        window.location.href = 'login.html'; return null;
     }
     if (me.must_change_password || me.password_expired) {
-        window.location.href = '/change-password.html'; return null;
+        window.location.href = 'change-password.html'; return null;
     }
 
-    // 현재 페이지 파악 (active 표시용)
-    const currentPage = '/' + (window.location.pathname.split('/').pop() || 'index.html');
+    // 현재 페이지 파악 (active 표시용) — 파일명만 추출
+    const currentPage = window.location.pathname.split('/').pop() || 'index.html';
 
     // 기존 페이지 콘텐츠 추출
     const pageContent = document.getElementById('page-content');
@@ -48,8 +50,8 @@ async function initLayout() {
     const pageTitle   = document.title;
 
     // 사이드바 — 홈 고정 항목 + 역할별 바로가기 카드
-    const isDashboard = currentPage === '/index.html' || currentPage === '/';
-    const homeItem = me.role !== 'nurse' ? `<a href="/index.html" class="sidebar-item${isDashboard ? ' sidebar-item--active' : ''}">
+    const isDashboard = currentPage === 'index.html' || currentPage === '';
+    const homeItem = me.role !== 'nurse' ? `<a href="index.html" class="sidebar-item${isDashboard ? ' sidebar-item--active' : ''}">
         <i class="fas fa-th-large"></i>
         <span>홈</span>
     </a>` : '';

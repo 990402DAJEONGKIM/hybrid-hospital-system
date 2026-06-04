@@ -9,7 +9,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db, get_read_db
-from core.onprem_client import OnpremClient
 from core.security import get_client_ip, get_current_user, has_permission
 from core.ses import send_appointment_notification
 from models.db import (
@@ -406,8 +405,8 @@ def nurse_reception_info(
     current_user:    dict     = Depends(get_current_user),
     db:              DbSession = Depends(get_db),
 ):
-    """접수 업무용 환자 정보 — 내원 이력·진단명(온프레미스 실시간)·알레르기.
-    민감 상병(정신과·HIV 등)은 코드·진단명 모두 마스킹."""
+    """접수 업무용 환자 정보 — 내원 이력·알레르기 (AWS RDS 기반).
+    진단명(diagnosis_text)은 병원 내부망에서 온프레미스 API를 직접 호출해야 합니다."""
     _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
 
     if current_user.get("role") not in ("nurse", "admin"):
@@ -425,14 +424,8 @@ def nurse_reception_info(
         SyncAllergy.patient_id_hash == patient_id_hash
     ).all()
 
-    # 온프레미스 실시간 조회 — diagnosis_text 포함
-    onprem = OnpremClient(
-        user_id   = current_user["sub"],
-        user_role = current_user.get("role", "nurse"),
-        source_ip = get_client_ip(request),
-    )
-    onprem_resp = onprem.get(f"/portal/patients/by-hash/{patient_id_hash}/diagnoses")
-    raw_diags = onprem_resp if isinstance(onprem_resp, list) else []
+    # 진단명 실시간 조회는 온프레미스 API 직접 호출 필요 (브라우저에서 internal.hospital.com 접근)
+    raw_diags: list = []
 
     _record_audit(db, current_user["sub"], "READ_RECEPTION_INFO", "200", request)
 

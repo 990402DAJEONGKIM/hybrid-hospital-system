@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>내 진료 일정 - MZ Clinic 의사</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         .page-wrap { max-width:1100px; margin:80px auto 40px; padding:0 16px; }
 
@@ -57,9 +57,6 @@
 <div id="page-content">
 <div class="page-wrap">
     <h2 style="margin-bottom:4px;font-size:20px;font-weight:800;color:#1e293b;">내 진료 일정</h2>
-    <p style="color:#78909c;font-size:13px;margin-bottom:20px;">
-        AWS RDS 예약 기반 — 환자 실명은 항목 클릭 시 온프레미스에서 개별 조회됩니다.
-    </p>
 
     <!-- 탭 -->
     <div class="tab-bar">
@@ -106,10 +103,10 @@
 </div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
     let _currentMode = 'today';
     // patient_id_hash → { patient_name, patient_id } 캐시 (재조회 방지)
@@ -120,7 +117,7 @@
         if (!me) return;
         if (me.role !== 'doctor') {
             alert('의사 계정만 접근할 수 있습니다.');
-            location.href = '/index.html';
+            location.href = 'index.html';
             return;
         }
         await load();

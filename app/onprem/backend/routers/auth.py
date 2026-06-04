@@ -71,14 +71,18 @@ def _build_token_payload(user: User) -> dict:
 
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    # samesite 정책:
+    #   HTTPS(운영) → "none" : AWS 프론트(다른 도메인)에서 onpremApiCall() 시 쿠키 전송 허용
+    #   HTTP(로컬)  → "lax"  : 브라우저가 samesite=none + secure=false 조합을 거부하므로 lax 사용
+    _samesite = "none" if COOKIE_SECURE else "lax"
     response.set_cookie(
         key="access_token", value=access_token,
-        httponly=True, secure=COOKIE_SECURE, samesite="strict",
+        httponly=True, secure=COOKIE_SECURE, samesite=_samesite,
         max_age=ACCESS_TOKEN_EXPIRE_SECONDS, path="/",
     )
     response.set_cookie(
         key="refresh_token", value=refresh_token,
-        httponly=True, secure=COOKIE_SECURE, samesite="strict",
+        httponly=True, secure=COOKIE_SECURE, samesite=_samesite,
         max_age=REFRESH_TOKEN_EXPIRE_HOURS * 3600, path="/auth/refresh",
     )
 

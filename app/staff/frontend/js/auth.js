@@ -29,9 +29,10 @@ async function requireRole(allowedRoles) {
     return me;
 }
 
-// 서브디렉토리 페이지에서 루트 경로 계산 (doctor/, nurse/ 등 1단계 하위에서 호출 가정)
+// 포털 서브디렉토리(/nurse/, /doctor/ 등) 내에서 루트 상대경로 반환
 function resolveRoot(path) {
-    const depth = (window.location.pathname.match(/\//g) || []).length - 1;
-    const prefix = depth > 1 ? '../' : '/';
-    return prefix + path;
+    // 현재 URL의 첫 번째 경로 세그먼트(포털 디렉토리)를 추출
+    const match = window.location.pathname.match(/^\/([^/]+)\//);
+    if (match) return '/' + match[1] + '/' + path;
+    return '/' + path;
 }

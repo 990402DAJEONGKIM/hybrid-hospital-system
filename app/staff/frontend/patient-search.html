@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>환자 검색 — 김이박 병원</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         .page-wrap { max-width:1100px; margin:80px auto 40px; padding:0 16px; }
 
@@ -370,10 +370,10 @@
 </div>
 
 </div>
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
     let _currentRole = null;
     let _currentPatientId = null;   // EMR 모달에서 진료 시작 시 사용
@@ -395,7 +395,7 @@
             document.getElementById('doctorSearchBar').style.display  = '';
             document.getElementById('doctorResultTable').style.display = '';
         } else {
-            document.getElementById('pageDesc').textContent  = '온프레미스 EMR 데이터 — 1등급 개인정보 포함';
+            document.getElementById('pageDesc').textContent  = '';
             document.getElementById('nurseSearchBar').style.display  = '';
             document.getElementById('nurseResultTable').style.display = '';
             if (['doctor', 'admin'].includes(me.role)) {
@@ -792,7 +792,7 @@
                     <button class="btn-emr" data-pid="${_esc(p.patient_id)}" data-hash="${_esc(p.patient_id_hash||'')}" onclick="openNurseDetail(this.dataset.pid)">
                         <i class="fas fa-folder-open" style="margin-right:4px;"></i>상세
                     </button>
-                    <a href="/nurse-appointment-new.html" onclick="goAppt('${_esc(p.patient_id_hash||'')}');return false;"
+                    <a href="nurse-appointment-new.html" onclick="goAppt('${_esc(p.patient_id_hash||'')}');return false;"
                        style="margin-left:4px;padding:5px 10px;background:#dbeafe;color:#1e40af;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;">
                         예약
                     </a>
@@ -804,7 +804,7 @@
     function goAppt(patientHash) {
         if (!patientHash) { alert('patient_id_hash가 없습니다.'); return; }
         sessionStorage.setItem('appt_patient_hash', patientHash);
-        loadPage('/nurse-appointment-new.html');
+        loadPage('nurse-appointment-new.html');
     }
 
     async function openNurseDetail(patientId) {
