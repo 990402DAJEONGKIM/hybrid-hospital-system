@@ -1,13 +1,27 @@
 # =========================================================
 # ALB — Application Load Balancer
 #
+# ALB 1개 (staff-alb 통합): by 김다정 20260604
+#   - staff-alb : 통합 ALB (patient/staff/admin 포털 + Wazuh + Grafana)
+#                 host-based 라우팅으로 서비스 분기
+#                 WAF IP 화이트리스트로 staff/admin은 병원 내부 IP만 허용
+#
+# staff-alb 라우팅: by 김다정 20260604
+#   - patient.mzclinic.cloud → ECS hospital TG (인터넷 공개)
+#   - staff.mzclinic.cloud   → ECS hospital TG (WAF: 병원 IP 제한)
+#   - admin.mzclinic.cloud   → ECS hospital TG (WAF: 병원 IP 제한)
+#   - wazuh.mzclinic.cloud   → Wazuh EC2 TG
+#   - grafana.mzclinic.cloud → Grafana TG
+#   - 그 외 host             → 403 고정 응답
+#
+# 변경 전:
 # ALB 2개:
 #   - patient-alb : Public ALB (인터넷 → 환자 포털)
 #   - staff-alb   : 통합 ALB (의료진 포털 + Wazuh 대시보드)
 #                   host-based 라우팅으로 두 서비스 분기
 #                   WAF IP 화이트리스트로 병원 내부 IP만 허용
 #
-# staff-alb 라우팅:
+# staff-alb 라우팅 (변경 전):
 #   - staff.mzclinic.cloud  → ECS staff TG  (HTTPS:443, WAF IP 제한)
 #   - wazuh.mzclinic.cloud  → Wazuh EC2 TG  (HTTPS:443, private subnet)
 #   - 그 외 host            → 403 고정 응답
@@ -17,37 +31,38 @@
 # ─────────────────────────────────────────────────────────
 # 보안그룹 — Public ALB (환자 포털)
 # 인터넷에서 80, 443 허용
+# 주석 처리: patient-alb 삭제로 불필요 by 김다정 20260604
 # ─────────────────────────────────────────────────────────
-resource "aws_security_group" "patient_alb" {
-  name        = "aws-patient-alb-sg"
-  description = "Public ALB security group for patient portal"
-  vpc_id      = data.aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTP from internet"
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS from internet"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = { Name = "aws-patient-alb-sg" }
-}
+# resource "aws_security_group" "patient_alb" {
+#   name        = "aws-patient-alb-sg"
+#   description = "Public ALB security group for patient portal"
+#   vpc_id      = data.aws_vpc.main.id
+#
+#   ingress {
+#     from_port   = 80
+#     to_port     = 80
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#     description = "HTTP from internet"
+#   }
+#
+#   ingress {
+#     from_port   = 443
+#     to_port     = 443
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#     description = "HTTPS from internet"
+#   }
+#
+#   egress {
+#     from_port   = 0
+#     to_port     = 0
+#     protocol    = "-1"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#
+#   tags = { Name = "aws-patient-alb-sg" }
+# }
 
 
 # ─────────────────────────────────────────────────────────
@@ -88,33 +103,60 @@ resource "aws_security_group" "staff_alb" {
 
 # ─────────────────────────────────────────────────────────
 # Target Group — 환자 포털
+# 주석 처리: hospital-tg로 통합 by 김다정 20260604
 # ─────────────────────────────────────────────────────────
-resource "aws_lb_target_group" "patient" {
-  name        = "aws-patient-tg"
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    path                = "/health"
-    protocol            = "HTTP"
-    healthy_threshold   = 2
-    unhealthy_threshold = 3
-    interval            = 30
-    timeout             = 5
-    matcher             = "200"
-  }
-
-  tags = { Name = "aws-patient-tg" }
-}
+# resource "aws_lb_target_group" "patient" {
+#   name        = "aws-patient-tg"
+#   port        = 80
+#   protocol    = "HTTP"
+#   vpc_id      = data.aws_vpc.main.id
+#   target_type = "ip"
+#
+#   health_check {
+#     path                = "/health"
+#     protocol            = "HTTP"
+#     healthy_threshold   = 2
+#     unhealthy_threshold = 3
+#     interval            = 30
+#     timeout             = 5
+#     matcher             = "200"
+#   }
+#
+#   tags = { Name = "aws-patient-tg" }
+# }
 
 
 # ─────────────────────────────────────────────────────────
 # Target Group — 의료진 포털
+# 주석 처리: hospital-tg로 통합 by 김다정 20260604
 # ─────────────────────────────────────────────────────────
-resource "aws_lb_target_group" "staff" {
-  name        = "aws-staff-tg"
+# resource "aws_lb_target_group" "staff" {
+#   name        = "aws-staff-tg"
+#   port        = 80
+#   protocol    = "HTTP"
+#   vpc_id      = data.aws_vpc.main.id
+#   target_type = "ip"
+#
+#   health_check {
+#     path                = "/health"
+#     protocol            = "HTTP"
+#     healthy_threshold   = 2
+#     unhealthy_threshold = 3
+#     interval            = 30
+#     timeout             = 5
+#     matcher             = "200"
+#   }
+#
+#   tags = { Name = "aws-staff-tg" }
+# }
+
+
+# ─────────────────────────────────────────────────────────
+# Target Group — 통합 병원 (patient/staff/admin 공용)
+# by 김다정 20260604
+# ─────────────────────────────────────────────────────────
+resource "aws_lb_target_group" "hospital" {
+  name        = "aws-hospital-tg"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.main.id
@@ -130,13 +172,8 @@ resource "aws_lb_target_group" "staff" {
     matcher             = "200"
   }
 
-  tags = { Name = "aws-staff-tg" }
+  tags = { Name = "aws-hospital-tg" }
 }
-
-
-
-
-
 
 
 # ─────────────────────────────────────────────────────────
@@ -155,7 +192,6 @@ resource "aws_lb_target_group" "wazuh" {
     create_before_destroy = true
   }
 
-
   stickiness {
     type            = "lb_cookie"
     cookie_duration = 86400
@@ -164,7 +200,7 @@ resource "aws_lb_target_group" "wazuh" {
 
   health_check {
     path                = "/"
-    protocol              = "HTTPS"
+    protocol            = "HTTPS"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     interval            = 30
@@ -182,12 +218,9 @@ resource "aws_lb_target_group_attachment" "wazuh" {
 }
 
 
-
-
 # ─────────────────────────────────────────────────────────
 # staff-alb — Grafana Target Group 추가 2026-06-03  김강환
 # ─────────────────────────────────────────────────────────
-
 resource "aws_lb_target_group" "aws-grafana-tg" {
   name        = "aws-grafana-tg"
   port        = 3000
@@ -196,7 +229,7 @@ resource "aws_lb_target_group" "aws-grafana-tg" {
   target_type = "instance"
 
   health_check {
-    path                = "/api/health"  # Grafana 공식 헬스체크 엔드포인트
+    path                = "/api/health"
     protocol            = "HTTP"
     healthy_threshold   = 2
     unhealthy_threshold = 3
@@ -218,60 +251,60 @@ resource "aws_lb_target_group_attachment" "aws-grafana-tg" {
 }
 
 
-
 # ─────────────────────────────────────────────────────────
 # Public ALB — 환자 포털
+# 주석 처리: staff-alb로 통합 by 김다정 20260604
 # ─────────────────────────────────────────────────────────
-resource "aws_lb" "patient" {
-  name               = "aws-patient-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.patient_alb.id]
-  subnets            = data.aws_subnets.public.ids
-
-  enable_deletion_protection = false
-  access_logs {
-    bucket  = data.terraform_remote_state.s3.outputs.alb_logs_bucket_name
-    prefix  = "alb"
-    enabled = true
-  }
-  tags = { Name = "aws-patient-alb" }
-}
-
-# HTTP → HTTPS 리다이렉트
-resource "aws_lb_listener" "patient_http" {
-  load_balancer_arn = aws_lb.patient.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type = "redirect"
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
-  }
-}
-
-# HTTPS → Target Group 포워드
-resource "aws_lb_listener" "patient_https" {
-  load_balancer_arn = aws_lb.patient.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = data.aws_acm_certificate.patient.arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.patient.arn
-  }
-}
+# resource "aws_lb" "patient" {
+#   name               = "aws-patient-alb"
+#   internal           = false
+#   load_balancer_type = "application"
+#   security_groups    = [aws_security_group.patient_alb.id]
+#   subnets            = data.aws_subnets.public.ids
+#
+#   enable_deletion_protection = false
+#   access_logs {
+#     bucket  = data.terraform_remote_state.s3.outputs.alb_logs_bucket_name
+#     prefix  = "alb"
+#     enabled = true
+#   }
+#   tags = { Name = "aws-patient-alb" }
+# }
+#
+# # HTTP → HTTPS 리다이렉트
+# resource "aws_lb_listener" "patient_http" {
+#   load_balancer_arn = aws_lb.patient.arn
+#   port              = 80
+#   protocol          = "HTTP"
+#
+#   default_action {
+#     type = "redirect"
+#     redirect {
+#       port        = "443"
+#       protocol    = "HTTPS"
+#       status_code = "HTTP_301"
+#     }
+#   }
+# }
+#
+# # HTTPS → Target Group 포워드
+# resource "aws_lb_listener" "patient_https" {
+#   load_balancer_arn = aws_lb.patient.arn
+#   port              = 443
+#   protocol          = "HTTPS"
+#   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+#   certificate_arn   = data.aws_acm_certificate.patient.arn
+#
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.patient.arn
+#   }
+# }
 
 
 # ─────────────────────────────────────────────────────────
-# 통합 ALB — 의료진 포털 + Wazuh 대시보드
-# host-based 라우팅으로 두 서비스 분기
+# 통합 ALB — patient/staff/admin 포털 + Wazuh + Grafana
+# host-based 라우팅으로 서비스 분기 by 김다정 20260604
 # ─────────────────────────────────────────────────────────
 resource "aws_lb" "staff" {
   name               = "aws-staff-alb"
@@ -324,20 +357,55 @@ resource "aws_lb_listener" "staff_https" {
   }
 }
 
-# 추가 인증서 — wazuh.mzclinic.cloud (SNI)
+# SNI 인증서 — patient.mzclinic.cloud by 김다정 20260604
+resource "aws_lb_listener_certificate" "patient" {
+  listener_arn    = aws_lb_listener.staff_https.arn
+  certificate_arn = data.aws_acm_certificate.patient.arn
+}
+
+# SNI 인증서 — admin.mzclinic.cloud by 김다정 20260604
+resource "aws_lb_listener_certificate" "admin" {
+  listener_arn    = aws_lb_listener.staff_https.arn
+  certificate_arn = data.aws_acm_certificate.admin.arn
+}
+
+# SNI 인증서 — wazuh.mzclinic.cloud
 resource "aws_lb_listener_certificate" "wazuh" {
   listener_arn    = aws_lb_listener.staff_https.arn
   certificate_arn = data.aws_acm_certificate.wazuh.arn
 }
 
-
-# staff-alb에 grafana.mzclinic.cloud 인증서 추가 (SNI)
+# SNI 인증서 — grafana.mzclinic.cloud
 resource "aws_lb_listener_certificate" "aws-grafana-cert" {
   listener_arn    = aws_lb_listener.staff_https.arn
   certificate_arn = data.aws_acm_certificate.grafana.arn
 }
 
-# 라우팅 규칙 — staff.mzclinic.cloud → ECS staff TG
+
+# ─────────────────────────────────────────────────────────
+# 라우팅 규칙 — patient.mzclinic.cloud → hospital TG
+# by 김다정 20260604
+# ─────────────────────────────────────────────────────────
+resource "aws_lb_listener_rule" "patient" {
+  listener_arn = aws_lb_listener.staff_https.arn
+  priority     = 5
+
+  condition {
+    host_header {
+      values = ["patient.${var.base_domain}"]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.hospital.arn
+  }
+}
+
+# ─────────────────────────────────────────────────────────
+# 라우팅 규칙 — staff.mzclinic.cloud → hospital TG
+# 변경: staff TG → hospital TG by 김다정 20260604
+# ─────────────────────────────────────────────────────────
 resource "aws_lb_listener_rule" "staff" {
   listener_arn = aws_lb_listener.staff_https.arn
   priority     = 10
@@ -350,7 +418,27 @@ resource "aws_lb_listener_rule" "staff" {
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.staff.arn
+    target_group_arn = aws_lb_target_group.hospital.arn # 변경: staff → hospital by 김다정 20260604
+  }
+}
+
+# ─────────────────────────────────────────────────────────
+# 라우팅 규칙 — admin.mzclinic.cloud → hospital TG
+# by 김다정 20260604
+# ─────────────────────────────────────────────────────────
+resource "aws_lb_listener_rule" "admin" {
+  listener_arn = aws_lb_listener.staff_https.arn
+  priority     = 15
+
+  condition {
+    host_header {
+      values = ["admin.${var.base_domain}"]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.hospital.arn
   }
 }
 
@@ -371,11 +459,10 @@ resource "aws_lb_listener_rule" "wazuh" {
   }
 }
 
-
 # grafana.mzclinic.cloud → Grafana TG 라우팅 규칙
 resource "aws_lb_listener_rule" "aws-grafana-rule" {
   listener_arn = aws_lb_listener.staff_https.arn
-  priority     = 30  # staff=10, wazuh=20, grafana=30
+  priority     = 30
 
   condition {
     host_header {
@@ -398,14 +485,15 @@ data "aws_route53_zone" "main" {
   private_zone = false
 }
 
+# 변경: patient-alb → staff-alb by 김다정 20260604
 resource "aws_route53_record" "patient" {
   zone_id = data.aws_route53_zone.main.zone_id
   name    = "patient.${var.base_domain}"
   type    = "A"
 
   alias {
-    name                   = aws_lb.patient.dns_name
-    zone_id                = aws_lb.patient.zone_id
+    name                   = aws_lb.staff.dns_name  # 변경: patient-alb → staff-alb by 김다정 20260604
+    zone_id                = aws_lb.staff.zone_id
     evaluate_target_health = true
   }
 }
@@ -413,6 +501,19 @@ resource "aws_route53_record" "patient" {
 resource "aws_route53_record" "staff" {
   zone_id = data.aws_route53_zone.main.zone_id
   name    = "staff.${var.base_domain}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.staff.dns_name
+    zone_id                = aws_lb.staff.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Route53 — admin.mzclinic.cloud → staff-alb by 김다정 20260604
+resource "aws_route53_record" "admin" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "admin.${var.base_domain}"
   type    = "A"
 
   alias {
@@ -433,7 +534,6 @@ resource "aws_route53_record" "wazuh" {
     evaluate_target_health = true
   }
 }
-
 
 # Route53 — grafana.mzclinic.cloud → staff-alb
 resource "aws_route53_record" "aws-grafana" {
