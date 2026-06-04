@@ -11,3 +11,4 @@ boto3
 pyotp
 qrcode[pil]
 httpx
+hvac>=2.0.0

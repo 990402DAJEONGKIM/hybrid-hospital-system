@@ -61,7 +61,7 @@
 
 <div class="page-wrap">
     <div class="page-header">
-        <a href="/index.html"><i class="fas fa-arrow-left" style="margin-right:4px;"></i>대시보드</a>
+        <a href="index.html"><i class="fas fa-arrow-left" style="margin-right:4px;"></i>대시보드</a>
         <i class="fas fa-chevron-right" style="font-size:10px;color:#d1d5db;"></i>
         <h1 class="page-title">환자 등록
             <span style="font-size:11px;font-weight:500;color:#059669;background:#d1fae5;padding:2px 8px;border-radius:10px;margin-left:8px;">
@@ -146,17 +146,17 @@
 </div>
 
 </div>
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
     (async () => {
         const me = await initLayout();
         if (!me) return;
         if (!['nurse', 'admin'].includes(me.role)) {
             alert('환자 등록 권한이 없습니다.');
-            window.location.href = '/index.html';
+            window.location.href = 'index.html';
         }
     })();
 

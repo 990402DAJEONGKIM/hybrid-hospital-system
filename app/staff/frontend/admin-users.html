@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>사용자 계정 관리 - MZ Clinic 관리자</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         .page-wrap { max-width:1200px; margin:80px auto 40px; padding:0 16px; }
         .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
@@ -170,17 +170,17 @@
 </div>
 
 </div>
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
     const ROLE_LABEL = { doctor:'의사', nurse:'간호사/원무과', admin:'관리자', patient:'환자' };
 
     async function init() {
         const me = await initLayout();
         if (!me) return;
-        if (me.role !== 'admin') { alert('관리자 권한이 필요합니다.'); location.href = '/index.html'; return; }
+        if (me.role !== 'admin') { alert('관리자 권한이 필요합니다.'); location.href = 'index.html'; return; }
         await loadUsers();
     }
 

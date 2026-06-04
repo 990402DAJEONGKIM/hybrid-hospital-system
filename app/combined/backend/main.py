@@ -1,5 +1,14 @@
 import os
 
+# ── Vault 시크릿 로드 ─────────────────────────────────────────
+# security.py 임포트 전에 실행해야 JWT_SECRET 등이 올바르게 설정됨.
+# VAULT_ADDR 미설정 시 즉시 반환 (로컬 개발 환경 호환).
+from core.vault_loader import load_vault_secrets
+load_vault_secrets()
+from core.security import reload_jwt_secrets
+reload_jwt_secrets()
+# ──────────────────────────────────────────────────────────────
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -28,8 +37,8 @@ Base.metadata.create_all(bind=engine)
 app.add_middleware(SessionExpiryMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost").split(","),
-    allow_credentials=True,
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "").split(","),
+    allow_credentials=True,   # httponly 쿠키 전송 필수
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key"],
 )

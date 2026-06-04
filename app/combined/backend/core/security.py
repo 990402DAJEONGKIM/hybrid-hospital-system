@@ -19,14 +19,26 @@ _DEFAULT_PW_EXPIRE_DAYS = 90
 
 load_dotenv()
 
-JWT_SECRET    = os.getenv("JWT_SECRET", "changeme")
-JWT_SECRET_PREVIOUS = os.getenv("JWT_SECRET_PREVIOUS", "")  # 추가 260601 박경수 수정
+JWT_SECRET          = os.getenv("JWT_SECRET", "")           # Vault에서 주입 필수 — 빈 값이면 JWT 검증 실패
+JWT_SECRET_PREVIOUS = os.getenv("JWT_SECRET_PREVIOUS", "")  # 키 교체 grace period용
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 API_KEY       = os.getenv("API_KEY", "")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
 pwd_context    = CryptContext(schemes=["bcrypt"], deprecated="auto")
 api_key_header = APIKeyHeader(name="X-API-Key")
+
+
+def reload_jwt_secrets() -> None:
+    """vault_loader.py가 os.environ에 주입한 뒤 호출 — 모듈 수준 변수를 갱신.
+
+    Python 모듈 변수는 임포트 시점에 평가되므로,
+    Vault 로드 이후 이 함수를 명시적으로 호출해야 반영됩니다.
+    """
+    global JWT_SECRET, JWT_SECRET_PREVIOUS, API_KEY
+    JWT_SECRET          = os.getenv("JWT_SECRET", "")
+    JWT_SECRET_PREVIOUS = os.getenv("JWT_SECRET_PREVIOUS", "")
+    API_KEY             = os.getenv("API_KEY", "")
 
 
 def get_client_ip(request: Request) -> Optional[str]:

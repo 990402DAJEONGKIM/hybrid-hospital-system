@@ -27,15 +27,15 @@
     <div id="pwBanner" class="pw-banner">
         <i class="fas fa-exclamation-triangle"></i>
         비밀번호가 만료되었습니다.
-        <a href="/change-password.html" style="margin-left:auto;font-weight:700;text-decoration:underline;">지금 변경하기</a>
+        <a href="change-password.html" style="margin-left:auto;font-weight:700;text-decoration:underline;">지금 변경하기</a>
     </div>
     <div id="dashboardContent"></div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
     const me = await initLayout();
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (me.role === 'nurse') {
-        window.location.replace('/nurse-dashboard.html');
+        loadPage('nurse-dashboard.html');
         return;
     }
     renderGenericDashboard(me);

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>내 환자 목록 — 김이박 병원</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         .page-wrap { max-width:1300px; margin:80px auto 40px; padding:0 16px; }
         .isms-notice { background:#fff8e1; border:1px solid #f59e0b; border-radius:6px; padding:10px 16px; font-size:12px; color:#92400e; margin-bottom:16px; }
@@ -118,7 +118,6 @@
     <!-- ── 환자 목록 섹션 ── -->
     <div id="list-section">
         <h2 style="margin-bottom:4px;">내 환자 목록</h2>
-        <p style="color:#78909c;font-size:13px;margin-bottom:14px;">온프레미스 EMR — 담당 환자 전체 목록 및 검색 (SFR-018)</p>
 
         <div class="isms-notice">
             <i class="fas fa-lock" style="margin-right:6px;"></i>
@@ -284,10 +283,10 @@
 </div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/layout.js"></script>
-<script src="/js/router.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/router.js"></script>
 <script>
 let _tab  = 'outpatient';
 let _page = 0;
@@ -306,7 +305,7 @@ async function init() {
     if (!me) return;
     if (me.role !== 'doctor') {
         alert('의사 계정만 접근할 수 있습니다.');
-        window.location.href = '/index.html';
+        window.location.href = 'index.html';
         return;
     }
     await loadPatients();

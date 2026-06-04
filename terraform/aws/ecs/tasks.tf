@@ -60,6 +60,11 @@ resource "aws_ecs_task_definition" "hospital" {
         containerPort = 80
         protocol      = "tcp"
       }]
+      # ONPREM_BASE_URL: 컨테이너 기동 시 envsubst가 nurse/js/config.js.template에 주입
+      # 빈 문자열이면 config.js에서 ONPREM_BASE_URL = '' 로 처리 → 온프레미스 기능 비활성화
+      environment = [
+        { name = "ONPREM_BASE_URL", value = var.onprem_base_url },
+      ]
       secrets = local.nginx_secrets
       logConfiguration = {
         logDriver = "awslogs"
@@ -84,9 +89,15 @@ resource "aws_ecs_task_definition" "hospital" {
       }]
       environment = [
         { name = "COOKIE_SECURE",   value = "true" },
-        { name = "ALLOWED_HOSTS",   value = "staff.mzclinic.cloud,patient.mzclinic.cloud,portal.mzclinic.cloud,localhost" },
-        { name = "ALLOWED_ORIGINS", value = "https://staff.mzclinic.cloud,https://patient.mzclinic.cloud,https://portal.mzclinic.cloud" },
+        # 단일 도메인 — 경로 기반 라우팅 (/patient/, /nurse/, /doctor/, /admin/)
+        { name = "ALLOWED_HOSTS",   value = "${var.frontend_domain},localhost" },
+        { name = "ALLOWED_ORIGINS", value = "https://${var.frontend_domain}" },
         { name = "TZ",              value = "Asia/Seoul" },
+        # Vault — JWT_SECRET 등 시크릿을 런타임에 주입 (vault_loader.py 참고)
+        { name = "VAULT_ADDR",      value = var.vault_addr },
+        { name = "VAULT_ROLE",      value = var.vault_role },
+        { name = "VAULT_PATH",      value = "hospital/deident" },
+        { name = "VAULT_MOUNT",     value = "secret" },
       ]
       secrets = local.hospital_secrets
       logConfiguration = {

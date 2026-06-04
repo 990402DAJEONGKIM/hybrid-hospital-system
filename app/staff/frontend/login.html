@@ -96,6 +96,14 @@
 
     <script src="js/config.js"></script>
     <script>
+        // 인증 기준 URL:
+        //   ONPREM_BASE_URL 설정 시 → 온프레미스 로그인 (병원 내부망)
+        //   미설정 시              → AWS 로그인 (외부 접속 폴백)
+        const _AUTH_BASE    = ONPREM_BASE_URL || BASE_URL;
+        const _authHeaders  = () => ONPREM_BASE_URL
+            ? { 'Content-Type': 'application/json' }
+            : { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -110,23 +118,35 @@
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>확인 중...';
 
             try {
-                const res = await fetch(`${BASE_URL}/auth/login`, {
+                // 1단계: 1차 로그인 (온프레미스 우선, 없으면 AWS)
+                const res = await fetch(`${_AUTH_BASE}/auth/login`, {
                     method: 'POST',
                     credentials: 'include',
-                    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                    headers: _authHeaders(),
                     body: JSON.stringify({ member_number: memberNumber, password: pw }),
                 });
 
                 const data = await res.json();
 
                 if (res.ok) {
-                    const meRes = await fetch(`${BASE_URL}/auth/me`, {
+                    // 2단계: 온프레미스 로그인 성공 시 AWS 세션도 동시 생성 (비민감 API 인증용)
+                    if (ONPREM_BASE_URL) {
+                        fetch(`${BASE_URL}/auth/login`, {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                            body: JSON.stringify({ member_number: memberNumber, password: pw }),
+                        }).catch(() => {});  // 실패해도 무시 (AWS DB에 계정 없을 수 있음)
+                    }
+
+                    // 3단계: 사용자 정보 확인
+                    const meRes = await fetch(`${_AUTH_BASE}/auth/me`, {
                         credentials: 'include',
-                        headers: { 'X-API-Key': API_KEY },
+                        headers: _authHeaders(),
                     });
                     const meData = await meRes.json();
 
-                    if (meData.password_expired) {
+                    if (meData.must_change_password || meData.password_expired) {
                         window.location.href = 'change-password.html';
                         return;
                     }
