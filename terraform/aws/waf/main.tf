@@ -191,11 +191,11 @@ resource "aws_wafv2_web_acl" "staff" {
     }
   }
 
-  # ── Rule 5: staff/admin 도메인 비허용 IP 차단 — ISMS-P 2.6.1 ───
-  # (staff.mzclinic.cloud OR admin.mzclinic.cloud) AND NOT 허용 IP → BLOCK
-  # by 김다정 20260604
+  # ── Rule 5: staff 도메인 비허용 IP 차단 — ISMS-P 2.6.1 ───
+  # staff.mzclinic.cloud AND NOT 허용 IP → BLOCK
+  # (admin.mzclinic.cloud 제거, staff로 통합)
   rule {
-    name     = "BlockNonHospitalIPsForStaffAdmin"
+    name     = "BlockNonHospitalIPsForStaff"
     priority = 5
 
     action {
@@ -205,33 +205,16 @@ resource "aws_wafv2_web_acl" "staff" {
     statement {
       and_statement {
         statement {
-          or_statement {
-            statement {
-              byte_match_statement {
-                search_string = "staff.${var.base_domain}"
-                field_to_match {
-                  single_header { name = "host" }
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "LOWERCASE"
-                }
-                positional_constraint = "EXACTLY"
-              }
+          byte_match_statement {
+            search_string = "staff.${var.base_domain}"
+            field_to_match {
+              single_header { name = "host" }
             }
-            statement {
-              byte_match_statement {
-                search_string = "admin.${var.base_domain}"
-                field_to_match {
-                  single_header { name = "host" }
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "LOWERCASE"
-                }
-                positional_constraint = "EXACTLY"
-              }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
             }
+            positional_constraint = "EXACTLY"
           }
         }
         statement {

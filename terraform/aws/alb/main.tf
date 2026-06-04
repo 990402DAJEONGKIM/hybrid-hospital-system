@@ -6,10 +6,9 @@
 #                 host-based 라우팅으로 서비스 분기
 #                 WAF IP 화이트리스트로 staff/admin은 병원 내부 IP만 허용
 #
-# staff-alb 라우팅: by 김다정 20260604
+# staff-alb 라우팅: by 김다정 20260604 (admin 통합)
 #   - patient.mzclinic.cloud → ECS hospital TG (인터넷 공개)
-#   - staff.mzclinic.cloud   → ECS hospital TG (WAF: 병원 IP 제한)
-#   - admin.mzclinic.cloud   → ECS hospital TG (WAF: 병원 IP 제한)
+#   - staff.mzclinic.cloud   → ECS hospital TG (WAF: 병원 IP 제한, 의료진+관리자 통합)
 #   - wazuh.mzclinic.cloud   → Wazuh EC2 TG
 #   - grafana.mzclinic.cloud → Grafana TG
 #   - 그 외 host             → 403 고정 응답
@@ -363,11 +362,11 @@ resource "aws_lb_listener_certificate" "patient" {
   certificate_arn = data.aws_acm_certificate.patient.arn
 }
 
-# SNI 인증서 — admin.mzclinic.cloud by 김다정 20260604
-resource "aws_lb_listener_certificate" "admin" {
-  listener_arn    = aws_lb_listener.staff_https.arn
-  certificate_arn = data.aws_acm_certificate.admin.arn
-}
+# SNI 인증서 — admin.mzclinic.cloud 삭제 (admin 도메인 제거, staff로 통합)
+# resource "aws_lb_listener_certificate" "admin" {
+#   listener_arn    = aws_lb_listener.staff_https.arn
+#   certificate_arn = data.aws_acm_certificate.admin.arn
+# }
 
 # SNI 인증서 — wazuh.mzclinic.cloud
 resource "aws_lb_listener_certificate" "wazuh" {
@@ -422,25 +421,18 @@ resource "aws_lb_listener_rule" "staff" {
   }
 }
 
-# ─────────────────────────────────────────────────────────
-# 라우팅 규칙 — admin.mzclinic.cloud → hospital TG
-# by 김다정 20260604
-# ─────────────────────────────────────────────────────────
-resource "aws_lb_listener_rule" "admin" {
-  listener_arn = aws_lb_listener.staff_https.arn
-  priority     = 15
-
-  condition {
-    host_header {
-      values = ["admin.${var.base_domain}"]
-    }
-  }
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.hospital.arn
-  }
-}
+# 라우팅 규칙 — admin.mzclinic.cloud 삭제 (admin 도메인 제거, staff로 통합)
+# resource "aws_lb_listener_rule" "admin" {
+#   listener_arn = aws_lb_listener.staff_https.arn
+#   priority     = 15
+#   condition {
+#     host_header { values = ["admin.${var.base_domain}"] }
+#   }
+#   action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.hospital.arn
+#   }
+# }
 
 # 라우팅 규칙 — wazuh.mzclinic.cloud → Wazuh EC2 TG
 resource "aws_lb_listener_rule" "wazuh" {
@@ -510,18 +502,17 @@ resource "aws_route53_record" "staff" {
   }
 }
 
-# Route53 — admin.mzclinic.cloud → staff-alb by 김다정 20260604
-resource "aws_route53_record" "admin" {
-  zone_id = data.aws_route53_zone.main.zone_id
-  name    = "admin.${var.base_domain}"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.staff.dns_name
-    zone_id                = aws_lb.staff.zone_id
-    evaluate_target_health = true
-  }
-}
+# Route53 — admin.mzclinic.cloud 삭제 (admin 도메인 제거, staff로 통합)
+# resource "aws_route53_record" "admin" {
+#   zone_id = data.aws_route53_zone.main.zone_id
+#   name    = "admin.${var.base_domain}"
+#   type    = "A"
+#   alias {
+#     name                   = aws_lb.staff.dns_name
+#     zone_id                = aws_lb.staff.zone_id
+#     evaluate_target_health = true
+#   }
+# }
 
 resource "aws_route53_record" "wazuh" {
   zone_id = data.aws_route53_zone.main.zone_id
