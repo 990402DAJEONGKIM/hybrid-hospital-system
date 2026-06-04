@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>진료 등록 - MZ Clinic 원무과</title>
+    <title>접수 - MZ Clinic 원무과</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
@@ -34,6 +34,15 @@
         .patient-box .p-row { display:flex; gap:20px; flex-wrap:wrap; margin-top:4px; }
         .patient-box .p-item { color:#374151; }
         .patient-box .p-label { font-size:11px; color:#94a3b8; font-weight:600; margin-bottom:2px; }
+        /* 접수 정보 섹션 */
+        .reception-info { margin-top:10px; border-top:1px solid #bbf7d0; padding-top:10px; display:none; }
+        .reception-info .ri-title { font-size:11px; font-weight:700; color:#94a3b8; margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em; }
+        .reception-info .ri-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
+        .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+        .badge-diag { background:#e0f2fe; color:#0369a1; }
+        .badge-diag.sensitive { background:#fef3c7; color:#92400e; }
+        .badge-allergy { background:#fee2e2; color:#991b1b; }
+        .badge-dept { background:#ede9fe; color:#5b21b6; }
         .search-row { display:flex; gap:8px; }
         .search-row input { flex:1; }
         .btn-search { padding:9px 16px; background:#0ea5e9; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
@@ -46,7 +55,7 @@
     <a class="back-link" href="/nurse-dashboard.html" onclick="loadPage('/nurse-dashboard.html');return false;">
         <i class="fas fa-arrow-left"></i> 예약 현황으로
     </a>
-    <h2 style="margin-bottom:4px;">진료 등록</h2>
+    <h2 style="margin-bottom:4px;">접수</h2>
     <p style="color:#78909c;font-size:13px;margin-bottom:18px;">방문 환자를 직접 AWS RDS에 예약 등록합니다.</p>
 
     <div class="isms-notice">
@@ -56,7 +65,7 @@
 
     <!-- 환자 조회 -->
     <div class="card">
-        <div class="card-title"><i class="fas fa-user-check" style="color:#0ea5e9;"></i>환자 조회 (Hash 기반)</div>
+        <div class="card-title"><i class="fas fa-user-check" style="color:#0ea5e9;"></i>환자 조회</div>
         <div class="form-group">
             <label>회원번호 또는 환자 이름으로 조회 <span style="color:#e53935;">*</span></label>
             <div class="search-row">
@@ -80,6 +89,17 @@
                 <div class="p-item"><div class="p-label">이름</div><div id="pName">—</div></div>
                 <div class="p-item"><div class="p-label">생년</div><div id="pBirth">—</div></div>
                 <div class="p-item"><div class="p-label">성별</div><div id="pGender">—</div></div>
+            </div>
+            <!-- 접수 참고 정보 (방향 A) -->
+            <div class="reception-info" id="receptionInfo">
+                <div id="riDiag" style="margin-bottom:6px;">
+                    <div class="ri-title">진단 코드 (접수 참고용)</div>
+                    <div class="ri-row" id="riDiagList"></div>
+                </div>
+                <div id="riAllergy" style="margin-bottom:2px;">
+                    <div class="ri-title">알레르기</div>
+                    <div class="ri-row" id="riAllergyList"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -165,7 +185,7 @@
         if (!me) return;
 
         if (!['nurse', 'admin'].includes(me.role)) {
-            alert('간호사·관리자만 진료 등록을 할 수 있습니다.');
+            alert('간호사·관리자만 접수를 할 수 있습니다.');
             loadPage('/index.html');
             return;
         }
@@ -253,12 +273,42 @@
         document.getElementById('pBirth').textContent  = p.birth_date ? p.birth_date.slice(0,4) + '년생' : '-';
         document.getElementById('pGender').textContent = GENDER[p.gender_code] || '-';
         document.getElementById('patientBox').style.display = '';
+        loadReceptionInfo(p.patient_id_hash);
+    }
+
+    async function loadReceptionInfo(hash) {
+        const infoEl    = document.getElementById('receptionInfo');
+        const diagEl    = document.getElementById('riDiagList');
+        const allergyEl = document.getElementById('riAllergyList');
+        infoEl.style.display = 'none';
+
+        const res = await apiCall(`/portal/doctor/nurse/patients/${encodeURIComponent(hash)}/reception-info`);
+        if (!res || !res.ok) return;
+        const data = await res.json();
+
+        const diags    = data.diagnoses   || [];
+        const allergies = data.allergies  || [];
+        if (!diags.length && !allergies.length) return;
+
+        diagEl.innerHTML = diags.length
+            ? diags.map(d => {
+                const isSensitive = d.diagnosis_code === '[민감]';
+                return `<span class="badge badge-diag${isSensitive ? ' sensitive' : ''}">${_esc(d.diagnosis_code)}${d.is_primary ? ' ★' : ''}</span>`;
+              }).join('')
+            : '<span style="font-size:11px;color:#94a3b8;">없음</span>';
+
+        allergyEl.innerHTML = allergies.length
+            ? allergies.map(a => `<span class="badge badge-allergy">${_esc(a.allergy_name)}${a.severity ? ' (' + _esc(a.severity) + ')' : ''}</span>`).join('')
+            : '<span style="font-size:11px;color:#94a3b8;">없음</span>';
+
+        infoEl.style.display = '';
     }
 
     function clearPatient() {
         _patientHash = null;
         document.getElementById('patientQuery').value = '';
         document.getElementById('patientBox').style.display = 'none';
+        document.getElementById('receptionInfo').style.display = 'none';
         document.getElementById('searchResultBox').style.display = 'none';
         document.getElementById('patientQuery').focus();
     }

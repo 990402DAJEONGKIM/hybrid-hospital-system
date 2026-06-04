@@ -10,7 +10,7 @@ const _ROLE_BG     = { doctor: '#ede9fe', nurse: '#d1fae5', admin: '#fee2e2' };
 const _SHORTCUTS = {
     nurse: [
         { url:'/nurse-dashboard.html',      icon:'calendar-alt',   color:'#0ea5e9', label:'예약 현황',    desc:'날짜·상태별 예약 목록' },
-        { url:'/nurse-appointment-new.html', icon:'plus-circle',    color:'#10b981', label:'진료 등록',    desc:'방문 환자 직접 등록' },
+        { url:'/nurse-appointment-new.html', icon:'plus-circle',    color:'#10b981', label:'접수',         desc:'방문 환자 직접 접수' },
         { url:'/patient-register.html',      icon:'user-plus',      color:'#6366f1', label:'환자 등록',    desc:'신규 환자 등록·회원번호 발급' },
         { url:'/patient-search.html',        icon:'search',         color:'#f59e0b', label:'환자 검색',    desc:'이름·회원번호로 조회' },
         { url:'/ward-status.html',           icon:'hospital',       color:'#ec4899', label:'병동 현황',    desc:'병동별 가용 병상' },

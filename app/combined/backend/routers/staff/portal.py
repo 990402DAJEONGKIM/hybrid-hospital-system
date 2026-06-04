@@ -389,6 +389,74 @@ def get_patient_detail(
     }
 
 
+# ── 접수 전용 제한적 환자 정보 (방향 A) ──────────────────────────
+# 간호사·원무과는 진단 코드만 열람 가능. 민감 상병(F*, B20*, Z21*)은 "[민감]" 마스킹.
+_SENSITIVE_PREFIXES = ("F", "B20", "Z21")
+
+
+def _mask_code(code: str) -> str:
+    if any(code.upper().startswith(p) for p in _SENSITIVE_PREFIXES):
+        return "[민감]"
+    return code
+
+
+@router.get("/nurse/patients/{patient_id_hash}/reception-info")
+def nurse_reception_info(
+    patient_id_hash: str,
+    request:         Request,
+    current_user:    dict     = Depends(get_current_user),
+    db:              DbSession = Depends(get_db),
+):
+    """접수 업무용 제한적 환자 정보 — 최근 내원 이력·진단 코드(민감 마스킹)·알레르기."""
+    _verify(current_user, db, "VIEW_ALL_APPOINTMENTS")
+
+    if current_user.get("role") not in ("nurse", "admin"):
+        raise HTTPException(status_code=403, detail="접수 권한이 없습니다.")
+
+    encounters = (
+        db.query(SyncEncounter)
+        .filter(SyncEncounter.patient_id_hash == patient_id_hash)
+        .order_by(SyncEncounter.visit_date.desc())
+        .limit(5)
+        .all()
+    )
+
+    diagnoses = db.query(SyncDiagnosis).filter(
+        SyncDiagnosis.patient_id_hash == patient_id_hash
+    ).all()
+
+    allergies = db.query(SyncAllergy).filter(
+        SyncAllergy.patient_id_hash == patient_id_hash
+    ).all()
+
+    _record_audit(db, current_user["sub"], "READ_RECEPTION_INFO", "200", request)
+
+    return {
+        "recent_encounters": [
+            {
+                "visit_date":      str(e.visit_date),
+                "department_code": e.department_code,
+                "encounter_type":  e.encounter_type,
+            }
+            for e in encounters
+        ],
+        "diagnoses": [
+            {
+                "diagnosis_code": _mask_code(d.diagnosis_code),
+                "is_primary":     d.is_primary,
+            }
+            for d in diagnoses
+        ],
+        "allergies": [
+            {
+                "allergy_name": a.allergy_name,
+                "severity":     a.severity_code,
+            }
+            for a in allergies
+        ],
+    }
+
+
 # ── 원무과/스태프 예약 관리 ──────────────────────────────────────
 
 @router.get("/staff/appointments")
