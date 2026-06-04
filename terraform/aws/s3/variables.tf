@@ -35,3 +35,28 @@ variable "github_backup_log_retention_days" {
   type        = number
   default     = 365
 }
+
+
+variable "flowlogs_retention_days" {
+  description = "VPC Flow Log 보존 기간 (일) — REJECT만 저장"
+  type        = number
+  default     = 365
+}
+
+variable "waf_retention_days" {
+  description = "WAF 로그 보존 기간 (일) — 이미 차단된 트래픽"
+  type        = number
+  default     = 90
+}
+
+variable "wazuh_db_backup_retention_days" {
+  description = "Wazuh wodle DB 백업 보존 기간 (일) — 재생성 가능"
+  type        = number
+  default     = 7
+}
+
+variable "wazuh_snapshots_retention_days" {
+  description = "Wazuh Indexer 스냅샷 보존 기간 (일) — alerts/에 원본 있음"
+  type        = number
+  default     = 30
+}
