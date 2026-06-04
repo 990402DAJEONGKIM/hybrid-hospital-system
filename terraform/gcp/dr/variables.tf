@@ -195,3 +195,10 @@ variable "cookie_secure" {
   type        = bool
   default     = false
 }
+
+# slack webhook url 추가 - 260602 김강환
+variable "slack_webhook_url" {
+  description = "Slack Webhook URL"
+  type        = string
+  sensitive   = true
+}
