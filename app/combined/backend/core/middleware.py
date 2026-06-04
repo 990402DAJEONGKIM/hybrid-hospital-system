@@ -1,7 +1,10 @@
 import re
 import uuid
-from datetime import datetime, timezone
+import json      # 추가 260604 김강환 - Wazuh stdout JSON 직렬화용
+import logging   # 추가 260604 김강환 - stdout 로거 생성용
+import sys        # 추가 260604 김강환 - stdout 핸들러 출력 대상 지정용
 
+from datetime import datetime, timezone
 from fastapi import Request
 from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -18,6 +21,42 @@ SKIP_AUDIT_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
 UUID_PATTERN = re.compile(
     r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.I
 )
+
+
+# ──────────────────────────────────────────────────────────────
+# Wazuh stdout 로거 (추가 260604 김강환)
+# 동작 흐름:
+#   FastAPI stdout 출력 → Docker json-file 드라이버가 파일로 저장
+#   → /var/lib/docker/containers/*/*-json.log
+#   → ECS EC2의 Wazuh agent가 해당 파일을 읽어 Manager로 전송
+# 별도 파일 저장 코드 불필요 — stdout 출력만 하면 Docker가 알아서 파일화함
+# ──────────────────────────────────────────────────────────────
+_wazuh_logger = logging.getLogger("wazuh.audit")
+_wazuh_handler = logging.StreamHandler(sys.stdout)        # stdout으로 출력
+_wazuh_handler.setFormatter(logging.Formatter("%(message)s"))  # JSON만 출력 (로그레벨/시각 prefix 제거)
+_wazuh_logger.addHandler(_wazuh_handler)
+_wazuh_logger.setLevel(logging.INFO)
+_wazuh_logger.propagate = False                            # 루트 로거로 중복 전파 방지 (uvicorn 로그와 섞임 방지)
+
+
+def _emit_wazuh_log(action_type, result_code, user_id, source_ip, path, method, role=None):
+    # UUID_PATTERN은 이 파일 상단에 이미 선언돼 있음 → 재사용
+    # 예: /patients/a1b2...-... → /patients/{id}
+    masked_path = UUID_PATTERN.sub("{id}", path)
+
+    _wazuh_logger.info(json.dumps({
+        "event_type":  "fastapi_audit",   # Wazuh 룰 필터용 식별자
+        "action_type": action_type,        # LOGIN, CREATE_USER 등 행위 종류
+        "result_code": result_code,        # HTTP 상태코드 (200/401 등)
+        "user_id":     user_id,            # 직원 UUID (환자 정보 아님)
+        "role":        role,               # admin/doctor/nurse
+        "source_ip":   source_ip,          # 접속 IP (감사 추적용)
+        "path":        masked_path,        # UUID 마스킹된 요청 경로
+        "method":      method,             # GET/POST 등
+        "timestamp":   datetime.now(timezone.utc).isoformat(),
+    }, ensure_ascii=False))                # ensure_ascii=False: 한글 등 비ASCII 깨짐 방지
+
+
 
 # (HTTP 메서드, 경로 패턴, action_type) — 순서 중요 (구체적인 경로 먼저)
 ACTION_MAP = [
@@ -171,6 +210,18 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                 db.commit()
             finally:
                 db.close()
+
+            # ── Wazuh stdout 출력 (추가 260604 김강환) ──────────────
+            # pid(patient_id_hash)는 인자로 넘기지 않음 → stdout 미포함 (DB에만 저장)
+            _emit_wazuh_log(
+                action_type = _get_action_type(request.method, request.url.path),
+                result_code = str(response.status_code),
+                user_id     = user_id_str,
+                source_ip   = _get_client_ip(request),
+                path        = request.url.path,   # 함수 내부에서 UUID 마스킹됨
+                method      = request.method,
+                role        = payload.get("role"),
+            )
         except Exception:
             pass  # 감사 로그 실패가 실제 응답에 영향을 주지 않도록
 
