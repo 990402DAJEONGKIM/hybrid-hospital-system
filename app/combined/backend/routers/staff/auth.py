@@ -77,8 +77,8 @@ def _build_token_payload(user: User) -> dict:
         "sub":  str(user.user_id),
         "role": user.role_ref.role_code,   # role_code from roles table (ISMS-P 2.5.4)
     }
-    if user.patient_id_hash:
-        payload["pid"] = user.patient_id_hash
+    if user.patient_id:
+        payload["pid"] = str(user.patient_id)
     if user.doctor_id:
         payload["did"] = str(user.doctor_id)
     return payload
@@ -336,8 +336,8 @@ def me(
         "must_change_password": user.must_change_password,
         "password_expire_days": policy.expire_days,
     }
-    if user.patient_id_hash:
-        result["patient_id_hash"] = user.patient_id_hash
+    if user.patient_id:
+        result["patient_id_hash"] = str(user.patient_id)
     if user.doctor_id:
         doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
         if doctor:
