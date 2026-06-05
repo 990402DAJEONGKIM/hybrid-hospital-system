@@ -21,11 +21,9 @@ data "aws_route53_zone" "main" {
 
 locals {
   patient_domain = "${var.patient_subdomain}.${var.base_domain}"
-  staff_domain   = "${var.staff_subdomain}.${var.base_domain}"
+  # staff_domain 삭제 — 직원 포털 온프레미스 이전
   wazuh_domain   = "${var.wazuh_subdomain}.${var.base_domain}"
   grafana_domain = "${var.grafana_subdomain}.${var.base_domain}"
-  # admin_domain 삭제 — admin.mzclinic.cloud 제거, staff.mzclinic.cloud로 통합
-  # admin_domain   = "${var.admin_subdomain}.${var.base_domain}"
 }
 
 
@@ -67,42 +65,10 @@ resource "aws_acm_certificate_validation" "patient" {
 }
 
 
-# ─────────────────────────────────────────────────────────
-# 2. 의료진 포털 인증서 (Internal ALB용)
-# ─────────────────────────────────────────────────────────
-resource "aws_acm_certificate" "staff" {
-  domain_name       = local.staff_domain
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = { Name = "aws-acm-staff-portal" }
-}
-
-resource "aws_route53_record" "staff_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.staff.domain_validation_options :
-    dvo.domain_name => {
-      name   = dvo.resource_record_name
-      type   = dvo.resource_record_type
-      record = dvo.resource_record_value
-    }
-  }
-
-  zone_id         = data.aws_route53_zone.main.zone_id
-  name            = each.value.name
-  type            = each.value.type
-  records         = [each.value.record]
-  ttl             = 60
-  allow_overwrite = true
-}
-
-resource "aws_acm_certificate_validation" "staff" {
-  certificate_arn         = aws_acm_certificate.staff.arn
-  validation_record_fqdns = [for r in aws_route53_record.staff_validation : r.fqdn]
-}
+# 2. 의료진 포털 인증서 삭제 — 직원 포털 온프레미스 이전으로 불필요
+# resource "aws_acm_certificate" "staff" { ... }
+# resource "aws_route53_record" "staff_validation" { ... }
+# resource "aws_acm_certificate_validation" "staff" { ... }
 
 
 # ─────────────────────────────────────────────────────────
