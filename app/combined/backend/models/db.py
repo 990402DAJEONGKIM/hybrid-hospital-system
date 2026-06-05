@@ -87,7 +87,7 @@ class User(Base):
     email                = Column(String(255), nullable=True, unique=True)
     password_hash        = Column(String(255), nullable=False)
     role_id              = Column(Integer,     ForeignKey("roles.role_id"), nullable=False)
-    patient_id           = Column(Uuid,        ForeignKey("patients.patient_id", ondelete="SET NULL"), nullable=True)
+    patient_id           = Column(Uuid,        nullable=True)
     doctor_id            = Column(Uuid)
     is_active            = Column(Boolean,      nullable=False, default=True)
     failed_login_cnt     = Column(SmallInteger, nullable=False, default=0)
@@ -367,7 +367,7 @@ class AuditLog(Base):
 
     audit_log_id = Column(Uuid,       primary_key=True, default=uuid.uuid4)
     user_id      = Column(Uuid,       ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
-    patient_id   = Column(Uuid,       ForeignKey("patients.patient_id", ondelete="SET NULL"), nullable=True)
+    patient_id   = Column(Uuid,       nullable=True)
     action_type  = Column(String(50), nullable=False)
     target_table = Column(String(50))
     target_id    = Column(Uuid)
