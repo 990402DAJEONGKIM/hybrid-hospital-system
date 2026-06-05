@@ -70,6 +70,16 @@ resource "aws_iam_role_policy" "github_actions_ecs" {
           "ecs:RegisterTaskDefinition",
           "ecs:DescribeServices",
           "ecs:UpdateService",
+          "ecs:ListTasks",
+          "ecs:DescribeTasks",
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:SetDesiredCapacity",
         ]
         Resource = "*"
       },
