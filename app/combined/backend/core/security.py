@@ -25,7 +25,7 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 API_KEY       = os.getenv("API_KEY", "")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
-pwd_context    = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context    = CryptContext(schemes=["bcrypt", "argon2"], deprecated="auto")
 api_key_header = APIKeyHeader(name="X-API-Key")
 
 
@@ -144,26 +144,26 @@ def get_password_policy(db: Session):
 # ── 감사 로그 (ISMS-P 2.9.1) ────────────────────────────────────
 
 def record_audit(
-    db:              Session,
-    action_type:     str,
-    result_code:     str,
+    db:           Session,
+    action_type:  str,
+    result_code:  str,
     user_id=None,
-    patient_id_hash: Optional[str] = None,
-    target_table:    Optional[str] = None,
+    patient_id=None,
+    target_table: Optional[str] = None,
     target_id=None,
-    source_ip:       Optional[str] = None,
+    source_ip:    Optional[str] = None,
 ) -> None:
     """audit_logs 테이블에 단일 행 삽입. 예외가 발생해도 메인 트랜잭션을 끊지 않는다."""
     from models.db import AuditLog
     try:
         db.add(AuditLog(
-            user_id         = user_id,
-            patient_id_hash = patient_id_hash,
-            action_type     = action_type,
-            target_table    = target_table,
-            target_id       = target_id,
-            source_ip       = source_ip,
-            result_code     = result_code,
+            user_id      = user_id,
+            patient_id   = patient_id,
+            action_type  = action_type,
+            target_table = target_table,
+            target_id    = target_id,
+            source_ip    = source_ip,
+            result_code  = result_code,
         ))
     except Exception:
         pass  # 감사 로그 실패가 비즈니스 흐름을 막으면 안 됨

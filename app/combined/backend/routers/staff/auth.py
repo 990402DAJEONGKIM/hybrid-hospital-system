@@ -59,17 +59,20 @@ def validate_password(password: str) -> str | None:
     return None
 
 
-def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result: str, request: Request, patient_hash: str = None):
+def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result: str, request: Request, patient_id=None):
     """감사 로그 기록 (ISMS-P 2.9.1)"""
-    log = AuditLog(
-        user_id=user_id,
-        patient_id_hash=patient_hash,
-        action_type=action,
-        source_ip=get_client_ip(request),
-        result_code=result
-    )
-    db.add(log)
-    db.commit()
+    try:
+        log = AuditLog(
+            user_id=user_id,
+            patient_id=patient_id,
+            action_type=action,
+            source_ip=get_client_ip(request),
+            result_code=result
+        )
+        db.add(log)
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 def _build_token_payload(user: User) -> dict:
@@ -77,8 +80,8 @@ def _build_token_payload(user: User) -> dict:
         "sub":  str(user.user_id),
         "role": user.role_ref.role_code,   # role_code from roles table (ISMS-P 2.5.4)
     }
-    if user.patient_id_hash:
-        payload["pid"] = user.patient_id_hash
+    if user.patient_id:
+        payload["pid"] = str(user.patient_id)
     if user.doctor_id:
         payload["did"] = str(user.doctor_id)
     return payload
@@ -336,8 +339,8 @@ def me(
         "must_change_password": user.must_change_password,
         "password_expire_days": policy.expire_days,
     }
-    if user.patient_id_hash:
-        result["patient_id_hash"] = user.patient_id_hash
+    if user.patient_id:
+        result["patient_id_hash"] = str(user.patient_id)
     if user.doctor_id:
         doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
         if doctor:
