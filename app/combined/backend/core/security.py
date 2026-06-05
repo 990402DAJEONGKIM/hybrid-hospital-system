@@ -25,7 +25,7 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 API_KEY       = os.getenv("API_KEY", "")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
-pwd_context    = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+pwd_context    = CryptContext(schemes=["bcrypt", "argon2"], deprecated="auto")
 api_key_header = APIKeyHeader(name="X-API-Key")
 
 
