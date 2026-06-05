@@ -69,8 +69,8 @@
 # WAF IP 화이트리스트로 허용 IP 제한 — ALB SG는 전체 허용
 # ─────────────────────────────────────────────────────────
 resource "aws_security_group" "staff_alb" {
-  name        = "aws-staff-alb-sg"
-  description = "Public ALB security group for staff portal (WAF IP whitelist applied)"
+  name        = "aws-hospital-alb-sg"
+  description = "Public ALB security group for hospital portal (WAF applied)"
   vpc_id      = data.aws_vpc.main.id
 
   ingress {
@@ -306,7 +306,7 @@ resource "aws_lb_target_group_attachment" "aws-grafana-tg" {
 # host-based 라우팅으로 서비스 분기 by 김다정 20260604
 # ─────────────────────────────────────────────────────────
 resource "aws_lb" "staff" {
-  name               = "aws-staff-alb"
+  name               = "aws-hospital-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.staff_alb.id]
@@ -318,7 +318,7 @@ resource "aws_lb" "staff" {
   }
   enable_deletion_protection = false
 
-  tags = { Name = "aws-staff-alb" }
+  tags = { Name = "aws-hospital-alb" }
 }
 
 # HTTP → HTTPS 리다이렉트
@@ -337,14 +337,14 @@ resource "aws_lb_listener" "staff_http" {
   }
 }
 
-# HTTPS 리스너 — 기본 인증서: staff.mzclinic.cloud
+# HTTPS 리스너 — 기본 인증서: patient.mzclinic.cloud (staff 온프레미스 이전)
 # 매칭되지 않는 host → 403 고정 응답
 resource "aws_lb_listener" "staff_https" {
   load_balancer_arn = aws_lb.staff.arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = data.aws_acm_certificate.staff.arn
+  certificate_arn   = data.aws_acm_certificate.patient.arn
 
   default_action {
     type = "fixed-response"
@@ -401,25 +401,8 @@ resource "aws_lb_listener_rule" "patient" {
   }
 }
 
-# ─────────────────────────────────────────────────────────
-# 라우팅 규칙 — staff.mzclinic.cloud → hospital TG
-# 변경: staff TG → hospital TG by 김다정 20260604
-# ─────────────────────────────────────────────────────────
-resource "aws_lb_listener_rule" "staff" {
-  listener_arn = aws_lb_listener.staff_https.arn
-  priority     = 10
-
-  condition {
-    host_header {
-      values = ["staff.${var.base_domain}"]
-    }
-  }
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.hospital.arn # 변경: staff → hospital by 김다정 20260604
-  }
-}
+# staff.mzclinic.cloud 라우팅 규칙 삭제 — 직원 포털 온프레미스 이전
+# resource "aws_lb_listener_rule" "staff" { ... }
 
 # 라우팅 규칙 — admin.mzclinic.cloud 삭제 (admin 도메인 제거, staff로 통합)
 # resource "aws_lb_listener_rule" "admin" {
@@ -490,17 +473,8 @@ resource "aws_route53_record" "patient" {
   }
 }
 
-resource "aws_route53_record" "staff" {
-  zone_id = data.aws_route53_zone.main.zone_id
-  name    = "staff.${var.base_domain}"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.staff.dns_name
-    zone_id                = aws_lb.staff.zone_id
-    evaluate_target_health = true
-  }
-}
+# staff.mzclinic.cloud Route53 레코드 삭제 — 직원 포털 온프레미스 이전
+# resource "aws_route53_record" "staff" { ... }
 
 # Route53 — admin.mzclinic.cloud 삭제 (admin 도메인 제거, staff로 통합)
 # resource "aws_route53_record" "admin" {

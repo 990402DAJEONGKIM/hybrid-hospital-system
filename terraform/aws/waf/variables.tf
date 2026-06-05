@@ -31,9 +31,9 @@ variable "rate_limit_auth" {
 }
 
 variable "staff_alb_name" {
-  description = "의료진 포털 ALB 이름"
+  description = "통합 병원 ALB 이름"
   type        = string
-  default     = "aws-staff-alb"
+  default     = "aws-hospital-alb"
 }
 
 variable "staff_allowed_ips" {

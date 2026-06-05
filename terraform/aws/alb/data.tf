@@ -40,12 +40,8 @@ data "aws_acm_certificate" "patient" {
   most_recent = true
 }
 
-# ACM 인증서 (staff.mzclinic.cloud)
-data "aws_acm_certificate" "staff" {
-  domain      = "staff.${var.base_domain}"
-  statuses    = ["ISSUED"]
-  most_recent = true
-}
+# staff ACM 인증서 삭제 — 직원 포털 온프레미스 이전
+# data "aws_acm_certificate" "staff" { ... }
 
 # ACM 인증서 (wazuh.mzclinic.cloud) — 통합 ALB 추가 인증서
 data "aws_acm_certificate" "wazuh" {

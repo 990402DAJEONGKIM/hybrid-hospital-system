@@ -30,21 +30,8 @@
 # resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-patient" { ... }
 
 
-# ─────────────────────────────────────────────────────────
-# IP Set — 허용 공인 IP 목록 (ISMS-P 2.6.1)
-# 병원 공인 IP 확정 시 staff_allowed_ips 변수에 추가
-# ─────────────────────────────────────────────────────────
-resource "aws_wafv2_ip_set" "staff_allowed" {
-  name               = "staff-allowed-ips"
-  scope              = "REGIONAL"
-  ip_address_version = "IPV4"
-  addresses          = var.staff_allowed_ips
-
-  tags = {
-    Name    = "staff-allowed-ips"
-    Purpose = "ISMS-P 2.6.1 의료진/관리자 포털 접근 허용 IP"
-  }
-}
+# staff IP Set 삭제 — 직원 포털 온프레미스 이전으로 불필요
+# resource "aws_wafv2_ip_set" "staff_allowed" { ... }
 
 
 # ─────────────────────────────────────────────────────────
@@ -198,50 +185,7 @@ resource "aws_wafv2_web_acl" "staff" {
     }
   }
 
-  # ── Rule 5: staff 도메인 비허용 IP 차단 — ISMS-P 2.6.1 ───
-  # staff.mzclinic.cloud AND NOT 허용 IP → BLOCK
-  # (admin.mzclinic.cloud 제거, staff로 통합)
-  rule {
-    name     = "BlockNonHospitalIPsForStaff"
-    priority = 5
-
-    action {
-      block {}
-    }
-
-    statement {
-      and_statement {
-        statement {
-          byte_match_statement {
-            search_string = "staff.${var.base_domain}"
-            field_to_match {
-              single_header { name = "host" }
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-            positional_constraint = "EXACTLY"
-          }
-        }
-        statement {
-          not_statement {
-            statement {
-              ip_set_reference_statement {
-                arn = aws_wafv2_ip_set.staff_allowed.arn
-              }
-            }
-          }
-        }
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "BlockNonHospitalIPs"
-      sampled_requests_enabled   = true
-    }
-  }
+  # Rule 5 삭제 — staff.mzclinic.cloud 온프레미스 이전으로 WAF IP 제한 불필요
 
   visibility_config {
     cloudwatch_metrics_enabled = true

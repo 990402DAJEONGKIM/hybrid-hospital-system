@@ -27,25 +27,19 @@ resource "cloudflare_record" "patient" {
   zone_id = var.cloudflare_zone_id
   name    = "patient"
   type    = "CNAME"
-  content = "aws-staff-alb-622767637.ap-south-2.elb.amazonaws.com"
+  content = "aws-hospital-alb-622767637.ap-south-2.elb.amazonaws.com"
   ttl     = 60
   proxied = false
 }
 
-resource "cloudflare_record" "staff" {
-  zone_id = var.cloudflare_zone_id
-  name    = "staff"
-  type    = "CNAME"
-  content = "aws-staff-alb-622767637.ap-south-2.elb.amazonaws.com"
-  ttl     = 60
-  proxied = false
-}
+# staff.mzclinic.cloud 삭제 — 직원 포털 온프레미스 이전으로 불필요
+# resource "cloudflare_record" "staff" { ... }
 
 resource "cloudflare_record" "wazuh" {
   zone_id = var.cloudflare_zone_id
   name    = "wazuh"
   type    = "CNAME"
-  content = "aws-staff-alb-622767637.ap-south-2.elb.amazonaws.com"
+  content = "aws-hospital-alb-622767637.ap-south-2.elb.amazonaws.com"
   ttl     = 60
   proxied = false
 }
@@ -55,7 +49,7 @@ resource "cloudflare_record" "grafana" {
   zone_id = var.cloudflare_zone_id
   name    = "grafana"
   type    = "CNAME"
-  content = "aws-staff-alb-622767637.ap-south-2.elb.amazonaws.com"
+  content = "aws-hospital-alb-622767637.ap-south-2.elb.amazonaws.com"
   ttl     = 60
   proxied = false
 }
@@ -113,14 +107,8 @@ resource "cloudflare_record" "acm_patient" {
   proxied = false
 }
 
-resource "cloudflare_record" "acm_staff" {
-  zone_id = var.cloudflare_zone_id
-  name    = "_f501e105c61809d876e042ec70e0f1a9.staff"
-  type    = "CNAME"
-  content = "_34e3a1c87f305b7426eba143bcc46133.jkddzztszm.acm-validations.aws"
-  ttl     = 60
-  proxied = false
-}
+# staff ACM 검증 레코드 삭제 — staff 인증서 제거에 따라 불필요
+# resource "cloudflare_record" "acm_staff" { ... }
 
 resource "cloudflare_record" "acm_wazuh" {
   zone_id = var.cloudflare_zone_id

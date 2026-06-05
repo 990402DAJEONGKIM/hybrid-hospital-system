@@ -5,9 +5,7 @@ on:
     branches: [main]
     paths:
       - 'app/combined/**'
-      - 'app/staff/frontend/**'
       - 'app/patient/frontend/**'
-      - 'app/portal/frontend/**'
       - 'docker/api/**'
       - 'docker/nginx/**'
       - 'docker-compose.yml'
