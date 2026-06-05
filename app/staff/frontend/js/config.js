@@ -3,5 +3,6 @@
 //   NGINX가 /api/staff/* → FastAPI /staff/* 로 프록시
 //
 // API_KEY: NGINX가 proxy_set_header로 주입 — 프론트엔드 노출 불필요
-const BASE_URL = '/api/staff';
-const API_KEY  = '';
+const BASE_URL        = '/api/staff';
+const ONPREM_BASE_URL = '';
+const API_KEY         = '';
