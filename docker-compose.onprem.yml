@@ -1,0 +1,46 @@
+services:
+
+  api-onprem:
+    build:
+      context: .
+      dockerfile: docker/api-onprem/Dockerfile
+    container_name: hospital-staff-api
+    environment:
+      DATABASE_URL: postgresql://hospital_user:jUOuyijkzuNPWTUHNg1tHeimnRgz0QPhtXcWZq3epRY=@hospital_db:5432/hospital
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS}
+      API_KEY: ${API_KEY}
+      COOKIE_SECURE: "true"
+      DB_SSLMODE: disable
+      ALLOWED_HOSTS: "172.30.1.76,localhost"
+      ALLOWED_ORIGINS: "http://172.30.1.76"
+      TZ: Asia/Seoul
+    networks:
+      - hospital-db_default
+      - staff-internal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  nginx-onprem:
+    build:
+      context: .
+      dockerfile: docker/nginx-onprem/Dockerfile
+    container_name: hospital-staff-nginx
+    ports:
+      - "80:80"
+    network_mode: "service:api-onprem"
+    depends_on:
+      api-onprem:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  hospital-db_default:
+    external: true
+  staff-internal:
+    driver: bridge
