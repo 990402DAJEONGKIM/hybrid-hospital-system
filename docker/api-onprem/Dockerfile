@@ -6,10 +6,10 @@ ENV TZ=Asia/Seoul
 
 WORKDIR /app
 
-COPY app/onprem/backend/requirements.txt .
+COPY app/combined/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app/onprem/backend/ .
+COPY app/combined/backend/ .
 
 EXPOSE 8000
 
