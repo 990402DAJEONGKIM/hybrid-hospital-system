@@ -60,11 +60,7 @@ resource "aws_ecs_task_definition" "hospital" {
         containerPort = 80
         protocol      = "tcp"
       }]
-      # ONPREM_BASE_URL: 컨테이너 기동 시 envsubst가 nurse/js/config.js.template에 주입
-      # 빈 문자열이면 config.js에서 ONPREM_BASE_URL = '' 로 처리 → 온프레미스 기능 비활성화
-      environment = [
-        { name = "ONPREM_BASE_URL", value = var.onprem_base_url },
-      ]
+      environment = []
       secrets = local.nginx_secrets
       logConfiguration = {
         logDriver = "awslogs"
