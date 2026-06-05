@@ -39,7 +39,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          sts-regional-endpoints: regional
 
       - name: Login to ECR
         id: login-ecr
@@ -124,7 +123,50 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          sts-regional-endpoints: regional
+
+      - name: Validate inputs
+        run: |
+          if [ -z "$REGISTRY" ]; then
+            echo "ERROR: REGISTRY is empty. build job may not have passed registry output correctly."
+            exit 1
+          fi
+          echo "REGISTRY=$REGISTRY"
+          echo "TAG=$TAG"
+
+      - name: Ensure ECS capacity is available
+        run: |
+          echo "Checking ASG running instance count..."
+          RUNNING=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names aws-ecs-asg-01 \
+            --region $AWS_REGION \
+            --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`] | length(@)' \
+            --output text)
+          echo "InService instances: $RUNNING"
+          if [ "$RUNNING" -lt 1 ]; then
+            echo "No running instances. Setting ASG desired=1 and waiting for capacity..."
+            aws autoscaling set-desired-capacity \
+              --auto-scaling-group-name aws-ecs-asg-01 \
+              --desired-capacity 1 \
+              --region $AWS_REGION
+            for i in $(seq 1 12); do
+              sleep 30
+              RUNNING=$(aws autoscaling describe-auto-scaling-groups \
+                --auto-scaling-group-names aws-ecs-asg-01 \
+                --region $AWS_REGION \
+                --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`] | length(@)' \
+                --output text)
+              echo "[${i}/12] InService instances: $RUNNING"
+              if [ "$RUNNING" -ge 1 ]; then
+                echo "Capacity ready. Waiting 30s for ECS agent registration..."
+                sleep 30
+                break
+              fi
+              if [ $i -eq 12 ]; then
+                echo "ERROR: ASG did not reach capacity within 6 minutes."
+                exit 1
+              fi
+            done
+          fi
 
       - name: Deploy hospital-service
         run: |
@@ -186,7 +228,21 @@ jobs:
               exit 1
             fi
             if [ $i -eq 60 ]; then
-              echo "Timed out. Check ECS console for hospital-service."
+              echo "Timed out. Fetching stopped task reasons..."
+              STOPPED=$(aws ecs list-tasks \
+                --cluster $ECS_CLUSTER \
+                --service-name hospital-service \
+                --desired-status STOPPED \
+                --query 'taskArns[0]' --output text)
+              if [ "$STOPPED" != "None" ] && [ -n "$STOPPED" ]; then
+                aws ecs describe-tasks \
+                  --cluster $ECS_CLUSTER \
+                  --tasks "$STOPPED" \
+                  --query 'tasks[0].{stoppedReason:stoppedReason,containers:containers[*].{name:name,reason:reason,exitCode:exitCode,lastStatus:lastStatus}}' \
+                  --output json
+              else
+                echo "No stopped tasks found. Check ECS console for placement failures."
+              fi
               exit 1
             fi
             sleep 30
