@@ -1,21 +1,21 @@
 #!/bin/bash
 set -e
 
-# 네트워크 안정화 대기 (최대 5분)
-until curl -s --connect-timeout 5 https://packages.wazuh.com > /dev/null 2>&1; do
-  echo "Waiting for network..."
-  sleep 5
-done
-
 # ── ECS 클러스터 등록 ────────────────────────────────────
+# AWS 공식문서: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-install.html
+# "starting Amazon ECS or Docker via Amazon EC2 user data may cause a deadlock"
+# ecs.service는 After=cloud-final.service로 묶여있어 cloud-init 도중 start/stop 호출 시 SIGTERM 발생
+# 해결: --no-block 옵션으로 cloud-final 종료 대기 없이 systemd에 시작 요청만 등록
 mkdir -p /etc/ecs
 echo "ECS_CLUSTER=${cluster_name}" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config
 echo "ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true" >> /etc/ecs/ecs.config
-echo 'ECS_AVAILABLE_LOGGING_DRIVERS=["json-file","awslogs"]' >> /etc/ecs/ecs.config  # 추가
+echo 'ECS_AVAILABLE_LOGGING_DRIVERS=["json-file","awslogs"]' >> /etc/ecs/ecs.config
 
-# 260601 박경수 ECS agent 자동시작 일시 중지 (Wazuh 설치 완료 후 수동 시작)
-systemctl stop ecs || true
+# 260605 김강환 - ECS 자동시작 차단 (Wazuh agent 설치 완료 후 enable + --no-block start)
+# 기존 `systemctl stop ecs || true`는 ecs.service After=cloud-final 의존성과 충돌해
+# systemd가 cloud-init에 SIGTERM을 보내고 userdata가 13초 만에 죽었음
+systemctl disable ecs
 
 %{ if wazuh_server_ip != "" }
 # ── Wazuh 에이전트 설치 ──────────────────────────────────
@@ -66,13 +66,13 @@ AGENT_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
   http://169.254.169.254/latest/meta-data/local-ipv4 | tr '.' '-')
 sed -i "s|AGENT_IP_PLACEHOLDER|$AGENT_IP|" /var/ossec/etc/ossec.conf
 usermod -aG docker wazuh 2>/dev/null || true
+
+# Wazuh agent도 --no-block로 시작 (cloud-final 의존성 회피)
 systemctl daemon-reload
-systemctl enable wazuh-agent
-systemctl start wazuh-agent || true
+systemctl enable --now --no-block wazuh-agent
 %{ endif }
 
-
-# ── Grafana Alloy 설치 — AL2023 RPM 방식 ─────────────────
+# ── Grafana Alloy 설치 ─────────────────────────────────
 curl -s -o /tmp/grafana-gpg.key https://rpm.grafana.com/gpg.key
 rpm --import /tmp/grafana-gpg.key
 rm -f /tmp/grafana-gpg.key
@@ -89,7 +89,7 @@ sslverify=1
 sslcacert=/etc/pki/tls/certs/ca-bundle.crt
 EOF
 
-dnf install -y alloy 
+dnf install -y alloy
 
 TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
   -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
@@ -124,34 +124,10 @@ prometheus.remote_write "prometheus" {
 }
 ALLOYEOF
 
-systemctl daemon-reload
-systemctl enable alloy
-systemctl start alloy || true
+# Alloy도 --no-block로 시작
+systemctl enable --now --no-block alloy
 
-# 260601 박경수  Wazuh 안정화 대기 후 ECS agent 시작
-
-# sleep 30
-# systemctl start ecs
-
-
-# Wazuh agent active 상태 대기 (최대 120초)
-# Wazuh agent가 120초 내에 활성화되지 않더라도 ECS는 시작하도록 함 (모니터링은 되지만 보안 이벤트는 누락될 수 있음)
-# 30초는 불안해서 120초로 늘림 
-# agent가 활성화되면 ECS를 시작하도록 변경 - 260603 김강환
-%{ if wazuh_server_ip != "" }
-echo "Waiting for wazuh-agent to become active..."
-for i in $(seq 1 24); do
-  if systemctl is-active --quiet wazuh-agent; then
-    echo "Wazuh agent is active after $((i*5))s, starting ECS..."
-    break
-  fi
-  if [ $i -eq 24 ]; then
-    echo "Wazuh agent did not start in 120s, starting ECS anyway..."
-  fi
-  sleep 5
-done
-%{ else }
-echo "Wazuh not configured, starting ECS immediately..."
-%{ endif }
-
-systemctl start ecs
+# ── ECS agent 시작 (Wazuh/Alloy 설치 완료 후) ───────────
+# AWS 공식 권장: --no-block로 cloud-init 데드락 회피
+# enable 후 --now가 즉시 시작을 요청하지만 --no-block가 cloud-final 완료를 기다리지 않음
+systemctl enable --now --no-block ecs
