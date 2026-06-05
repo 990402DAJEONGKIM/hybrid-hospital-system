@@ -35,9 +35,9 @@ type = "aws_s3"
 inputs = ["wazuh_alerts"]
 bucket = "aws-k2p-storage-01"
 region = "ap-south-2"
-key_prefix = "wazuh/alerts/{{ wazuh_node_name }}/%Y/%m/%d/"
+key_prefix = "wazuh/alerts/%Y/%m/%d/"
 filename_time_format = "alerts-%Y-%m-%d-%H-%M"
-filename_extension = "json"
+filename_extension = "json.gz"
 filename_append_uuid = false
 compression = "gzip"
 
@@ -61,7 +61,7 @@ bucket = "aws-k2p-storage-01"
 region = "ap-south-2"
 key_prefix = "wazuh/archives/%Y/%m/%d/"
 filename_time_format = "archives-%Y-%m-%d-%H-%M"
-filename_extension = "json"
+filename_extension = "json.gz"
 filename_append_uuid = false
 compression = "gzip"
 

@@ -43,7 +43,7 @@
   <!-- 업무 시간 외 WRITE -->
   <rule id="100105" level="10">
     <if_sid>100102</if_sid>
-    <time>18:00 - 09:00</time>
+    <time>09:00 - 00:00</time>
     <description>업무 시간 외 RDS WRITE 쿼리 탐지 - 비정상 접근 의심</description>
     <group>after_hours,database_change</group>
   </rule>
@@ -51,7 +51,7 @@
   <!-- 업무 시간 외 DDL -->
   <rule id="100106" level="12">
     <if_sid>100101</if_sid>
-    <time>18:00 - 09:00</time>
+    <time>09:00 - 00:00</time>
     <description>업무 시간 외 RDS DDL 쿼리 탐지 - 비정상 접근 의심</description>
     <group>after_hours,ddl</group>
   </rule>
@@ -115,6 +115,63 @@
 
 
 
+  <!-- 대용량 SELECT 탐지 — 데이터 유출 의심 -->
+  <rule id="100115" level="10">
+    <if_sid>100103</if_sid>
+    <field name="data.audit.rows" type="pcre2">^[1-9][0-9]{4,}</field>
+    <description>내부자 위협 의심 — 대용량 SELECT (10000건 이상)</description>
+    <group>rds,insider_threat,data_exfiltration</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
+  <!-- 1분 내 SELECT 반복 — 대량 데이터 추출 의심 -->
+  <rule id="100116" level="12" frequency="100" timeframe="60">
+    <if_matched_sid>100103</if_matched_sid>
+    <description>내부자 위협 의심 — 1분 내 SELECT 100회 이상</description>
+    <group>rds,insider_threat,data_exfiltration</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
+  <!-- rdsproxyadmin READ 필터링 (기존 100104와 동일 패턴) -->
+  <!-- Vault 동적 역할 READ 필터링 — 복제/내부 동작 노이즈 제거 -->
+  <rule id="100117" level="0">
+    <if_sid>100103</if_sid>
+    <match>v-approle-api-role</match>
+    <description>Vault 동적 역할 SELECT - 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- DB 브루트포스 — 1분 내 로그인 실패 10회 -->
+  <rule id="100118" level="12" frequency="10" timeframe="60">
+    <if_matched_sid>100100</if_matched_sid>
+    <match>FAILED_AUTHENTICATION|authentication failed</match>
+    <description>DB 브루트포스 의심 — 1분 내 로그인 실패 10회</description>
+    <group>rds,bruteforce,authentication</group>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <!-- Vault 동적 역할 CREATE ROLE 무시 -->
+  <rule id="100119" level="0">
+    <if_sid>100110</if_sid>
+    <match>v-approle-api-role</match>
+    <description>Vault 동적 역할 CREATE ROLE - 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- Vault 동적 역할  GRANT/REVOKE 무시 -->
+  <rule id="100120" level="0">
+      <if_sid>100108</if_sid>
+      <match>v-approle-api-role</match>
+      <description>Vault 동적 역할 ROLE 변경 - 무시</description>
+      <group>noise</group>
+  </rule>
+
+  <rule id="100121" level="0">
+      <if_sid>5503</if_sid>
+      <match>ssm-user</match>
+      <description>SSM Agent PAM 실패 — 노이즈 제거</description>
+      <group>noise</group>
+  </rule>
 
 
 
