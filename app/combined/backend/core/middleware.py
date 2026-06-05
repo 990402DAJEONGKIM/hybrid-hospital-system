@@ -32,12 +32,12 @@ UUID_PATTERN = re.compile(
 # 별도 파일 저장 코드 불필요 — stdout 출력만 하면 Docker가 알아서 파일화함
 # ──────────────────────────────────────────────────────────────
 _wazuh_logger = logging.getLogger("wazuh.audit")
-_wazuh_handler = logging.StreamHandler(sys.stdout)        # stdout으로 출력
-_wazuh_handler.setFormatter(logging.Formatter("%(message)s"))  # JSON만 출력 (로그레벨/시각 prefix 제거)
-_wazuh_logger.addHandler(_wazuh_handler)
-_wazuh_logger.setLevel(logging.INFO)
-_wazuh_logger.propagate = False                            # 루트 로거로 중복 전파 방지 (uvicorn 로그와 섞임 방지)
-
+if not _wazuh_logger.handlers:                             # 추가 260605 김강환 - 핸들러 중복 방지 (hot reload 시 로그 중복 출력 방지)
+    _wazuh_handler = logging.StreamHandler(sys.stdout)        # stdout으로 출력
+    _wazuh_handler.setFormatter(logging.Formatter("%(message)s"))  # JSON만 출력 (로그레벨/시각 prefix 제거)
+    _wazuh_logger.addHandler(_wazuh_handler)
+    _wazuh_logger.setLevel(logging.INFO)
+    _wazuh_logger.propagate = False    
 
 def _emit_wazuh_log(action_type, result_code, user_id, source_ip, path, method, role=None):
     # UUID_PATTERN은 이 파일 상단에 이미 선언돼 있음 → 재사용
@@ -189,40 +189,48 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         if request.url.path in SKIP_AUDIT_PATHS:
             return response
 
+        # 260605 김강환 수정 - DB 저장과 Wazuh stdout 예외 분리 (이중 보존 신뢰성 확보)
+        # 공통 데이터 추출
+        payload       = _decode_token_silent(request)
+        user_id_str   = payload.get("sub")
+        target_id_str = _get_target_id(request.url.path)
+        action_type   = _get_action_type(request.method, request.url.path)
+        client_ip     = _get_client_ip(request)
+        result_code   = str(response.status_code)
+
+        # ── DB 저장 (AuditLog 테이블) ──────────────────────────
         try:
             from models.db import AuditLog
-
-            payload       = _decode_token_silent(request)
-            user_id_str   = payload.get("sub")
-            target_id_str = _get_target_id(request.url.path)
-
             db = SessionLocal()
             try:
                 db.add(AuditLog(
                     user_id         = uuid.UUID(user_id_str) if user_id_str else None,
                     patient_id_hash = payload.get("pid"),
-                    action_type     = _get_action_type(request.method, request.url.path),
+                    action_type     = action_type,
                     target_table    = _get_target_table(request.url.path),
                     target_id       = uuid.UUID(target_id_str) if target_id_str else None,
-                    source_ip       = _get_client_ip(request),
-                    result_code     = str(response.status_code),
+                    source_ip       = client_ip,
+                    result_code     = result_code,
                 ))
                 db.commit()
             finally:
                 db.close()
+        except Exception:
+            pass  # DB 실패가 응답에 영향 주지 않도록
 
-            # ── Wazuh stdout 출력 (추가 260604 김강환) ──────────────
-            # pid(patient_id_hash)는 인자로 넘기지 않음 → stdout 미포함 (DB에만 저장)
+        # ── Wazuh stdout 출력 (DB 실패와 독립적으로 실행) ──────────
+        # pid(patient_id_hash)는 인자로 넘기지 않음 → stdout 미포함 (DB에만 저장)
+        try:
             _emit_wazuh_log(
-                action_type = _get_action_type(request.method, request.url.path),
-                result_code = str(response.status_code),
+                action_type = action_type,
+                result_code = result_code,
                 user_id     = user_id_str,
-                source_ip   = _get_client_ip(request),
+                source_ip   = client_ip,
                 path        = request.url.path,   # 함수 내부에서 UUID 마스킹됨
                 method      = request.method,
                 role        = payload.get("role"),
             )
         except Exception:
-            pass  # 감사 로그 실패가 실제 응답에 영향을 주지 않도록
+            pass  # stdout 실패가 응답/DB에 영향 주지 않도록
 
         return response
