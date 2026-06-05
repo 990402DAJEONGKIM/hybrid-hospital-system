@@ -220,8 +220,6 @@ resource "google_compute_instance_template" "dr_app" {
   metadata = {
     enable-oslogin = "TRUE"
     startup-script = templatefile("${path.module}/scripts/startup-dr-app.sh.tftpl", {
-      artifact_bucket         = google_storage_bucket.artifact.name
-      artifact_object         = google_storage_bucket_object.dr_app.name
       project_id              = var.project_id
       cloud_sql_ip            = data.google_sql_database_instance.main.private_ip_address
       database_name           = var.database_name
