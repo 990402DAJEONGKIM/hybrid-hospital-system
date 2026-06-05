@@ -59,17 +59,20 @@ def validate_password(password: str) -> str | None:
     return None
 
 
-def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result: str, request: Request, patient_hash: str = None):
+def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result: str, request: Request, patient_id=None):
     """감사 로그 기록 (ISMS-P 2.9.1)"""
-    log = AuditLog(
-        user_id=user_id,
-        patient_id_hash=patient_hash,
-        action_type=action,
-        source_ip=get_client_ip(request),
-        result_code=result
-    )
-    db.add(log)
-    db.commit()
+    try:
+        log = AuditLog(
+            user_id=user_id,
+            patient_id=patient_id,
+            action_type=action,
+            source_ip=get_client_ip(request),
+            result_code=result
+        )
+        db.add(log)
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 def _build_token_payload(user: User) -> dict:

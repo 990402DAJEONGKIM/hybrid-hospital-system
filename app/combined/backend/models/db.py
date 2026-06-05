@@ -365,12 +365,12 @@ class SyncSurgery(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    audit_log_id    = Column(Uuid,       primary_key=True, default=uuid.uuid4)
-    user_id         = Column(Uuid,       ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
-    patient_id_hash = Column(String(64))
-    action_type     = Column(String(50), nullable=False)
-    target_table    = Column(String(50))
-    target_id       = Column(Uuid)
-    source_ip       = Column(INET)
-    result_code     = Column(String(20))
-    event_at        = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    audit_log_id = Column(Uuid,       primary_key=True, default=uuid.uuid4)
+    user_id      = Column(Uuid,       ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    patient_id   = Column(Uuid,       ForeignKey("patients.patient_id", ondelete="SET NULL"), nullable=True)
+    action_type  = Column(String(50), nullable=False)
+    target_table = Column(String(50))
+    target_id    = Column(Uuid)
+    source_ip    = Column(INET)
+    result_code  = Column(String(20))
+    event_at     = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
