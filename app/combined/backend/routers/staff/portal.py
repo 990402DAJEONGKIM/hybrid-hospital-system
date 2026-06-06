@@ -13,7 +13,7 @@ from core.security import get_client_ip, get_current_user, has_permission
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
-    AuditLog, Notification, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
+    AuditLog, Notification, Patient, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
     SyncEncounter, SyncPatient, SyncSurgery, SyncWard, User,
 )
 
@@ -46,9 +46,10 @@ def _record_audit(
 def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
     """예약 상태 변경 시 환자 이메일 알림 발송 + notifications 테이블 기록."""
     try:
-        patient = db.query(User).filter(User.user_id == appt.patient_user_id).first()
+        patient = db.query(Patient).filter(Patient.patient_id_hash == appt.patient_id_hash).first()
         if not patient:
             return
+        patient_user = db.query(User).filter(User.patient_id == patient.patient_id).first()
         type_name = appt.appt_type.type_name if appt.appt_type else None
         sent = send_appointment_notification(
             to_email  = patient.email,
@@ -60,7 +61,7 @@ def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
         )
         now = datetime.now(timezone.utc)
         db.add(Notification(
-            user_id        = patient.user_id,
+            user_id        = patient_user.user_id if patient_user else None,  # by 김다정, 2026-06-06
             appointment_id = appt.appointment_id,
             channel        = "email",
             status         = "sent" if sent else "failed",
@@ -80,7 +81,6 @@ def _appt_out(appt: Appointment) -> dict:
     t = appt.appt_type
     return {
         "appointment_id":        str(appt.appointment_id),
-        "patient_user_id":       str(appt.patient_user_id),
         "patient_id_hash":       appt.patient_id_hash,
         "type_code":             t.type_code if t else None,
         "type_name":             t.type_name if t else None,
@@ -635,11 +635,15 @@ def create_manual_appointment(
     if not patient:
         raise HTTPException(status_code=404, detail="해당 환자 정보를 찾을 수 없습니다.")
 
-    # 환자 포털 계정 조회 (없어도 예약 가능)
-    from models.db import User as UserModel
-    patient_user = db.query(UserModel).filter(
-        UserModel.patient_id_hash == body.patient_id_hash
+    # 환자 포털 계정 조회 (없어도 예약 가능) — by 김다정, 2026-06-06
+    portal_patient = db.query(Patient).filter(
+        Patient.patient_id_hash == body.patient_id_hash
     ).first()
+    patient_user = None
+    if portal_patient:
+        patient_user = db.query(User).filter(
+            User.patient_id == portal_patient.patient_id
+        ).first()
 
     appt_type = db.query(AppointmentType).filter(
         AppointmentType.type_code == body.type_code,
@@ -683,7 +687,6 @@ def create_manual_appointment(
     staff_user_id = uuid.UUID(current_user["sub"])
 
     appt = Appointment(
-        patient_user_id       = patient_user.user_id if patient_user else staff_user_id,
         patient_id_hash       = body.patient_id_hash,
         type_id               = appt_type.type_id,
         status_id             = pending_status.status_id,
@@ -712,11 +715,8 @@ def create_manual_appointment(
         request, appt.appointment_id,
     )
 
-    # 예약 완료 알림 생성
+    # 예약 완료 알림 생성 — by 김다정, 2026-06-06
     try:
-        patient_user = db.query(User).filter(
-            User.patient_id_hash == body.patient_id_hash
-        ).first()
         if patient_user:
             db.add(Notification(
                 user_id        = patient_user.user_id,

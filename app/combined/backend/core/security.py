@@ -1,4 +1,5 @@
 import os
+import uuid
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -157,8 +158,8 @@ def record_audit(
     from models.db import AuditLog
     try:
         db.add(AuditLog(
-            user_id         = user_id,
-            patient_id_hash = patient_id,
+            user_id    = user_id,
+            patient_id = uuid.UUID(str(patient_id)) if patient_id else None,
             action_type     = action_type,
             target_table    = target_table,
             target_id       = target_id,

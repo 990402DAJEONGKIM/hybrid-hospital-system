@@ -13,7 +13,7 @@ from core.security import get_current_user, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
-    Notification, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
+    Notification, Patient, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
     SyncEncounter, SyncPatient, SyncSurgery, SyncWard, User,
 )
 
@@ -27,12 +27,13 @@ router = APIRouter(prefix="/portal", tags=["patient-portal"])
 def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
     """예약 상태 변경 시 환자 이메일 알림 발송 + notifications 테이블 기록."""
     try:
-        patient = db.query(User).filter(User.user_id == appt.patient_user_id).first()
+        patient = db.query(Patient).filter(Patient.patient_id_hash == appt.patient_id_hash).first()
         if not patient:
             return
         if not patient.email:
-            logger.info("이메일 미등록 환자 — 알림 생략 (patient_user_id=%s)", appt.patient_user_id)
+            logger.info("이메일 미등록 환자 — 알림 생략 (patient_id_hash=%s)", appt.patient_id_hash)
             return
+        patient_user = db.query(User).filter(User.patient_id == patient.patient_id).first()
         type_name = appt.appt_type.type_name if appt.appt_type else None
         sent = send_appointment_notification(
             to_email  = patient.email,
@@ -44,7 +45,7 @@ def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
         )
         now = datetime.now(timezone.utc)
         db.add(Notification(
-            user_id        = patient.user_id,
+            user_id        = patient_user.user_id if patient_user else None,
             appointment_id = appt.appointment_id,
             channel        = "email",
             status         = "sent" if sent else "failed",
@@ -478,7 +479,6 @@ def create_appointment(
     patient_user_id = uuid_module.UUID(current_user["sub"])
 
     appt = Appointment(
-        patient_user_id       = patient_user_id,
         patient_id_hash       = pid,
         type_id               = appt_type.type_id,
         status_id             = pending_status.status_id,
@@ -504,7 +504,7 @@ def create_appointment(
 
     record_audit(
         db, action_type="APPOINTMENT_CREATE", result_code="201",
-        user_id=patient_user_id, patient_id_hash=pid,
+        user_id=patient_user_id, patient_id=pid,
         target_table="appointments", target_id=appt.appointment_id,
     )
     db.commit()
@@ -577,7 +577,7 @@ def update_appointment(
 
     record_audit(
         db, action_type="APPOINTMENT_UPDATE", result_code="200",
-        user_id=patient_user_id, patient_id_hash=pid,
+        user_id=patient_user_id, patient_id=pid,
         target_table="appointments", target_id=appt.appointment_id,
     )
     db.commit()
@@ -645,7 +645,7 @@ def cancel_appointment(
 
     record_audit(
         db, action_type="APPOINTMENT_CANCEL", result_code="200",
-        user_id=patient_user_id, patient_id_hash=pid,
+        user_id=patient_user_id, patient_id=pid,
         target_table="appointments", target_id=appt.appointment_id,
     )
     db.commit()

@@ -87,7 +87,7 @@ class User(Base):
     email                = Column(String(255), nullable=True, unique=True)
     password_hash        = Column(String(255), nullable=False)
     role_id              = Column(Integer,     ForeignKey("roles.role_id"), nullable=False)
-    patient_id_hash      = Column(String(64),  nullable=True)
+    patient_id           = Column(Uuid,       ForeignKey("patients.patient_id"), nullable=True)
     doctor_id            = Column(Uuid)
     is_active            = Column(Boolean,      nullable=False, default=True)
     failed_login_cnt     = Column(SmallInteger, nullable=False, default=0)
@@ -181,11 +181,28 @@ class AppointmentStatus(Base):
     sort_order  = Column(Integer,    nullable=False, default=0)
 
 
+class Patient(Base):
+    __tablename__ = "patients"
+
+    patient_id           = Column(Uuid,         primary_key=True, default=uuid.uuid4)
+    patient_name         = Column(String(100),  nullable=False)
+    national_id_encrypted = Column(Text,        nullable=False)
+    birth_date           = Column(Date,         nullable=False)
+    gender_code          = Column(String(1),    nullable=False)
+    phone_number         = Column(String(20),   nullable=False)
+    email                = Column(String(255))
+    address              = Column(Text)
+    created_at           = Column(DateTime,     nullable=False)
+    updated_at           = Column(DateTime,     nullable=False)
+    patient_id_hash      = Column(String(255),  nullable=False)
+    member_number        = Column(String(20))
+    internal_seq         = Column(String(20))
+
+
 class Appointment(Base):
     __tablename__ = "appointments"
 
     appointment_id        = Column(Uuid,        primary_key=True, default=uuid.uuid4)
-    patient_user_id       = Column(Uuid,        ForeignKey("users.user_id"), nullable=False)
     patient_id_hash       = Column(String(64),  ForeignKey("sync_patients.patient_id_hash"))
     type_id               = Column(Integer,     ForeignKey("appointment_types.type_id"), nullable=False)
     status_id             = Column(Integer,     ForeignKey("appointment_statuses.status_id"), nullable=False)
@@ -365,9 +382,9 @@ class SyncSurgery(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    audit_log_id    = Column(Uuid,       primary_key=True, default=uuid.uuid4)
-    user_id         = Column(Uuid,       ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
-    patient_id_hash = Column(String(64), nullable=True)
+    audit_log_id = Column(Uuid,       primary_key=True, default=uuid.uuid4)
+    user_id      = Column(Uuid,       ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    patient_id   = Column(Uuid,       nullable=True)
     action_type     = Column(String(50), nullable=False)
     target_table = Column(String(50))
     target_id    = Column(Uuid)
