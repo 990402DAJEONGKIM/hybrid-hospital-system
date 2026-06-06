@@ -5,5 +5,5 @@
 //   IP 직접 노출 제거 → 사설 CA 인증서 CN 과 일치하여 브라우저 경고 없음
 // API_KEY: NGINX가 proxy_set_header로 주입 — 프론트엔드 노출 불필요
 const BASE_URL        = '/api/staff';
-const ONPREM_BASE_URL = 'https://office.mzclinic.local';  // IP → 내부 도메인 — by 김다정, 2026-06-06
+const ONPREM_BASE_URL = 'https://office.mzclinic.local:8443';  // IP → 내부 도메인 — by 김다정, 2026-06-06
 const API_KEY         = '';
