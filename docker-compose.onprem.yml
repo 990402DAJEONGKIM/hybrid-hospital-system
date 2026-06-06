@@ -20,6 +20,11 @@ services:
       ALLOWED_HOSTS: "staff.mzclinic.cloud,admin.mzclinic.cloud,172.30.1.76,localhost"
       ALLOWED_ORIGINS: "https://staff.mzclinic.cloud,https://admin.mzclinic.cloud"
       TZ: Asia/Seoul
+    # nginx-onprem이 network_mode: service:api-onprem 으로 네트워크 공유 — by 김다정, 2026-06-06
+    # nginx가 80/443 을 listen하므로 ports는 api-onprem에 선언
+    ports:
+      - "80:80"
+      - "443:443"
     networks:
       - hospital-db_default
       - staff-internal
@@ -36,9 +41,6 @@ services:
       context: .
       dockerfile: docker/nginx-onprem/Dockerfile
     container_name: hospital-staff-nginx
-    ports:
-      - "80:80"
-      - "443:443"
     # Let's Encrypt 인증서 볼륨 마운트 — 기존 Dockerfile COPY 방식 대체 — by 김다정, 2026-06-06
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
