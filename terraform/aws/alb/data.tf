@@ -33,9 +33,9 @@ data "aws_subnets" "app" {
   }
 }
 
-# ACM 인증서 (patient.mzclinic.cloud)
+# ACM 인증서 (mzclinic.cloud 루트 도메인 — patient 서브도메인에서 통합)
 data "aws_acm_certificate" "patient" {
-  domain      = "patient.${var.base_domain}"
+  domain      = var.base_domain
   statuses    = ["ISSUED"]
   most_recent = true
 }

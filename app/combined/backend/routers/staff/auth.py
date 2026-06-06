@@ -370,8 +370,9 @@ def change_password(
     if pw_error:
         raise HTTPException(status_code=400, detail=pw_error)
 
-    user.password_hash       = hash_password(body.new_password)
-    user.password_changed_at = datetime.now(timezone.utc)
+    user.password_hash        = hash_password(body.new_password)
+    user.password_changed_at  = datetime.now(timezone.utc)
+    user.must_change_password = False
 
     # 비밀번호 변경 시 기존 세션 전체 폐기 (탈취된 토큰 무력화)
     db.query(SessionModel).filter(
