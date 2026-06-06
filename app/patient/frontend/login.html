@@ -74,8 +74,112 @@
 
     </div>
 
+    <!-- 의사 로그인 섹션 — by 김다정, 2026-06-06 -->
+    <!-- 의사가 mzclinic.cloud 에서 로그인 후 office.mzclinic.local 로 이동하는 진입점 -->
+    <div class="w-full max-w-md mt-4" id="staffSection" style="display:none;">
+        <div class="bg-white rounded-2xl p-6" style="border-top:3px solid #1d4ed8;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+            <h2 class="text-base font-bold text-gray-800 mb-1 flex items-center gap-2">
+                <i class="fas fa-shield-alt text-blue-700"></i> 직원 로그인
+            </h2>
+            <p class="text-xs text-gray-500 mb-3">의료진·관리자 전용입니다.</p>
+            <form id="staffLoginForm" class="space-y-3">
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-3 flex items-center text-gray-400"><i class="fas fa-id-card text-sm"></i></span>
+                    <input type="text" id="staffMemberNumber" required placeholder="회원번호"
+                        class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-700 outline-none bg-gray-50 text-sm">
+                </div>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-3 flex items-center text-gray-400"><i class="fas fa-lock text-sm"></i></span>
+                    <input type="password" id="staffPw" required
+                        class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-700 outline-none bg-gray-50 text-sm">
+                </div>
+                <div id="staffError" class="hidden p-2.5 bg-red-50 border border-red-300 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                    <i class="fas fa-exclamation-circle flex-shrink-0"></i>
+                    <span id="staffErrorMsg"></span>
+                </div>
+                <button type="submit" id="staffSubmitBtn"
+                    class="w-full text-white py-2.5 rounded-xl font-bold text-sm disabled:opacity-50"
+                    style="background:#1d3a6e;">
+                    <i class="fas fa-sign-in-alt mr-2"></i>직원 로그인
+                </button>
+            </form>
+
+            <!-- 로그인 성공 후 내부망 이동 버튼 — by 김다정, 2026-06-06 -->
+            <!-- 환자에게는 보이지 않으며 의사/간호사 로그인 성공 시에만 표시 -->
+            <div id="internalLinkBox" style="display:none;" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <p class="text-xs text-blue-700 mb-2 font-medium">
+                    <i class="fas fa-check-circle mr-1"></i>로그인 완료. 내부 시스템으로 이동하세요.
+                </p>
+                <a id="internalLinkBtn" href="#" target="_blank"
+                    class="block text-center text-white py-2 rounded-xl font-bold text-sm"
+                    style="background:#1d4ed8;">
+                    <i class="fas fa-hospital mr-2"></i>내부 진료 DB 바로가기
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 직원 로그인 토글 링크 — by 김다정, 2026-06-06 -->
+    <p class="text-center text-xs text-gray-400 mt-3">
+        직원이신가요?
+        <a href="#" id="toggleStaffSection" class="text-blue-500 font-medium hover:underline">직원 로그인</a>
+    </p>
+
     <script src="js/config.js"></script>
     <script>
+        // 직원 로그인 섹션 토글 — by 김다정, 2026-06-06
+        document.getElementById('toggleStaffSection').addEventListener('click', (e) => {
+            e.preventDefault();
+            const sec = document.getElementById('staffSection');
+            sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // 직원 로그인 처리 — by 김다정, 2026-06-06
+        // 1. AWS FastAPI /api/staff/auth/login 으로 인증
+        // 2. 응답 body의 access_token 을 localStorage 에 저장
+        // 3. office.mzclinic.local 로 URL 해시(#access_token=...)에 토큰을 담아 이동
+        //    → URL 해시는 서버 로그에 남지 않아 query param 보다 안전
+        document.getElementById('staffLoginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const memberNumber = document.getElementById('staffMemberNumber').value.trim();
+            const pw           = document.getElementById('staffPw').value;
+            const errorBox     = document.getElementById('staffError');
+            const errorMsg     = document.getElementById('staffErrorMsg');
+            const submitBtn    = document.getElementById('staffSubmitBtn');
+
+            errorBox.classList.add('hidden');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>확인 중...';
+
+            try {
+                const res = await fetch('/api/staff/auth/login', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                    body: JSON.stringify({ member_number: memberNumber, password: pw }),
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    // 토큰을 URL 해시에 담아 내부 페이지로 이동 — by 김다정, 2026-06-06
+                    const token = data.access_token;
+                    const internalUrl = `https://office.mzclinic.local/#access_token=${encodeURIComponent(token)}`;
+                    document.getElementById('internalLinkBtn').href = internalUrl;
+                    document.getElementById('internalLinkBox').style.display = 'block';
+                    document.getElementById('staffLoginForm').style.display = 'none';
+                } else {
+                    errorMsg.textContent = data.detail || '로그인 중 오류가 발생했습니다.';
+                    errorBox.classList.remove('hidden');
+                }
+            } catch {
+                errorMsg.textContent = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.';
+                errorBox.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>직원 로그인';
+            }
+        });
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 

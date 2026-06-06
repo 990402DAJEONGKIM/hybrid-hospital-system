@@ -1,3 +1,19 @@
+// ── mzclinic.cloud → office.mzclinic.local JWT 해시 수신 — by 김다정, 2026-06-06 ──
+// 의사가 AWS 외부 페이지에서 로그인 후 URL 해시(#access_token=...)에 JWT를 담아 이동.
+// 해시는 서버로 전송되지 않아 로그에 노출되지 않음.
+// 수신한 토큰을 httpOnly 불가 대신 이 도메인 쿠키로 설정 후 해시 제거.
+(function _ingestHashToken() {
+    if (!window.location.hash) return;
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const token  = params.get('access_token');
+    if (!token) return;
+    // SameSite=Strict: 외부에서 직접 쿠키 전송 차단, Secure: HTTPS 전용
+    const maxAge = 1800; // ACCESS_TOKEN_EXPIRE_SECONDS 와 동일
+    document.cookie = `access_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; secure; samesite=strict`;
+    // 해시 제거 — 브라우저 히스토리에 토큰 남지 않도록 — by 김다정, 2026-06-06
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+})();
+
 // ── 인증 기준 URL ─────────────────────────────────────────
 // ONPREM_BASE_URL 설정 시: 온프레미스에서 로그인·인증 처리 (병원 내부망)
 // 미설정 시: AWS 백엔드로 폴백
