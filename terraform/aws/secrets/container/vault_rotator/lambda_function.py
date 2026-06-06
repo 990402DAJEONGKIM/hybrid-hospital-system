@@ -160,10 +160,20 @@ def handle_jwt_secret_rotation(vault_addr: str, token: str):
     )
     logger.info("JWT Secret 조회 완료 (길이: %d)", len(jwt_value))
 
+    # 기존 jwt_secret_key를 previous로 보존 — by 김다정, 2026-06-06
+    # 키 교체 타이밍에 AWS(신 키)와 온프레미스(구 키) 불일치 구간 발생 방지
+    # previous에 구 키를 저장해두면 decode_access_token이 current→previous 순으로
+    # 재시도하므로 교체 직후에도 기존 토큰 검증 유지 (grace period)
+    current = vault_get_kv(vault_addr, token, VAULT_AUTH_SECRET_PATH)
+    old_jwt = current.get("jwt_secret_key", "")
+    if old_jwt:
+        logger.info("기존 jwt_secret_key → previous 보존 (길이: %d)", len(old_jwt))
+
     vault_update_kv(vault_addr, token, VAULT_AUTH_SECRET_PATH, {
-        "jwt_secret_key": jwt_value
+        "jwt_secret_key":          jwt_value,
+        "jwt_secret_key_previous": old_jwt,   # 구 키 보존 — by 김다정, 2026-06-06
     })
-    logger.info("Vault %s jwt_secret_key 동기화 완료", VAULT_AUTH_SECRET_PATH)
+    logger.info("Vault %s jwt_secret_key / jwt_secret_key_previous 동기화 완료", VAULT_AUTH_SECRET_PATH)
 
 
 def lambda_handler(event, context):
