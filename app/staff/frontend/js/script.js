@@ -67,7 +67,7 @@ function _toOnpremPath(path) {
     return path;
 }
 
-// ── 온프레미스 API 호출 (민감 데이터 — 병원 내부망 전용) ────
+// ── 온프레미스 API 호출 (민감 데이터 — 병원 내부망 전용) — by 김다정, 2026-06-06 ──
 // 환자 실명·진료기록·EMR 등 1등급 데이터는 이 함수로 온프레미스를 직접 호출.
 // ONPREM_BASE_URL이 빈 문자열이면 병원 내부망 접속 안내 오류를 반환.
 async function onpremApiCall(path, options = {}) {
@@ -83,6 +83,7 @@ async function onpremApiCall(path, options = {}) {
             ...options,
         });
         if (res.status === 401) { logout(); return null; }
+        if (res.status === 403) { _handle403(); return null; }
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
             throw new Error(body.detail || `온프레미스 API 오류 (${res.status})`);
@@ -108,6 +109,28 @@ async function _refreshTokens() {
         // return res.ok;
         return true;
     } catch { return false; }
+}
+
+// ── 접근 거부 처리 — by 김다정, 2026-06-06 ───────────────────
+// 403 응답 시 날것의 브라우저 에러 대신 오버레이로 안내 후 2.5초 뒤 홈 이동
+function _handle403() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+        'position:fixed;inset:0;background:rgba(0,0,0,.45);',
+        'z-index:9999;display:flex;align-items:center;justify-content:center;',
+    ].join('');
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:40px 48px;text-align:center;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+            <div style="width:56px;height:56px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#dc2626" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+            </div>
+            <h2 style="font-size:18px;font-weight:700;color:#111827;margin-bottom:8px;">접근 권한이 없습니다</h2>
+            <p style="font-size:14px;color:#6b7280;line-height:1.6;">이 페이지에 대한 접근 권한이 없습니다.<br>잠시 후 메인 화면으로 이동합니다.</p>
+        </div>`;
+    document.body.appendChild(overlay);
+    setTimeout(() => { window.location.href = '/'; }, 2500);
 }
 
 // ── 세션 만료 경고 배너 ──────────────────────────────────────
@@ -167,6 +190,7 @@ async function apiCall(path, options = {}) {
             headers,
         });
     }
+    if (res.status === 403) { _handle403(); return null; }
     return res;
 }
 
@@ -181,6 +205,19 @@ async function logout() {
         }
     } catch {}
     window.location.href = 'login.html';
+}
+
+// ── 페이지별 역할 진입 제한 — by 김다정, 2026-06-06 ──────────
+// 사용법: const me = await requireRole(['doctor']);
+// 허용되지 않은 role 접근 시 _handle403() 호출 → 오버레이 표시
+async function requireRole(allowedRoles) {
+    const me = await requireLogin();
+    if (!me) return null;
+    if (!allowedRoles.includes(me.role)) {
+        _handle403();
+        return null;
+    }
+    return me;
 }
 
 async function requireLogin() {

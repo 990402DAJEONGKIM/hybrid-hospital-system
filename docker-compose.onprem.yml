@@ -11,9 +11,14 @@ services:
       JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS}
       API_KEY: ${API_KEY}
       COOKIE_SECURE: "true"
-      DB_SSLMODE: disable
-      ALLOWED_HOSTS: "172.30.1.76,localhost"
-      ALLOWED_ORIGINS: "http://172.30.1.76"
+      # DB SSL 모드 — by 김다정, 2026-06-06
+      # ISMS-P 2.7.1: prefer = TLS 시도(Docker 내부망 fallback 허용)
+      # PostgreSQL SSL 인증서 구성 완료 후 require 로 상향 권장
+      DB_SSLMODE: prefer
+      # staff/admin 온프레미스 도메인만 허용 — by 김다정, 2026-06-06
+      # mzclinic.cloud(환자 포털)는 온프레미스 API를 호출하지 않으므로 제거 (CORS 범위 최소화)
+      ALLOWED_HOSTS: "staff.mzclinic.cloud,admin.mzclinic.cloud,172.30.1.76,localhost"
+      ALLOWED_ORIGINS: "https://staff.mzclinic.cloud,https://admin.mzclinic.cloud"
       TZ: Asia/Seoul
     networks:
       - hospital-db_default
@@ -33,6 +38,10 @@ services:
     container_name: hospital-staff-nginx
     ports:
       - "80:80"
+      - "443:443"
+    # Let's Encrypt 인증서 볼륨 마운트 — 기존 Dockerfile COPY 방식 대체 — by 김다정, 2026-06-06
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     network_mode: "service:api-onprem"
     depends_on:
       api-onprem:

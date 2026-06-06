@@ -33,7 +33,7 @@ data "aws_subnets" "app" {
   }
 }
 
-# ACM 인증서 (mzclinic.cloud 루트 도메인 — patient 서브도메인에서 통합)
+# ACM 인증서 조회 도메인: patient.mzclinic.cloud → var.base_domain(루트)으로 변경 — by 김다정, 2026-06-06
 data "aws_acm_certificate" "patient" {
   domain      = var.base_domain
   statuses    = ["ISSUED"]
