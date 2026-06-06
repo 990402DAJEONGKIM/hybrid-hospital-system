@@ -204,8 +204,8 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             db = SessionLocal()
             try:
                 db.add(AuditLog(
-                    user_id         = uuid.UUID(user_id_str) if user_id_str else None,
-                    patient_id_hash = payload.get("pid"),
+                    user_id    = uuid.UUID(user_id_str) if user_id_str else None,
+                    patient_id = uuid.UUID(payload.get("pid")) if payload.get("pid") else None,
                     action_type     = action_type,
                     target_table    = _get_target_table(request.url.path),
                     target_id       = uuid.UUID(target_id_str) if target_id_str else None,
