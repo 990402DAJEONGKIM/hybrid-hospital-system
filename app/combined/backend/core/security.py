@@ -155,17 +155,32 @@ def record_audit(
     source_ip:    Optional[str] = None,
 ) -> None:
     """audit_logs 테이블에 단일 행 삽입. 예외가 발생해도 메인 트랜잭션을 끊지 않는다."""
+    import os
     from models.db import AuditLog
+    db_mode = os.getenv("DB_MODE", "cloud")
     try:
-        db.add(AuditLog(
-            user_id    = user_id,
-            patient_id = uuid.UUID(str(patient_id)) if patient_id else None,
-            action_type     = action_type,
-            target_table    = target_table,
-            target_id       = target_id,
-            source_ip       = source_ip,
-            result_code     = result_code,
-        ))
+        # DB_MODE 분기: 클라우드는 patient_id_hash, 온프레미스는 patient_id UUID — by 김다정, 2026-06-06
+        if db_mode == "onprem":
+            log = AuditLog(
+                user_id      = user_id,
+                patient_id   = uuid.UUID(str(patient_id)) if patient_id else None,
+                action_type  = action_type,
+                target_table = target_table,
+                target_id    = target_id,
+                source_ip    = source_ip,
+                result_code  = result_code,
+            )
+        else:
+            log = AuditLog(
+                user_id         = user_id,
+                patient_id_hash = str(patient_id) if patient_id else None,
+                action_type     = action_type,
+                target_table    = target_table,
+                target_id       = target_id,
+                source_ip       = source_ip,
+                result_code     = result_code,
+            )
+        db.add(log)
     except Exception:
         pass  # 감사 로그 실패가 비즈니스 흐름을 막으면 안 됨
 

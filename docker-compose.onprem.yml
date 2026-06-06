@@ -15,6 +15,7 @@ services:
       # ISMS-P 2.7.1: prefer = TLS 시도(Docker 내부망 fallback 허용)
       # PostgreSQL SSL 인증서 구성 완료 후 require 로 상향 권장
       DB_SSLMODE: prefer
+      DB_MODE: onprem  # 온프레미스 스키마 분기 — by 김다정, 2026-06-06
       # office.mzclinic.local 추가 — by 김다정, 2026-06-06
       # 의사 PC hosts 파일에서 172.30.1.76 으로 해석되는 내부 전용 도메인
       # mzclinic.cloud(AWS)에서 발급한 JWT 를 들고 진입하므로 CORS 허용 필요
