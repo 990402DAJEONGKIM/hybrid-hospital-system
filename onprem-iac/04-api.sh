@@ -108,21 +108,28 @@ log "[3/6] SSL 인증서 준비"
 
 SSL_DIR="/opt/hospital/nginx/ssl"
 mkdir -p "$SSL_DIR"
-CERT_FILE="${SSL_DIR}/fullchain.pem"
-KEY_FILE="${SSL_DIR}/privkey.pem"
 
-if [[ -f "$CERT_FILE" && -f "$KEY_FILE" ]]; then
-    warn "기존 인증서 존재 — 스킵"
+# ── office.mzclinic.local 사설 CA 인증서 생성 — by 김다정, 2026-06-06 ──────────
+# .local TLD 는 Let's Encrypt 발급 불가 → openssl 로 사설 CA 인증서 생성
+# 의사 PC OS 에 이 인증서(fullchain.pem)를 신뢰 루트로 설치해야 브라우저 경고 없음
+LOCAL_DOMAIN="office.mzclinic.local"
+LOCAL_SSL_DIR="${SSL_DIR}/${LOCAL_DOMAIN}"
+LOCAL_CERT_FILE="${LOCAL_SSL_DIR}/fullchain.pem"
+LOCAL_KEY_FILE="${LOCAL_SSL_DIR}/privkey.pem"
+
+mkdir -p "$LOCAL_SSL_DIR"
+if [[ -f "$LOCAL_CERT_FILE" && -f "$LOCAL_KEY_FILE" ]]; then
+    warn "${LOCAL_DOMAIN} 인증서 존재 — 스킵"
 else
-    warn "Self-signed 인증서 생성 (운영 전환 시 Let's Encrypt로 교체 필요)"
-    openssl req -x509 -nodes -days 365 \
+    log "${LOCAL_DOMAIN} 사설 CA 인증서 생성"
+    openssl req -x509 -nodes -days 3650 \
         -newkey rsa:2048 \
-        -keyout "$KEY_FILE" \
-        -out "$CERT_FILE" \
-        -subj "/CN=${DOMAIN}/O=Hospital/C=KR" \
-        -addext "subjectAltName=DNS:${DOMAIN},DNS:*.${DOMAIN},IP:${ONPREM_PRIVATE_IP}"
-    chmod 600 "$KEY_FILE"
-    log "Self-signed 인증서 생성 완료"
+        -keyout "$LOCAL_KEY_FILE" \
+        -out "$LOCAL_CERT_FILE" \
+        -subj "/CN=${LOCAL_DOMAIN}/O=Hospital Internal CA/C=KR" \
+        -addext "subjectAltName=DNS:${LOCAL_DOMAIN},IP:${ONPREM_PRIVATE_IP}"
+    chmod 600 "$LOCAL_KEY_FILE"
+    log "${LOCAL_DOMAIN} 사설 CA 인증서 생성 완료 → 의사 PC OS 에 ${LOCAL_CERT_FILE} 설치 필요"
 fi
 
 # ── 4. nginx 설정 작성 ───────────────────────────────────────────────────────
@@ -222,7 +229,7 @@ log "이미지 빌드 완료"
 log "[6/6] 준비 상태 검증"
 echo "────────────────────────────────────────"
 [[ -f "$API_ENV_PATH" ]]                     && echo -e "  ${GREEN}✔${NC} .env" || echo -e "  ${RED}✘${NC} .env"
-[[ -f "$CERT_FILE" ]]                        && echo -e "  ${GREEN}✔${NC} SSL 인증서" || echo -e "  ${RED}✘${NC} SSL 인증서"
+[[ -f "$LOCAL_CERT_FILE" ]]                  && echo -e "  ${GREEN}✔${NC} 사설 CA 인증서 (${LOCAL_DOMAIN})" || echo -e "  ${RED}✘${NC} 사설 CA 인증서 (${LOCAL_DOMAIN})"
 [[ -f "${NGINX_CONF_DIR}/hospital.conf" ]]   && echo -e "  ${GREEN}✔${NC} nginx 설정" || echo -e "  ${RED}✘${NC} nginx 설정"
 docker image inspect deidentification-api:latest &>/dev/null \
     && echo -e "  ${GREEN}✔${NC} Docker 이미지" || echo -e "  ${RED}✘${NC} Docker 이미지"
