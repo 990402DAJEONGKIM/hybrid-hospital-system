@@ -200,18 +200,34 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         # ── DB 저장 (AuditLog 테이블) ──────────────────────────
         try:
+            import os
             from models.db import AuditLog
             db = SessionLocal()
+            db_mode = os.getenv("DB_MODE", "cloud")
             try:
-                db.add(AuditLog(
-                    user_id    = uuid.UUID(user_id_str) if user_id_str else None,
-                    patient_id = uuid.UUID(payload.get("pid")) if payload.get("pid") else None,
-                    action_type     = action_type,
-                    target_table    = _get_target_table(request.url.path),
-                    target_id       = uuid.UUID(target_id_str) if target_id_str else None,
-                    source_ip       = client_ip,
-                    result_code     = result_code,
-                ))
+                # DB_MODE 분기: 클라우드는 patient_id_hash, 온프레미스는 patient_id UUID — by 김다정, 2026-06-06
+                pid = payload.get("pid")
+                if db_mode == "onprem":
+                    log = AuditLog(
+                        user_id      = uuid.UUID(user_id_str) if user_id_str else None,
+                        patient_id   = uuid.UUID(pid) if pid else None,
+                        action_type  = action_type,
+                        target_table = _get_target_table(request.url.path),
+                        target_id    = uuid.UUID(target_id_str) if target_id_str else None,
+                        source_ip    = client_ip,
+                        result_code  = result_code,
+                    )
+                else:
+                    log = AuditLog(
+                        user_id         = uuid.UUID(user_id_str) if user_id_str else None,
+                        patient_id_hash = pid,
+                        action_type     = action_type,
+                        target_table    = _get_target_table(request.url.path),
+                        target_id       = uuid.UUID(target_id_str) if target_id_str else None,
+                        source_ip       = client_ip,
+                        result_code     = result_code,
+                    )
+                db.add(log)
                 db.commit()
             finally:
                 db.close()

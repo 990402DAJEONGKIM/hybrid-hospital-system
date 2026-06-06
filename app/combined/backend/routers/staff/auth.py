@@ -79,12 +79,20 @@ def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result:
 
 
 def _build_token_payload(user: User) -> dict:
+    import os
     payload = {
         "sub":  str(user.user_id),
-        "role": user.role_ref.role_code,   # role_code from roles table (ISMS-P 2.5.4)
+        "role": user.role_ref.role_code,
     }
-    if user.patient_id:
-        payload["pid"] = str(user.patient_id)
+    # DB_MODE 분기: 클라우드는 patient_id_hash, 온프레미스는 patient_id UUID — by 김다정, 2026-06-06
+    if os.getenv("DB_MODE", "cloud") == "onprem":
+        pid = getattr(user, "patient_id", None)
+        if pid:
+            payload["pid"] = str(pid)
+    else:
+        pid = getattr(user, "patient_id_hash", None)
+        if pid:
+            payload["pid"] = pid
     if user.doctor_id:
         payload["did"] = str(user.doctor_id)
     return payload

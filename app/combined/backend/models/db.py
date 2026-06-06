@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -9,6 +10,11 @@ from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import relationship
 
 from core.database import Base
+
+# DB_MODE: cloud(AWS RDS) vs onprem — by 김다정, 2026-06-06
+# cloud : users.patient_id_hash varchar, audit_logs.patient_id_hash, appointments.patient_user_id
+# onprem: users.patient_id UUID FK,      audit_logs.patient_id UUID,  appointments에 patient_user_id 없음
+DB_MODE = os.getenv("DB_MODE", "cloud")
 
 
 # ============================================================
@@ -87,7 +93,9 @@ class User(Base):
     email                = Column(String(255), nullable=True, unique=True)
     password_hash        = Column(String(255), nullable=False)
     role_id              = Column(Integer,     ForeignKey("roles.role_id"), nullable=False)
-    patient_id           = Column(Uuid,       ForeignKey("patients.patient_id"), nullable=True)
+    # DB_MODE 분기: 클라우드는 patient_id_hash varchar, 온프레미스는 patient_id UUID FK — by 김다정, 2026-06-06
+    patient_id_hash = Column(String(64), nullable=True) if DB_MODE == "cloud" else None
+    patient_id      = Column(Uuid, ForeignKey("patients.patient_id"), nullable=True) if DB_MODE == "onprem" else None
     doctor_id            = Column(Uuid)
     is_active            = Column(Boolean,      nullable=False, default=True)
     failed_login_cnt     = Column(SmallInteger, nullable=False, default=0)
@@ -202,8 +210,10 @@ class Patient(Base):
 class Appointment(Base):
     __tablename__ = "appointments"
 
-    appointment_id        = Column(Uuid,        primary_key=True, default=uuid.uuid4)
-    patient_id_hash       = Column(String(64),  ForeignKey("sync_patients.patient_id_hash"))
+    appointment_id  = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    # cloud RDS 에는 patient_user_id (NOT NULL) 존재, 온프레미스에는 없음 — by 김다정, 2026-06-06
+    patient_user_id = Column(Uuid, ForeignKey("users.user_id"), nullable=False) if DB_MODE == "cloud" else None
+    patient_id_hash = Column(String(64), ForeignKey("sync_patients.patient_id_hash"))
     type_id               = Column(Integer,     ForeignKey("appointment_types.type_id"), nullable=False)
     status_id             = Column(Integer,     ForeignKey("appointment_statuses.status_id"), nullable=False)
     department_code       = Column(String(20),  ForeignKey("sync_departments.department_code"))
@@ -382,9 +392,11 @@ class SyncSurgery(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    audit_log_id = Column(Uuid,       primary_key=True, default=uuid.uuid4)
-    user_id      = Column(Uuid,       ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
-    patient_id   = Column(Uuid,       nullable=True)
+    audit_log_id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id      = Column(Uuid, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    # DB_MODE 분기: 클라우드는 patient_id_hash varchar, 온프레미스는 patient_id UUID — by 김다정, 2026-06-06
+    patient_id_hash = Column(String(64), nullable=True) if DB_MODE == "cloud" else None
+    patient_id      = Column(Uuid,       nullable=True) if DB_MODE == "onprem"  else None
     action_type     = Column(String(50), nullable=False)
     target_table = Column(String(50))
     target_id    = Column(Uuid)

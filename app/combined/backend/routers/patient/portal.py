@@ -478,7 +478,9 @@ def create_appointment(
     pending_status  = _get_pending_status(db)
     patient_user_id = uuid_module.UUID(current_user["sub"])
 
-    appt = Appointment(
+    import os
+    # cloud RDS 는 patient_user_id NOT NULL — by 김다정, 2026-06-06
+    appt_kwargs = dict(
         patient_id_hash       = pid,
         type_id               = appt_type.type_id,
         status_id             = pending_status.status_id,
@@ -490,6 +492,9 @@ def create_appointment(
         appointment_time      = appt_time,
         notes                 = body.notes,
     )
+    if os.getenv("DB_MODE", "cloud") == "cloud":
+        appt_kwargs["patient_user_id"] = patient_user_id
+    appt = Appointment(**appt_kwargs)
     db.add(appt)
     db.flush()
 
