@@ -27,7 +27,7 @@ resource "cloudflare_record" "patient" {
   zone_id = var.cloudflare_zone_id
   name    = "patient"
   type    = "CNAME"
-  content = "aws-hospital-alb-622767637.ap-south-2.elb.amazonaws.com"
+  content = "aws-hospital-alb-142886199.ap-south-2.elb.amazonaws.com"
   ttl     = 60
   proxied = false
 }
@@ -39,7 +39,7 @@ resource "cloudflare_record" "wazuh" {
   zone_id = var.cloudflare_zone_id
   name    = "wazuh"
   type    = "CNAME"
-  content = "aws-hospital-alb-622767637.ap-south-2.elb.amazonaws.com"
+  content = "aws-hospital-alb-142886199.ap-south-2.elb.amazonaws.com"
   ttl     = 60
   proxied = false
 }
@@ -49,7 +49,7 @@ resource "cloudflare_record" "grafana" {
   zone_id = var.cloudflare_zone_id
   name    = "grafana"
   type    = "CNAME"
-  content = "aws-hospital-alb-622767637.ap-south-2.elb.amazonaws.com"
+  content = "aws-hospital-alb-142886199.ap-south-2.elb.amazonaws.com"
   ttl     = 60
   proxied = false
 }
