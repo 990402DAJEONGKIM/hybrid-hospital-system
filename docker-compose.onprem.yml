@@ -43,6 +43,8 @@ services:
       context: .
       dockerfile: docker/nginx-onprem/Dockerfile
     container_name: hospital-staff-nginx
+    environment:
+      API_KEY: ${API_KEY}
     # 사설 CA 인증서 — 04-api.sh 로 생성, 두 도메인 모두 이 경로에서 로드 — by 김다정, 2026-06-06
     volumes:
       - /opt/hospital/nginx/ssl:/opt/hospital/nginx/ssl:ro
