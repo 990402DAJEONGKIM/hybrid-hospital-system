@@ -7,8 +7,7 @@
 #                 WAF IP 화이트리스트로 staff/admin은 병원 내부 IP만 허용
 #
 # staff-alb 라우팅: by 김다정 20260604 (admin 통합)
-#   - patient.mzclinic.cloud → ECS hospital TG (인터넷 공개)
-#   - staff.mzclinic.cloud   → ECS hospital TG (WAF: 병원 IP 제한, 의료진+관리자 통합)
+#   - mzclinic.cloud         → ECS hospital TG (인터넷 공개, 환자/의료진 통합 도메인)
 #   - wazuh.mzclinic.cloud   → Wazuh EC2 TG
 #   - grafana.mzclinic.cloud → Grafana TG
 #   - 그 외 host             → 403 고정 응답
@@ -96,7 +95,7 @@ resource "aws_security_group" "staff_alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "aws-staff-alb-sg" }
+  tags = { Name = "aws-hospital-alb-sg" }
 }
 
 
@@ -337,7 +336,7 @@ resource "aws_lb_listener" "staff_http" {
   }
 }
 
-# HTTPS 리스너 — 기본 인증서: patient.mzclinic.cloud (staff 온프레미스 이전)
+# HTTPS 리스너 — 기본 인증서: mzclinic.cloud 루트 (환자/의료진 통합 도메인)
 # 매칭되지 않는 host → 403 고정 응답
 resource "aws_lb_listener" "staff_https" {
   load_balancer_arn = aws_lb.staff.arn
@@ -356,7 +355,7 @@ resource "aws_lb_listener" "staff_https" {
   }
 }
 
-# SNI 인증서 — patient.mzclinic.cloud by 김다정 20260604
+# SNI 인증서 — mzclinic.cloud 루트 도메인 (환자/의료진 통합)
 resource "aws_lb_listener_certificate" "patient" {
   listener_arn    = aws_lb_listener.staff_https.arn
   certificate_arn = data.aws_acm_certificate.patient.arn
@@ -382,8 +381,8 @@ resource "aws_lb_listener_certificate" "aws-grafana-cert" {
 
 
 # ─────────────────────────────────────────────────────────
-# 라우팅 규칙 — patient.mzclinic.cloud → hospital TG
-# by 김다정 20260604
+# 라우팅 규칙 — mzclinic.cloud 루트 → hospital TG (환자/의료진 통합)
+# patient.mzclinic.cloud → mzclinic.cloud 변경 by 김다정
 # ─────────────────────────────────────────────────────────
 resource "aws_lb_listener_rule" "patient" {
   listener_arn = aws_lb_listener.staff_https.arn
@@ -391,7 +390,7 @@ resource "aws_lb_listener_rule" "patient" {
 
   condition {
     host_header {
-      values = ["patient.${var.base_domain}"]
+      values = [var.base_domain]
     }
   }
 
@@ -460,14 +459,14 @@ data "aws_route53_zone" "main" {
   private_zone = false
 }
 
-# 변경: patient-alb → staff-alb by 김다정 20260604
+# 루트 도메인 → staff-alb (환자/의료진 통합 도메인으로 변경)
 resource "aws_route53_record" "patient" {
   zone_id = data.aws_route53_zone.main.zone_id
-  name    = "patient.${var.base_domain}"
+  name    = var.base_domain
   type    = "A"
 
   alias {
-    name                   = aws_lb.staff.dns_name  # 변경: patient-alb → staff-alb by 김다정 20260604
+    name                   = aws_lb.staff.dns_name
     zone_id                = aws_lb.staff.zone_id
     evaluate_target_health = true
   }

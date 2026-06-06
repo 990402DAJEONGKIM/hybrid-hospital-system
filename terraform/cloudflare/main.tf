@@ -23,9 +23,9 @@ variable "cloudflare_zone_id" {
 
 # ── 서비스 레코드 ──────────────────────────────────────────────────────────────
 
-resource "cloudflare_record" "patient" {
+resource "cloudflare_record" "root" {
   zone_id = var.cloudflare_zone_id
-  name    = "patient"
+  name    = "@"
   type    = "CNAME"
   content = "aws-hospital-alb-142886199.ap-south-2.elb.amazonaws.com"
   ttl     = 60
@@ -98,14 +98,27 @@ resource "cloudflare_record" "dkim_3" {
 
 # ── ACM 검증 레코드 ───────────────────────────────────────────────────────────
 
-resource "cloudflare_record" "acm_patient" {
-  zone_id = var.cloudflare_zone_id
-  name    = "_4bc3c3471e77e06d31865fe6cbd0485b.patient"
-  type    = "CNAME"
-  content = "_690e85673eed6ad22e768019941816d1.jkddzztszm.acm-validations.aws"
-  ttl     = 60
-  proxied = false
-}
+# mzclinic.cloud 루트 도메인 ACM 인증서 DNS 검증 레코드
+# !! terraform apply(TC-aws-ACM) 실행 후 aws_acm_certificate.patient.domain_validation_options 에서
+#    실제 name/value를 조회하여 아래 값을 채워야 합니다 !!
+# resource "cloudflare_record" "acm_root" {
+#   zone_id = var.cloudflare_zone_id
+#   name    = "<_XXXXX>"          # ACM 검증 CNAME 이름 (서브도메인 없이 루트 레벨)
+#   type    = "CNAME"
+#   content = "<_YYYY.jkddzztszm.acm-validations.aws>"
+#   ttl     = 60
+#   proxied = false
+# }
+
+# 이전 patient.mzclinic.cloud ACM 검증 레코드 — 루트 도메인 인증서로 교체
+# resource "cloudflare_record" "acm_patient" {
+#   zone_id = var.cloudflare_zone_id
+#   name    = "_4bc3c3471e77e06d31865fe6cbd0485b.patient"
+#   type    = "CNAME"
+#   content = "_690e85673eed6ad22e768019941816d1.jkddzztszm.acm-validations.aws"
+#   ttl     = 60
+#   proxied = false
+# }
 
 # staff ACM 검증 레코드 삭제 — staff 인증서 제거에 따라 불필요
 # resource "cloudflare_record" "acm_staff" { ... }

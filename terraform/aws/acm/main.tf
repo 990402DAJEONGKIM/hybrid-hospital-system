@@ -20,7 +20,7 @@ data "aws_route53_zone" "main" {
 }
 
 locals {
-  patient_domain = "${var.patient_subdomain}.${var.base_domain}"
+  patient_domain = var.base_domain                              # mzclinic.cloud 루트 도메인 (patient 서브도메인 → 루트로 통합)
   # staff_domain 삭제 — 직원 포털 온프레미스 이전
   wazuh_domain   = "${var.wazuh_subdomain}.${var.base_domain}"
   grafana_domain = "${var.grafana_subdomain}.${var.base_domain}"
@@ -28,7 +28,8 @@ locals {
 
 
 # ─────────────────────────────────────────────────────────
-# 1. 환자 포털 인증서 (Public ALB용)
+# 1. 통합 포털 인증서 (mzclinic.cloud 루트 도메인)
+#    환자/의료진 단일 도메인 통합 — patient.mzclinic.cloud → mzclinic.cloud
 # ─────────────────────────────────────────────────────────
 resource "aws_acm_certificate" "patient" {
   domain_name       = local.patient_domain
@@ -38,7 +39,7 @@ resource "aws_acm_certificate" "patient" {
     create_before_destroy = true
   }
 
-  tags = { Name = "aws-acm-patient-portal" }
+  tags = { Name = "aws-acm-root-portal" }
 }
 
 resource "aws_route53_record" "patient_validation" {
