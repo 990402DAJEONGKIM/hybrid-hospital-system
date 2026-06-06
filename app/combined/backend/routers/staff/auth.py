@@ -40,6 +40,9 @@ class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
 
+class SetTokenRequest(BaseModel):
+    token: str
+
 
 # ── 비밀번호 정책 검증 (ISMS-P 2.5.3) ──────────────────────
 
@@ -299,6 +302,28 @@ def refresh(
     })
     _set_auth_cookies(response, new_access_token, new_refresh_token)
     return response
+
+
+@router.post("/set-token", status_code=204)
+def set_token(
+    body:     SetTokenRequest,
+    response: Response,
+    _:        str = Depends(verify_api_key),
+):
+    """mzclinic.cloud 에서 발급된 JWT 를 온프레미스 HTTP-only 쿠키로 설정. — by 김다정, 2026-06-06
+    토큰 검증 실패 시 401 반환 → 브라우저가 일반 로그인 화면을 표시.
+    """
+    from core.security import decode_access_token
+    decode_access_token(body.token)  # 유효하지 않으면 401 raise
+    response.set_cookie(
+        key      = "access_token",
+        value    = body.token,
+        httponly = True,
+        secure   = COOKIE_SECURE,
+        samesite = "strict",
+        max_age  = ACCESS_TOKEN_EXPIRE_SECONDS,
+        path     = "/",
+    )
 
 
 @router.post("/logout", status_code=204)

@@ -96,6 +96,33 @@
 
     <script src="js/config.js"></script>
     <script>
+        // URL 해시 자동 로그인 — by 김다정, 2026-06-06
+        // mzclinic.cloud 에서 직원 로그인 후 "내부 진료 DB 바로가기" 버튼으로 진입 시
+        // URL 해시(#access_token=...)에서 토큰을 꺼내 /auth/set-token 으로 전달
+        // 서버가 HTTP-only 쿠키를 설정한 뒤 index.html 로 이동
+        (async () => {
+            const hash = window.location.hash;
+            if (!hash.startsWith('#access_token=')) return;
+
+            const token = decodeURIComponent(hash.slice('#access_token='.length));
+            history.replaceState(null, '', window.location.pathname);  // 주소창에서 토큰 제거
+
+            try {
+                const res = await fetch('/auth/set-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token }),
+                });
+                if (res.ok) {
+                    window.location.replace('/index.html');
+                } else {
+                    console.warn('토큰 검증 실패, 일반 로그인 화면을 표시합니다.');
+                }
+            } catch {
+                console.warn('set-token 요청 실패, 일반 로그인 화면을 표시합니다.');
+            }
+        })();
+
         // 인증 기준 URL:
         //   ONPREM_BASE_URL 설정 시 → 온프레미스 로그인 (병원 내부망)
         //   미설정 시              → AWS 로그인 (외부 접속 폴백)
