@@ -32,7 +32,9 @@ app = FastAPI(
     openapi_url=None,
 )
 
-Base.metadata.create_all(bind=engine)
+# 온프레미스는 테이블이 이미 존재하고 hospital_user에 CREATE 권한이 없으므로 DDL 건너뜀 — by 김다정, 2026-06-06
+if os.getenv("DB_MODE", "cloud") == "cloud":
+    Base.metadata.create_all(bind=engine)
 
 app.add_middleware(SessionExpiryMiddleware)
 app.add_middleware(

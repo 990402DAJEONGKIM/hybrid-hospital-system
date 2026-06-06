@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from datetime import date as date_type, datetime, timezone
 from typing import Optional
@@ -686,7 +687,8 @@ def create_manual_appointment(
 
     staff_user_id = uuid.UUID(current_user["sub"])
 
-    appt = Appointment(
+    # DB_MODE 분기: 클라우드 RDS는 patient_user_id(NOT NULL) 포함 — by 김다정, 2026-06-06
+    appt_kwargs = dict(
         patient_id_hash       = body.patient_id_hash,
         type_id               = appt_type.type_id,
         status_id             = pending_status.status_id,
@@ -698,6 +700,9 @@ def create_manual_appointment(
         appointment_time      = appt_time,
         notes                 = body.notes,
     )
+    if os.getenv("DB_MODE", "cloud") == "cloud":
+        appt_kwargs["patient_user_id"] = patient_user.user_id if patient_user else staff_user_id
+    appt = Appointment(**appt_kwargs)
     db.add(appt)
     db.flush()
 

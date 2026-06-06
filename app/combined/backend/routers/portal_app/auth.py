@@ -55,9 +55,17 @@ def validate_password(password: str) -> str | None:
 
 
 def _build_token_payload(user: User) -> dict:
+    import os
     payload = {"sub": str(user.user_id), "role": user.role_ref.role_code}
-    if user.patient_id_hash:
-        payload["pid"] = user.patient_id_hash
+    # DB_MODE 분기: 온프레미스는 patient_id UUID, 클라우드는 patient_id_hash varchar — by 김다정, 2026-06-06
+    if os.getenv("DB_MODE", "cloud") == "onprem":
+        pid = getattr(user, "patient_id", None)
+        if pid:
+            payload["pid"] = str(pid)
+    else:
+        pid = getattr(user, "patient_id_hash", None)
+        if pid:
+            payload["pid"] = pid
     if user.doctor_id:
         payload["did"] = str(user.doctor_id)
     return payload
@@ -223,8 +231,10 @@ def me(
         "password_expired":    password_expired,
         "password_expire_days": PASSWORD_EXPIRE_DAYS,
     }
-    if user.patient_id_hash:
-        result["patient_id_hash"] = user.patient_id_hash
+    # DB_MODE 분기: 클라우드만 patient_id_hash 반환 — by 김다정, 2026-06-06
+    pid_hash = getattr(user, "patient_id_hash", None)
+    if pid_hash:
+        result["patient_id_hash"] = pid_hash
     return result
 
 
