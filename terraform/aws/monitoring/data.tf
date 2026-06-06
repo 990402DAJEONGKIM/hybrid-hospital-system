@@ -17,6 +17,7 @@ data "aws_subnet" "aws-app-sub-2b" {
 
 
 # staff-alb 보안그룹 참조 (Grafana 인그레스 허용용)
+# SG 태그명 aws-staff-alb-sg → aws-hospital-alb-sg 로 수정 — by 김다정, 2026-06-06
 data "aws_security_group" "staff_alb" {
   filter {
     name   = "tag:Name"

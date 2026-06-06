@@ -157,13 +157,13 @@ def record_audit(
     from models.db import AuditLog
     try:
         db.add(AuditLog(
-            user_id      = user_id,
-            patient_id   = patient_id,
-            action_type  = action_type,
-            target_table = target_table,
-            target_id    = target_id,
-            source_ip    = source_ip,
-            result_code  = result_code,
+            user_id         = user_id,
+            patient_id_hash = patient_id,
+            action_type     = action_type,
+            target_table    = target_table,
+            target_id       = target_id,
+            source_ip       = source_ip,
+            result_code     = result_code,
         ))
     except Exception:
         pass  # 감사 로그 실패가 비즈니스 흐름을 막으면 안 됨

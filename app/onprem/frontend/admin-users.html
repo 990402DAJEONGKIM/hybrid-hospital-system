@@ -49,7 +49,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>이메일</th>
+                            <th>회원번호 / 이메일</th>
                             <th>역할</th>
                             <th>상태</th>
                             <th>최근 로그인</th>
@@ -70,9 +70,15 @@
                 <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
                 <h3 class="modal-title" id="modalTitle">계정 생성</h3>
 
+                <div id="memberNumberGroup">
+                    <div class="form-group">
+                        <label>회원번호 (로그인 ID) <span style="color:#ef4444;">*</span></label>
+                        <input type="text" id="uMemberNumber" class="form-control" placeholder="예: 20240001">
+                    </div>
+                </div>
                 <div class="form-group">
-                    <label>이메일 <span style="color:#ef4444;">*</span></label>
-                    <input type="email" id="uEmail" class="form-control" placeholder="staff@clinic.local">
+                    <label>이메일</label>
+                    <input type="email" id="uEmail" class="form-control" placeholder="staff@clinic.local (선택)">
                 </div>
                 <div id="pwGroup">
                     <div class="form-group">
@@ -128,7 +134,7 @@
 
         tbody.innerHTML = data.items.map(u => `
             <tr>
-                <td><strong>${u.email}</strong></td>
+                <td><strong>${u.member_number}</strong><br><span style="font-size:11px;color:#9ca3af;">${u.email || '-'}</span></td>
                 <td><span class="badge ${u.role === 'admin' ? 'badge-blue' : u.role === 'doctor' ? 'badge-green' : 'badge-gray'}">${ROLE_LABEL[u.role]||u.role}</span></td>
                 <td><span class="badge ${u.is_active ? 'badge-green' : 'badge-red'}">${u.is_active ? '활성' : '비활성'}</span></td>
                 <td>${formatDateTime(u.last_login_at)}</td>
@@ -147,10 +153,12 @@
     function openCreate() {
         _editUserId = null;
         document.getElementById('modalTitle').textContent = '계정 생성';
+        document.getElementById('uMemberNumber').value = '';
         document.getElementById('uEmail').value    = '';
         document.getElementById('uPw').value       = '';
         document.getElementById('uRole').value     = 'nurse';
         document.getElementById('uDoctorId').value = '';
+        document.getElementById('memberNumberGroup').style.display = '';
         document.getElementById('pwGroup').style.display = '';
         document.getElementById('doctorIdGroup').style.display = 'none';
         document.getElementById('modalStatus').style.display   = 'none';
@@ -162,6 +170,7 @@
         document.getElementById('modalTitle').textContent = '계정 수정';
         document.getElementById('uEmail').value    = email;
         document.getElementById('uRole').value     = role;
+        document.getElementById('memberNumberGroup').style.display = 'none';
         document.getElementById('pwGroup').style.display        = 'none';
         document.getElementById('doctorIdGroup').style.display  = role === 'doctor' ? '' : 'none';
         document.getElementById('modalStatus').style.display    = 'none';
@@ -177,7 +186,7 @@
         btn.disabled = true;
 
         const body = {
-            email:     document.getElementById('uEmail').value.trim(),
+            email:     document.getElementById('uEmail').value.trim() || null,
             role:      document.getElementById('uRole').value,
             doctor_id: document.getElementById('uDoctorId').value.trim() || null,
         };
@@ -186,6 +195,9 @@
         if (_editUserId) {
             res = await apiCall(`/admin/users/${_editUserId}`, { method: 'PATCH', body: JSON.stringify(body) });
         } else {
+            const memberNumber = document.getElementById('uMemberNumber').value.trim();
+            if (!memberNumber) { setStatus('modalStatus', '회원번호를 입력해주세요.', false); btn.disabled = false; return; }
+            body.member_number = memberNumber;
             body.password = document.getElementById('uPw').value;
             res = await apiCall('/admin/users', { method: 'POST', body: JSON.stringify(body) });
         }

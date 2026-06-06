@@ -129,7 +129,10 @@ def update_user(
     if body.role is not None:
         if body.role not in ALLOWED_ROLES:
             raise HTTPException(status_code=400, detail=f"허용 역할: {', '.join(ALLOWED_ROLES)}")
-        user.role = body.role
+        new_role = db.query(Role).filter(Role.role_code == body.role).first()
+        if not new_role:
+            raise HTTPException(status_code=400, detail=f"역할을 찾을 수 없습니다: {body.role}")
+        user.role_id = new_role.role_id
 
     if body.is_active is not None:
         user.is_active = body.is_active

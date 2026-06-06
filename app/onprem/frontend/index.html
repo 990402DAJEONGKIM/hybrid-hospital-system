@@ -72,7 +72,7 @@
         if (!me) return;
 
         document.getElementById('welcomeMsg').textContent =
-            `${me.email} 님, 오늘도 안전한 진료 환경을 위해 감사드립니다.`;
+            `${me.email || me.member_number} 님, 오늘도 안전한 진료 환경을 위해 감사드립니다.`;
 
         const cards = ROLE_CARDS[me.role] || [];
         document.getElementById('dashCards').innerHTML = cards.map(c => `

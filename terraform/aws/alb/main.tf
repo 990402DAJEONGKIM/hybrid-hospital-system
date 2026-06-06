@@ -382,7 +382,7 @@ resource "aws_lb_listener_certificate" "aws-grafana-cert" {
 
 # ─────────────────────────────────────────────────────────
 # 라우팅 규칙 — mzclinic.cloud 루트 → hospital TG (환자/의료진 통합)
-# patient.mzclinic.cloud → mzclinic.cloud 변경 by 김다정
+# patient.mzclinic.cloud → mzclinic.cloud 루트 도메인으로 변경 — by 김다정, 2026-06-06
 # ─────────────────────────────────────────────────────────
 resource "aws_lb_listener_rule" "patient" {
   listener_arn = aws_lb_listener.staff_https.arn
