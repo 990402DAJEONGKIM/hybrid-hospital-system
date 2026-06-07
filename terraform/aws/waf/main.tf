@@ -138,9 +138,15 @@ resource "aws_wafv2_web_acl" "staff" {
             count {}
           }
         }
+        # 추가: GenericRFI_BODY도 /api/check-api를 오탐 차단 → count 전환 (260607)
+        rule_action_override {
+          name = "GenericRFI_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
-
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "CommonRuleSet"
