@@ -307,10 +307,36 @@ def create_patient(
     current_user: dict      = Depends(_require_roles("nurse", "admin")),
     db:           DbSession = Depends(get_db),
 ):
-    """온프레미스 EMR에 신규 환자 등록 — 병원 내부망에서 직접 접근 필요.
-    (RDS sync_patients 동기화는 온프레미스 VPN 동기화 배치로 처리)
-    """
-    raise _501
+    import hashlib, secrets
+    from datetime import date as date_type
+    from models.db import Patient
+
+    patient_id      = uuid.uuid4()
+    patient_id_hash = hashlib.sha256(str(patient_id).encode()).hexdigest()
+    year            = str(date_type.today().year)
+    member_number   = f"P-{year}-{secrets.token_hex(3).upper()}"
+
+    patient = Patient(
+        patient_id            = patient_id,
+        patient_id_hash       = patient_id_hash,
+        patient_name          = body.patient_name,
+        birth_date            = body.birth_date,
+        gender_code           = body.gender_code,
+        phone_number          = body.phone_number,
+        national_id_encrypted = getattr(body, "national_id_encrypted", ""),
+        member_number         = member_number,
+        created_at            = datetime.now(),
+        updated_at            = datetime.now(),
+    )
+    db.add(patient)
+    db.commit()
+    db.refresh(patient)
+    return {
+        "patient_id":       str(patient.patient_id),
+        "patient_id_hash":  patient.patient_id_hash,
+        "member_number":    patient.member_number,
+        "patient_name":     patient.patient_name,
+    }
 
     # ── 아래는 온프레미스 응답 수신 후 RDS 동기화 코드 (미사용, 참조 유지) ──
     pid_hash = None

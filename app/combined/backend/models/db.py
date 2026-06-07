@@ -408,6 +408,71 @@ class OnpremDoctor(Base):
     updated_at      = Column(DateTime(timezone=False))
 
 
+class OnpremEncounter(Base):
+    __tablename__ = "encounters"
+
+    encounter_id     = Column(Uuid,        primary_key=True)
+    patient_id       = Column(Uuid)
+    encounter_type   = Column(String(30))
+    department_code  = Column(String(20))
+    doctor_id        = Column(Uuid)
+    visit_datetime   = Column(DateTime(timezone=False))
+    chief_complaint  = Column(Text)
+    status_code      = Column(String(20))
+    created_at       = Column(DateTime(timezone=False))
+    updated_at       = Column(DateTime(timezone=False))
+
+
+class OnpremDiagnosis(Base):
+    __tablename__ = "diagnoses"
+
+    diagnosis_id    = Column(Uuid,        primary_key=True)
+    encounter_id    = Column(Uuid)
+    patient_id      = Column(Uuid)
+    diagnosis_code  = Column(String(20))
+    diagnosis_text  = Column(Text)
+    is_primary      = Column(Boolean)
+    diagnosed_at    = Column(DateTime(timezone=False))
+    updated_at      = Column(DateTime(timezone=False))
+
+
+class OnpremAllergy(Base):
+    __tablename__ = "allergies"
+
+    allergy_id    = Column(Uuid,        primary_key=True)
+    patient_id    = Column(Uuid)
+    allergy_code  = Column(String(50))
+    allergy_name  = Column(Text)
+    severity_code = Column(String(20))
+    is_active     = Column(Boolean)
+    recorded_at   = Column(DateTime(timezone=False))
+    updated_at    = Column(DateTime(timezone=False))
+
+
+class OnpremSurgery(Base):
+    __tablename__ = "surgery_histories"
+
+    surgery_history_id = Column(Uuid, primary_key=True)
+    patient_id         = Column(Uuid)
+    surgery_code       = Column(String(50))
+    surgery_name       = Column(Text)
+    surgery_date       = Column(Date)
+    note               = Column(Text)
+    updated_at         = Column(DateTime(timezone=False))
+
+
+class OnpremClinicalNote(Base):
+    __tablename__ = "clinical_notes"
+
+    note_id      = Column(Uuid,        primary_key=True)
+    encounter_id = Column(Uuid)
+    patient_id   = Column(Uuid)
+    author_type  = Column(String(20))
+    note_type    = Column(String(30))
+    note_text    = Column(Text)
+    created_at   = Column(DateTime(timezone=False))
+
+
 # ============================================================
 # 감사 로그 — ISMS-P 2.9.1
 # ============================================================
