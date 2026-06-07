@@ -54,6 +54,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadPage('admin-users.html');
         return;
     }
+    if (me.role === 'doctor') {
+        loadPage('doctor-schedule.html');
+        return;
+    }
     renderGenericDashboard(me);
 });
 

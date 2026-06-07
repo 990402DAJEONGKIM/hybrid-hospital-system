@@ -38,13 +38,14 @@ const _ONPREM_PATH_MAP = [
     ['/emr/nurse/patients/',                   '/portal/patients/'],      // verify, diagnoses 등
     ['/emr/nurse/encounters/',                 '/portal/encounters/'],    // discharge 등
     // ── /emr/doctor/* ─────────────────────────────────────
-    ['/emr/doctor/patients/search',            '/portal/doctor/patients/search'],
-    ['/emr/doctor/patients/',                  '/portal/doctor/patients/'],
-    ['/emr/doctor/patients',                   '/portal/doctor/patients'],       // 목록 조회 (슬래시 없음)
-    ['/emr/doctor/encounters',                 '/portal/doctor/encounters'],
+    ['/emr/doctor/patients/search',            '/staff/emr/doctor/patients/search'],
+    ['/emr/doctor/patients/',                  '/staff/emr/doctor/patients/'],
+    ['/emr/doctor/patients',                   '/staff/emr/doctor/patients'],    // 목록 조회 (슬래시 없음)
+    ['/emr/doctor/encounters',                 '/staff/emr/doctor/encounters'],
     // ── /emr/* (기타 공통) ─────────────────────────────────
     ['/emr/departments',                       '/portal/departments'],
     ['/emr/encounters',                        '/portal/encounters'],
+    ['/emr/patients/by-hash/',                 '/portal/patients/'],  // 구체적인 것 먼저
     ['/emr/patients/',                         '/portal/patients/'],
     // ── /portal/doctor/staff/* → /portal/* ────────────────
     ['/portal/doctor/staff/departments',       '/portal/departments'],
@@ -65,14 +66,14 @@ function _toOnpremPath(path) {
     const query = qIdx >= 0 ? path.slice(qIdx) : '';
 
     // ── 정규식이 필요한 특수 케이스 ───────────────────────────
-    // /portal/doctor/patients/${hash} (단건 hash 조회) → /portal/patients/by-hash/${hash}
+    // /portal/doctor/patients/${hash} (단건 hash 조회) → /portal/patients/${hash}
     const byHashM = base.match(/^\/portal\/doctor\/patients\/([^/]+)$/);
     if (byHashM && byHashM[1] !== 'search') {
-        return `/portal/patients/by-hash/${byHashM[1]}${query}`;
+        return `/portal/patients/${byHashM[1]}${query}`;
     }
-    // /portal/doctor/appointments/today → /portal/my/encounters (의사 당일 진료 목록)
+    // /portal/doctor/appointments/today → staff 백엔드 RDS 예약 목록 (mode=today|week 지원)
     if (base === '/portal/doctor/appointments/today') {
-        return '/portal/doctor/schedule' + query;
+        return '/staff/portal/doctor/appointments/today' + query;
     }
 
     // ── 문자열 prefix 치환 (순서 중요: 구체적인 것 먼저) ─────

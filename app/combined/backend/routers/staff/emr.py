@@ -14,12 +14,15 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db
 from core.security import get_client_ip, get_current_user
 from models.db import (
-    Appointment, AppointmentHistory, AppointmentStatus,
+    Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
+    OnpremAllergy, OnpremClinicalNote, OnpremDiagnosis, OnpremEncounter, OnpremSurgery,
+    Patient,
     SyncDiagnosis, SyncEncounter, SyncPatient, SyncWard, User,
 )
 
@@ -437,32 +440,65 @@ def doctor_list_patients(
     current_user: dict          = Depends(_require_roles("doctor")),
     db:           DbSession     = Depends(get_db),
 ):
-    raise _501
+    did_str = current_user.get("did")
+    today   = date_type.today()
 
-    # ── 아래는 AWS RDS next_appt 보강 코드 (미사용, 참조 유지) ──
-    items = []
-    if items:
-        hashes = [it["patient_id_hash"] for it in items if it.get("patient_id_hash")]
-        if hashes:
-            from sqlalchemy import func
-            today = date_type.today()
-            next_appts = (
-                db.query(
-                    Appointment.patient_id_hash,
-                    func.min(Appointment.appointment_date).label("next_date"),
-                )
-                .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
-                .filter(
-                    Appointment.patient_id_hash.in_(hashes),
-                    Appointment.appointment_date >= today,
-                    AppointmentStatus.is_terminal == False,
-                )
-                .group_by(Appointment.patient_id_hash)
-                .all()
+    if did_str:
+        try:
+            did     = uuid.UUID(did_str)
+            appt_q  = db.query(Appointment.patient_id_hash).filter(
+                Appointment.doctor_id == did,
+                Appointment.patient_id_hash.isnot(None),
             )
-            next_map = {h: str(d) for h, d in next_appts}
-            for it in items:
-                it["next_appt"] = next_map.get(it.get("patient_id_hash"))
+            if tab == "inpatient":
+                appt_q = appt_q.join(
+                    AppointmentType, Appointment.type_id == AppointmentType.type_id
+                ).filter(AppointmentType.type_code.ilike("%inpatient%"))
+            hashes = list({r.patient_id_hash for r in appt_q.all()})
+        except (ValueError, Exception):
+            hashes = []
+    else:
+        hashes = []
+
+    pq = db.query(Patient).filter(Patient.patient_id_hash.in_(hashes))
+    if q:
+        pq = pq.filter(or_(
+            Patient.patient_name.ilike(f"%{q}%"),
+            Patient.member_number.ilike(f"%{q}%"),
+        ))
+
+    total    = pq.count()
+    patients = pq.order_by(Patient.patient_name).offset(offset).limit(limit).all()
+
+    p_hashes = [p.patient_id_hash for p in patients]
+    last_visits = {h: str(d) for h, d in db.query(
+        Appointment.patient_id_hash,
+        func.max(Appointment.appointment_date),
+    ).filter(
+        Appointment.patient_id_hash.in_(p_hashes),
+        Appointment.appointment_date <= today,
+    ).group_by(Appointment.patient_id_hash).all()}
+
+    next_appts = {h: str(d) for h, d in db.query(
+        Appointment.patient_id_hash,
+        func.min(Appointment.appointment_date),
+    ).filter(
+        Appointment.patient_id_hash.in_(p_hashes),
+        Appointment.appointment_date > today,
+    ).group_by(Appointment.patient_id_hash).all()}
+
+    return {
+        "items": [{
+            "patient_id":    p.patient_id_hash,
+            "patient_name":  p.patient_name,
+            "member_number": p.member_number or "-",
+            "birth_date":    str(p.birth_date) if p.birth_date else None,
+            "gender_code":   p.gender_code,
+            "last_visit":    last_visits.get(p.patient_id_hash),
+            "next_appt":     next_appts.get(p.patient_id_hash),
+        } for p in patients],
+        "total": total,
+    }
 
 
 # ============================================================
@@ -496,28 +532,90 @@ def doctor_create_encounter(
     current_user: dict      = Depends(_require_roles("doctor")),
     db:           DbSession = Depends(get_db),
 ):
-    raise _501
+    patient = db.query(Patient).filter(Patient.patient_id_hash == body.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
 
-    # ── 아래는 AWS sync 코드 (미사용, 참조 유지) ──
-    _sync_encounter_to_aws(db, {})
+    did = current_user.get("did")
+    doctor_uuid = uuid.UUID(did) if did else None
+    now = datetime.now()
+
+    enc = OnpremEncounter(
+        encounter_id    = uuid.uuid4(),
+        patient_id      = patient.patient_id,
+        encounter_type  = "outpatient_return",
+        department_code = body.department_code or "GEN",
+        doctor_id       = doctor_uuid,
+        visit_datetime  = now,
+        chief_complaint = body.chief_complaint,
+        status_code     = "open",
+        created_at      = now,
+        updated_at      = now,
+    )
+    db.add(enc)
+    db.commit()
+    db.refresh(enc)
+    return {"encounter_id": str(enc.encounter_id), "status_code": enc.status_code}
 
 
 @router.post("/doctor/encounters/{encounter_id}/notes", status_code=201)
 def doctor_create_note(
     encounter_id: str,
     body:         SoapNoteCreate,
-    current_user: dict = Depends(_require_roles("doctor")),
+    current_user: dict      = Depends(_require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
 ):
-    raise _501
+    try:
+        enc_uuid = uuid.UUID(encounter_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 진료 ID입니다.")
+    enc = db.query(OnpremEncounter).filter(OnpremEncounter.encounter_id == enc_uuid).first()
+    if not enc:
+        raise HTTPException(status_code=404, detail="진료 기록을 찾을 수 없습니다.")
+    note = OnpremClinicalNote(
+        note_id      = uuid.uuid4(),
+        encounter_id = enc_uuid,
+        patient_id   = enc.patient_id,
+        author_type  = "doctor",
+        note_type    = body.note_type,
+        note_text    = body.note_text,
+        created_at   = datetime.now(),
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return {"note_id": str(note.note_id)}
 
 
 @router.post("/doctor/encounters/{encounter_id}/diagnoses", status_code=201)
 def doctor_create_diagnosis(
     encounter_id: str,
     body:         DoctorDiagnosisCreate,
-    current_user: dict = Depends(_require_roles("doctor")),
+    current_user: dict      = Depends(_require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
 ):
-    raise _501
+    try:
+        enc_uuid = uuid.UUID(encounter_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 진료 ID입니다.")
+    enc = db.query(OnpremEncounter).filter(OnpremEncounter.encounter_id == enc_uuid).first()
+    if not enc:
+        raise HTTPException(status_code=404, detail="진료 기록을 찾을 수 없습니다.")
+    now  = datetime.now()
+    diag = OnpremDiagnosis(
+        diagnosis_id   = uuid.uuid4(),
+        encounter_id   = enc_uuid,
+        patient_id     = enc.patient_id,
+        diagnosis_code = body.diagnosis_code,
+        diagnosis_text = body.diagnosis_text,
+        is_primary     = body.is_primary,
+        diagnosed_at   = now,
+        updated_at     = now,
+    )
+    db.add(diag)
+    db.commit()
+    db.refresh(diag)
+    return {"diagnosis_id": str(diag.diagnosis_id)}
 
 
 @router.patch("/doctor/encounters/{encounter_id}")
@@ -527,34 +625,130 @@ def doctor_update_encounter(
     current_user: dict      = Depends(_require_roles("doctor")),
     db:           DbSession = Depends(get_db),
 ):
-    raise _501
-
-    # ── 아래는 AWS sync 코드 (미사용, 참조 유지) ──
-    _sync_encounter_to_aws(db, {})
+    try:
+        enc_uuid = uuid.UUID(encounter_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 진료 ID입니다.")
+    enc = db.query(OnpremEncounter).filter(OnpremEncounter.encounter_id == enc_uuid).first()
+    if not enc:
+        raise HTTPException(status_code=404, detail="진료 기록을 찾을 수 없습니다.")
+    enc.status_code = body.status_code
+    enc.updated_at  = datetime.now()
+    db.commit()
+    return {"encounter_id": encounter_id, "status_code": body.status_code}
 
 
 @router.get("/doctor/patients/search")
 def doctor_search_patients(
-    q:            str  = Query(..., min_length=1),
-    current_user: dict = Depends(_require_roles("doctor")),
+    q:            str       = Query(..., min_length=1),
+    current_user: dict      = Depends(_require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
 ):
-    raise _501
+    patients = db.query(Patient).filter(or_(
+        Patient.patient_name.ilike(f"%{q}%"),
+        Patient.member_number.ilike(f"%{q}%"),
+    )).limit(20).all()
+    return [{"patient_id": p.patient_id_hash, "patient_name": p.patient_name,
+             "member_number": p.member_number, "birth_date": str(p.birth_date) if p.birth_date else None,
+             "gender_code": p.gender_code} for p in patients]
 
 
 @router.get("/doctor/patients/{patient_id}/emr")
 def doctor_get_emr(
     patient_id:   str,
-    current_user: dict = Depends(_require_roles("doctor")),
+    current_user: dict      = Depends(_require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
 ):
-    raise _501
+    patient = db.query(Patient).filter(Patient.patient_id_hash == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
+    pid = patient.patient_id
+    encounters = db.query(OnpremEncounter).filter(
+        OnpremEncounter.patient_id == pid
+    ).order_by(OnpremEncounter.visit_datetime.desc()).all()
+    diagnoses = db.query(OnpremDiagnosis).filter(
+        OnpremDiagnosis.patient_id == pid
+    ).order_by(OnpremDiagnosis.diagnosed_at.desc()).all()
+    allergies = db.query(OnpremAllergy).filter(
+        OnpremAllergy.patient_id == pid,
+        OnpremAllergy.is_active == True,
+    ).all()
+    notes = db.query(OnpremClinicalNote).filter(
+        OnpremClinicalNote.patient_id == pid
+    ).order_by(OnpremClinicalNote.created_at.desc()).all()
+    surgeries = db.query(OnpremSurgery).filter(
+        OnpremSurgery.patient_id == pid
+    ).order_by(OnpremSurgery.surgery_date.desc()).all()
+    return {
+        "patient": {
+            "patient_id_hash": patient.patient_id_hash,
+            "patient_name":    patient.patient_name,
+            "member_number":   patient.member_number,
+            "birth_date":      str(patient.birth_date) if patient.birth_date else None,
+            "gender_code":     patient.gender_code,
+            "phone_number":    patient.phone_number,
+        },
+        "encounters": [{
+            "encounter_id":    str(e.encounter_id),
+            "encounter_type":  e.encounter_type,
+            "department_code": e.department_code,
+            "doctor_id":       str(e.doctor_id) if e.doctor_id else None,
+            "visit_datetime":  e.visit_datetime.isoformat() if e.visit_datetime else None,
+            "status_code":     e.status_code,
+        } for e in encounters],
+        "diagnoses": [{
+            "diagnosis_id":   str(d.diagnosis_id),
+            "encounter_id":   str(d.encounter_id) if d.encounter_id else None,
+            "diagnosis_code": d.diagnosis_code,
+            "diagnosis_text": d.diagnosis_text,
+            "is_primary":     d.is_primary,
+        } for d in diagnoses],
+        "allergies": [{
+            "allergy_id":   str(a.allergy_id),
+            "allergy_name": a.allergy_name,
+            "severity_code": a.severity_code,
+        } for a in allergies],
+        "clinical_notes": [{
+            "note_id":      str(n.note_id),
+            "encounter_id": str(n.encounter_id) if n.encounter_id else None,
+            "note_type":    n.note_type,
+            "note_text":    n.note_text,
+            "created_at":   n.created_at.isoformat() if n.created_at else None,
+        } for n in notes],
+        "surgeries": [{
+            "surgery_id":   str(s.surgery_history_id),
+            "surgery_name": s.surgery_name,
+            "surgery_date": str(s.surgery_date) if s.surgery_date else None,
+        } for s in surgeries],
+    }
 
 
 @router.get("/doctor/patients/{patient_id}/encounters/latest")
 def doctor_get_latest_encounter(
     patient_id:   str,
-    current_user: dict = Depends(_require_roles("doctor")),
+    current_user: dict      = Depends(_require_roles("doctor")),
+    db:           DbSession = Depends(get_db),
 ):
-    raise _501
+    patient = db.query(Patient).filter(Patient.patient_id_hash == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
+    enc = db.query(OnpremEncounter).filter(
+        OnpremEncounter.patient_id == patient.patient_id
+    ).order_by(OnpremEncounter.visit_datetime.desc()).first()
+    if not enc:
+        raise HTTPException(status_code=404, detail="이전 진료 기록이 없습니다.")
+    notes = db.query(OnpremClinicalNote).filter(
+        OnpremClinicalNote.encounter_id == enc.encounter_id
+    ).all()
+    diagnoses = db.query(OnpremDiagnosis).filter(
+        OnpremDiagnosis.encounter_id == enc.encounter_id
+    ).all()
+    return {
+        "encounter_id": str(enc.encounter_id),
+        "notes":        [{"note_type": n.note_type, "note_text": n.note_text} for n in notes],
+        "diagnoses":    [{"diagnosis_code": d.diagnosis_code, "diagnosis_text": d.diagnosis_text,
+                          "is_primary": d.is_primary} for d in diagnoses],
+    }
 
 
 # ============================================================
