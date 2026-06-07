@@ -20,7 +20,7 @@ data "aws_subnet" "aws-app-sub-2b" {
 data "aws_security_group" "staff_alb" {
   filter {
     name   = "tag:Name"
-    values = ["aws-staff-alb-sg"]
+    values = ["aws-hospital-alb-sg"]
   }
 }
 
