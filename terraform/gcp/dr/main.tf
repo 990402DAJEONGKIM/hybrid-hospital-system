@@ -53,16 +53,6 @@ resource "google_secret_manager_secret" "jwt_secret" {
 }
 
 
-# Slack webhook 시크릿 (TC 변수 평문 제거 — startup 스크립트가 런타임에 읽음)
-resource "google_secret_manager_secret" "slack_webhook" {
-  secret_id = "gcp-dr-slack-webhook"
-
-  replication {
-    auto {}
-  }
-
-  depends_on = [google_project_service.secretmanager]
-}
 
 resource "google_secret_manager_secret" "api_key" {
   secret_id = var.api_key_secret_name
