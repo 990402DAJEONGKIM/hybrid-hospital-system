@@ -109,10 +109,10 @@ log "[3/6] SSL 인증서 준비"
 SSL_DIR="/opt/hospital/nginx/ssl"
 mkdir -p "$SSL_DIR"
 
-# ── office.mzclinic.local 사설 CA 인증서 생성 — by 김다정, 2026-06-06 ──────────
-# .local TLD 는 Let's Encrypt 발급 불가 → openssl 로 사설 CA 인증서 생성
+# ── staff.mzclinic.cloud 사설 CA 인증서 생성 — by 김다정, 2026-06-06 ──────────
+# hosts 파일 기반 내부 도메인 → Let's Encrypt 발급 불가 → openssl 로 사설 CA 인증서 생성
 # 의사 PC OS 에 이 인증서(fullchain.pem)를 신뢰 루트로 설치해야 브라우저 경고 없음
-LOCAL_DOMAIN="office.mzclinic.local"
+LOCAL_DOMAIN="staff.mzclinic.cloud"
 LOCAL_SSL_DIR="${SSL_DIR}/${LOCAL_DOMAIN}"
 LOCAL_CERT_FILE="${LOCAL_SSL_DIR}/fullchain.pem"
 LOCAL_KEY_FILE="${LOCAL_SSL_DIR}/privkey.pem"

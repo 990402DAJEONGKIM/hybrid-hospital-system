@@ -222,7 +222,7 @@ def login(
     ).isoformat()
 
     # access_token을 응답 body에도 포함 — by 김다정, 2026-06-06
-    # mzclinic.cloud(AWS)에서 로그인 후 office.mzclinic.local(온프레미스)로 이동 시
+    # mzclinic.cloud(AWS)에서 로그인 후 staff.mzclinic.cloud(온프레미스)로 이동 시
     # 서로 다른 도메인이라 쿠키 공유 불가 → JS가 토큰을 읽어 URL 해시로 전달하는 방식 사용
     response = JSONResponse({
         "token_type":              "bearer",
@@ -236,7 +236,7 @@ def login(
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     # domain 미설정 — by 김다정, 2026-06-06
-    # office.mzclinic.local 은 mzclinic.cloud 와 완전히 다른 도메인이므로
+    # staff.mzclinic.cloud 은 mzclinic.cloud 와 완전히 다른 도메인이므로
     # 쿠키 공유 불가. 크로스 도메인 이동은 응답 body의 access_token + URL 해시 방식 사용.
     response.set_cookie(
         key="access_token",

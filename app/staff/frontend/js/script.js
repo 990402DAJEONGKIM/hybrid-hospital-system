@@ -1,4 +1,4 @@
-// ── mzclinic.cloud → office.mzclinic.local JWT 해시 수신 — by 김다정, 2026-06-06 ──
+// ── mzclinic.cloud → staff.mzclinic.cloud JWT 해시 수신 — by 김다정, 2026-06-06 ──
 // 의사가 AWS 외부 페이지에서 로그인 후 URL 해시(#access_token=...)에 JWT를 담아 이동.
 // 해시는 서버로 전송되지 않아 로그에 노출되지 않음.
 // 수신한 토큰을 httpOnly 불가 대신 이 도메인 쿠키로 설정 후 해시 제거.

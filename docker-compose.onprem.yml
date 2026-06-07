@@ -16,12 +16,12 @@ services:
       # PostgreSQL SSL 인증서 구성 완료 후 require 로 상향 권장
       DB_SSLMODE: prefer
       DB_MODE: onprem  # 온프레미스 스키마 분기 — by 김다정, 2026-06-06
-      # office.mzclinic.local 추가 — by 김다정, 2026-06-06
+      # staff.mzclinic.cloud 추가 — by 김다정, 2026-06-06
       # 의사 PC hosts 파일에서 172.30.1.76 으로 해석되는 내부 전용 도메인
       # mzclinic.cloud(AWS)에서 발급한 JWT 를 들고 진입하므로 CORS 허용 필요
-      # office.mzclinic.local 단일 도메인으로 통합 — by 김다정, 2026-06-06
-      ALLOWED_HOSTS: "office.mzclinic.local,172.30.1.76,localhost"
-      ALLOWED_ORIGINS: "https://office.mzclinic.local:8443"
+      # staff.mzclinic.cloud 단일 도메인으로 통합 — by 김다정, 2026-06-06
+      ALLOWED_HOSTS: "staff.mzclinic.cloud,172.30.1.76,localhost"
+      ALLOWED_ORIGINS: "https://staff.mzclinic.cloud:8443"
       TZ: Asia/Seoul
     # nginx-onprem이 network_mode: service:api-onprem 으로 네트워크 공유 — by 김다정, 2026-06-06
     # nginx가 80/443 을 listen하므로 ports는 api-onprem에 선언
