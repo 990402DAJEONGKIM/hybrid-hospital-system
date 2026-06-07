@@ -50,10 +50,7 @@ async function initLayout() {
 
     // 사이드바 — 홈 고정 항목 + 역할별 바로가기 카드
     const isDashboard = currentPage === 'index.html' || currentPage === '';
-    const homeItem = me.role === 'doctor' ? `<a href="index.html" class="sidebar-item${isDashboard ? ' sidebar-item--active' : ''}">
-        <i class="fas fa-th-large"></i>
-        <span>홈</span>
-    </a>` : '';
+    const homeItem = '';
 
     const shortcuts = _SHORTCUTS[me.role] || [];
     const sidebarNav = homeItem + shortcuts.map(s => {
