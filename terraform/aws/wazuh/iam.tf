@@ -139,7 +139,10 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
         Sid    = "ReadIndexerSecret"
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-indexer-credentials-*"
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-indexer-credentials-*",
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-slack-alarm-webhook-*"
+        ]
       },
       # 위 시크릿 복호화용 KMS (sm 키, Secrets Manager 경유만)
       {
