@@ -3,8 +3,11 @@
 - name: Wazuh Manager + Dashboard 설치
   hosts: wazuh
   become: yes
-  vars_files:
-    - vault.yml
+  vars:
+    # Slack webhook을 vault.yml 대신 Secrets Manager에서 읽음 (Git 평문 제거 — ISMS-P)
+    # 공식문서: https://docs.ansible.com/ansible/latest/collections/amazon/aws/aws_secret_lookup.html
+    slack_webhook_url: "{{ lookup('amazon.aws.aws_secret', 'aws-wazuh-slack-alarm-webhook', region=aws_region) }}"
+  
 
   handlers:
     - name: systemd reload
@@ -709,7 +712,7 @@
     # ──────────────────────────────────────────
     - name: 취약점 추출 스크립트 배포
       template:
-        src: vuln-export.sh.j2
+        src: vuln-export.sh
         dest: /usr/local/bin/vuln-export.sh
         owner: root
         group: root

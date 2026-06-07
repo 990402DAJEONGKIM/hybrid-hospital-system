@@ -129,6 +129,15 @@ resource "aws_wafv2_web_acl" "staff" {
             count {}
           }
         }
+        # 추가: Wazuh 대시보드 /api/check-api 오탐 차단 해제 (AWS 공식 권장: rule_action_override + Count)
+        # 6/4 ALB 통합 후 EC2MetaDataSSRF_BODY가 Wazuh API 요청 body를 SSRF로 오탐 → Count 전환
+        # 룰 이름은 WAF 로그의 terminatingRule.ruleId에서 확인한 정확한 값 (대소문자 일치) - 260607 김강환
+        rule_action_override {
+          name = "EC2MetaDataSSRF_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
 
