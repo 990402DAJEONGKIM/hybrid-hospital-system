@@ -537,24 +537,32 @@ def doctor_create_encounter(
         raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
 
     did = current_user.get("did")
-    doctor_uuid = uuid.UUID(did) if did else None
-    now = datetime.now()
+    try:
+        doctor_uuid = uuid.UUID(did) if did else None
+    except (ValueError, AttributeError):
+        doctor_uuid = None
 
-    enc = OnpremEncounter(
-        encounter_id    = uuid.uuid4(),
-        patient_id      = patient.patient_id,
-        encounter_type  = "outpatient_return",
-        department_code = body.department_code or "GEN",
-        doctor_id       = doctor_uuid,
-        visit_datetime  = now,
-        chief_complaint = body.chief_complaint,
-        status_code     = "open",
-        created_at      = now,
-        updated_at      = now,
-    )
-    db.add(enc)
-    db.commit()
-    db.refresh(enc)
+    now = datetime.now()
+    try:
+        enc = OnpremEncounter(
+            encounter_id    = uuid.uuid4(),
+            patient_id      = patient.patient_id,
+            encounter_type  = "outpatient_return",
+            department_code = body.department_code or "GEN",
+            doctor_id       = doctor_uuid,
+            visit_datetime  = now,
+            chief_complaint = body.chief_complaint,
+            status_code     = "in_progress",
+            created_at      = now,
+            updated_at      = now,
+        )
+        db.add(enc)
+        db.commit()
+        db.refresh(enc)
+    except Exception as exc:
+        db.rollback()
+        logger.error("doctor_create_encounter 실패: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"진료 기록 생성 실패: {exc}")
     return {"encounter_id": str(enc.encounter_id), "status_code": enc.status_code}
 
 
