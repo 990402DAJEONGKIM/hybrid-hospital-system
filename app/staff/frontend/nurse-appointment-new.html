@@ -52,16 +52,7 @@
 <body>
 <div id="page-content">
 <div class="page-wrap">
-    <a class="back-link" href="nurse-dashboard.html" onclick="loadPage('nurse-dashboard.html');return false;">
-        <i class="fas fa-arrow-left"></i> 예약 현황으로
-    </a>
     <h2 style="margin-bottom:4px;">접수</h2>
-    <p style="color:#78909c;font-size:13px;margin-bottom:18px;">방문 환자를 직접 AWS RDS에 예약 등록합니다.</p>
-
-    <div class="isms-notice">
-        <i class="fas fa-lock" style="margin-right:6px;"></i>
-        등록 행위는 <strong>감사 로그(APPOINTMENT_CREATE)</strong>에 기록됩니다.
-    </div>
 
     <!-- 환자 조회 -->
     <div class="card">
@@ -69,7 +60,7 @@
         <div class="form-group">
             <label>회원번호 또는 환자 이름으로 조회 <span style="color:#e53935;">*</span></label>
             <div class="search-row">
-                <input type="text" id="patientQuery" placeholder="예) 21870195  또는  김민준">
+                <input type="text" id="patientQuery" placeholder="회원번호 또는 환자 이름">
                 <button class="btn-search" onclick="searchPatient()"><i class="fas fa-search" style="margin-right:4px;"></i>조회</button>
             </div>
         </div>

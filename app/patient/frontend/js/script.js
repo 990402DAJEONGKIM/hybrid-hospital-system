@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const appts = appointmentsMap[dateString];
             if (appts && appts.length > 0) {
                 const badge = document.createElement('div');
-                badge.className = 'mt-1 w-full text-[10px] px-2 bg-blue-100 text-blue-700 rounded-md font-bold truncate';
+                badge.className = 'mt-1 w-full text-[8px] px-2 bg-blue-100 text-blue-700 rounded-md font-bold truncate';
                 badge.style.paddingTop = '2px';
                 badge.style.paddingBottom = '2px';
                 badge.innerText = `예약 ${appts.length}건`;

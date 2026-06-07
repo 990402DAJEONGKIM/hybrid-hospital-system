@@ -6,6 +6,7 @@ COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf.template
 
 # 환자 포털 프론트엔드 — mzclinic.cloud 환자 전용 — by 김다정, 2026-06-06
 COPY app/patient/frontend/ /var/www/html/patient/
+COPY app/patient/frontend/ /var/www/html/
 
 EXPOSE 80
 

@@ -89,9 +89,6 @@
         </div>
 
         <!-- 하단 -->
-        <p class="text-center text-xs text-gray-500 mt-3">
-            모든 접근 기록은 보안 감사 로그에 기록됩니다 (ISMS-P 2.9.1)
-        </p>
     </div>
 
     <script src="js/config.js"></script>
@@ -100,12 +97,22 @@
         // mzclinic.cloud 에서 직원 로그인 후 "내부 진료 DB 바로가기" 버튼으로 진입 시
         // URL 해시(#access_token=...)에서 토큰을 꺼내 /auth/set-token 으로 전달
         // 서버가 HTTP-only 쿠키를 설정한 뒤 index.html 로 이동
+        function _parseJwt(t) {
+            try {
+                const b64 = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                return JSON.parse(atob(b64));
+            } catch { return {}; }
+        }
+
         (async () => {
             const hash = window.location.hash;
             if (!hash.startsWith('#access_token=')) return;
 
             const token = decodeURIComponent(hash.slice('#access_token='.length));
             history.replaceState(null, '', window.location.pathname);  // 주소창에서 토큰 제거
+
+            const role = _parseJwt(token).role || '';
+            const redirectUrl = role === 'admin' ? '/admin-users.html' : '/index.html';
 
             try {
                 const res = await fetch('/auth/set-token', {
@@ -114,7 +121,7 @@
                     body: JSON.stringify({ token }),
                 });
                 if (res.ok) {
-                    window.location.replace('/index.html');
+                    window.location.replace(redirectUrl);
                 } else {
                     console.warn('토큰 검증 실패, 일반 로그인 화면을 표시합니다.');
                 }
