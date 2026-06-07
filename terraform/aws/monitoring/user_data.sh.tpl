@@ -140,6 +140,13 @@ GRAFANA_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
   --query SecretString \
   --output text)
 
+# ── Secrets Manager에서 Slack webhook 가져오기 (TC 변수 평문 제거) ─────────
+SLACK_WEBHOOK_URL=$(aws secretsmanager get-secret-value \
+  --secret-id "aws-wazuh-slack-alarm-webhook" \
+  --region ${aws_region} \
+  --query SecretString \
+  --output text)
+
 # ── Grafana 설정 ─────────────────────────────────────────
 cat > /etc/grafana/grafana.ini <<GRAFANAEOF
 [server]
@@ -191,7 +198,7 @@ contactPoints:
       - uid: slack-receiver
         type: slack
         settings:
-          url: ${slack_webhook_url}
+          url: $SLACK_WEBHOOK_URL
           title: "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
           text: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}"
 EOF
