@@ -14,7 +14,7 @@ from models.db import (
     SyncPatient, SyncSurgery,
 )
 
-router = APIRouter(prefix="/portal", tags=["portal"])
+router = APIRouter(tags=["portal"])
 
 
 class AppointmentCreate(BaseModel):
