@@ -210,6 +210,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     expiration { days = var.github_backup_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
+
+  # RDS pgaudit 감사 로그 365일 (ISMS-P 2.9.1, 접근기록 1년 보존)- 260607 김강환
+  rule {
+    id     = "rds-lifecycle"
+    status = "Enabled"
+    filter { prefix = "rds/" }
+    transition {
+      days          = var.wazuh_log_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.wazuh_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
 }
 
 
@@ -367,12 +380,25 @@ resource "aws_s3_bucket_policy" "storage" {
           }
         }
       },
+      # S3 버킷 정책에 Firehose가 rds/ 쓰는 권한이 없어서 추가 (20260530, by 김강환)
       {
         Sid    = "AllowFirehoseVPN"
         Effect = "Allow"
         Principal = { Service = "firehose.amazonaws.com" }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.storage.arn}/vpn/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AllowFirehoseRDS"
+        Effect = "Allow"
+        Principal = { Service = "firehose.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/rds/*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
