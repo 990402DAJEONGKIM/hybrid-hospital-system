@@ -1,5 +1,5 @@
 # onprem_rules.xml
-<group name="onprem,fim,critical_file">
+<group name="onprem,fim,critical_file,">
 
   <!-- ───────────────────────────────────── -->
   <!-- 온프레미스 FIM 탐지 -->
@@ -47,8 +47,12 @@
     <group>fim,critical_file,onprem</group>
   </rule>
 
+
+
+
+
   <!-- USB 저장장치 연결 탐지 -->
-  <rule id="100039" level="12">
+  <rule id="100044" level="12">
     <if_sid>1002</if_sid>
     <match>USB Mass Storage</match>
     <description>온프레미스 USB 저장장치 연결 — 데이터 유출 의심</description>
@@ -56,17 +60,39 @@
     <mitre><id>T1091</id></mitre>
   </rule>
 
-  <!-- 업무 시간 외 온프레미스 SSH 접근 -->
-  <rule id="100041" level="10">
-    <if_sid>5715</if_sid>
-    <time>09:00 - 00:00</time>
-    <weekday>saturday,sunday</weekday>
-    <field name="agent.name">onprem-mspserver</field>
-    <description>업무 시간 외 온프레미스 SSH 접근</description>
-    <group>onprem,after_hours,insider_threat</group>
-    <mitre><id>T1078</id></mitre>
+  <!-- Vault 감사 로그 - root 토큰 사용 탐지 -->
+  <rule id="100045" level="10">
+    <decoded_as>json</decoded_as>
+    <field name="auth.display_name">root</field>
+    <description>Vault root 토큰 사용 탐지 — 비정상 접근 의심</description>
+    <group>vault,onprem,authentication_success</group>
+    <mitre><id>T1078.004</id></mitre>
   </rule>
 
+  <!-- Vault 감사 로그 - secret 삭제 -->
+  <rule id="100046" level="12">
+    <decoded_as>json</decoded_as>
+    <field name="request.operation">delete</field>
+    <field name="request.path" type="pcre2">^secret/</field>
+    <description>Vault secret 삭제 탐지</description>
+    <group>vault,onprem,data_destruction</group>
+    <mitre><id>T1485</id></mitre>
+  </rule>
 
+  <!-- Vault 감사 비활성화 시도 -->
+  <rule id="100047" level="13">
+    <decoded_as>json</decoded_as>
+    <field name="request.operation">delete</field>
+    <field name="request.path">sys/audit/file</field>
+    <description>Vault 감사 로그 비활성화 시도 — 로그 회피</description>
+    <group>vault,onprem,defense_evasion</group>
+    <mitre><id>T1562.008</id></mitre>
+  </rule>
+
+  <rule id="100048" level="8">
+    <if_sid>4100</if_sid>
+    <match>UFW BLOCK</match>
+    <description>UFW 차단 이벤트</description>
+  </rule>
 
 </group>

@@ -27,11 +27,6 @@
         creates: /swapfile
       tags: system
 
-    - name: Ensure Timezone is set to UTC
-      community.general.timezone:
-        name: Etc/UTC
-      tags: system
-
     - name: vm.swappiness 설정
       sysctl:
         name: vm.swappiness
@@ -229,6 +224,17 @@
         group: wazuh
         mode: '0640'
       tags: config
+
+    - name: Wazuh 내부 timezone을 호스트와 일치
+      copy:
+        src: /etc/localtime
+        dest: /var/ossec/etc/localtime
+        remote_src: yes
+        owner: root
+        group: wazuh
+        mode: '0640'
+      tags: config
+
 
     - name: 커스텀 룰 배포
       copy:
@@ -697,17 +703,27 @@
         user: root
       tags: cloudwatch
 
-    - name: 로컬 Wazuh 로그 7일 초과 파일 삭제 cron 등록
-      cron:
-        name: "wazuh-log-cleanup"
-        minute: "0"
-        hour: "1"
-        job: >
-          find /var/ossec/logs/alerts/ -type f -mtime +7 -exec rm -f {} \; &&
-          find /var/ossec/logs/archives/ -type f -mtime +7 -exec rm -f {} \;
-        user: root
-      tags: cleanup
+    # ──────────────────────────────────────────
+    # 취약점 스냅샷 → S3 (일일 보고서용)
+    # 인덱서 취약점 집계를 S3에 저장, report 람다가 읽음
+    # ──────────────────────────────────────────
+    - name: 취약점 추출 스크립트 배포
+      template:
+        src: vuln-export.sh.j2
+        dest: /usr/local/bin/vuln-export.sh
+        owner: root
+        group: root
+        mode: '0700'   # root만 (인덱서 비번 다루므로 엄격히)
+      tags: vuln
 
+    - name: 취약점 추출 크론 등록 (매일 KST 08:00 = UTC 23:00)
+      cron:
+        name: "wazuh-vuln-export"
+        minute: "0"
+        hour: "23"   # report 람다(08:30)보다 30분 먼저
+        job: "/usr/local/bin/vuln-export.sh >> /var/log/wazuh-vuln-export.log 2>&1"
+        user: root
+      tags: vuln
 
     # ──────────────────────────────────────────
     # SSM Agent

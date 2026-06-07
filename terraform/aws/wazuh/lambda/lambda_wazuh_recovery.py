@@ -106,7 +106,7 @@ def _scenario1_rebuild(target_id):
         waiter = ec2.get_waiter('instance_terminated')
         waiter.wait(
             InstanceIds=[target_id],
-            WaiterConfig={'Delay': 10, 'MaxAttempts': 30}
+            WaiterConfig={'Delay': 5, 'MaxAttempts': 24}
         )
         print("[SUCCESS] 기존 인스턴스 종료 완료")
 
@@ -192,6 +192,8 @@ def _run_ssm(instance_id, commands):
     )
     cmd_id = resp['Command']['CommandId']
     print(f"[INFO] CommandId: {cmd_id}")
+
+    time.sleep(2)
 
     # 공식 문서 기준 기본값(100초)을 깨고 10분(600초) 복구 타임라인 완벽 커버
     waiter = ssm.get_waiter('command_executed')

@@ -1,4 +1,6 @@
 #data.tf
+data "aws_caller_identity" "current" {}
+
 data "aws_vpc" "aws-vpc-01" {
   tags = { Name = "aws-vpc-01" }
 }

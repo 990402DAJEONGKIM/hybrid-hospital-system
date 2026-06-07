@@ -21,7 +21,7 @@ resource "aws_sns_topic_policy" "aws-wazuh-cw-alerts-01" {
         ]
         Resource = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
         Condition = {
-          StringEquals = { "AWS:SourceOwner" = "476293896981" }
+          StringEquals = { "AWS:SourceOwner" = data.aws_caller_identity.current.account_id }
         }
       },
       {
