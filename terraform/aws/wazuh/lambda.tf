@@ -43,7 +43,7 @@ resource "aws_lambda_function" "aws-wazuh-lambda-slack-notify" {
 
   environment {
     variables = {
-      SLACK_WEBHOOK_URL = var.slack_webhook_url
+      SLACK_WEBHOOK_SECRET = "aws-wazuh-slack-alarm-webhook"
     }
   }
 

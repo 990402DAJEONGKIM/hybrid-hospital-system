@@ -133,6 +133,25 @@ resource "aws_iam_role_policy" "aws-wazuh-s3" {
         Effect = "Allow"
         Action = ["ec2:DescribeFlowLogs"]
         Resource = "*"
+      },
+            # 취약점 cron이 인덱서 비번 읽기 (Secrets Manager)
+      {
+        Sid    = "ReadIndexerSecret"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-indexer-credentials-*"
+      },
+      # 위 시크릿 복호화용 KMS (sm 키, Secrets Manager 경유만)
+      {
+        Sid    = "DecryptIndexerSecretViaSM"
+        Effect = "Allow"
+        Action = ["kms:Decrypt"]
+        Resource = data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com"
+          }
+        }
       }
     ]
   })
@@ -170,6 +189,34 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy" "aws-wazuh-lambda-slack-notify-secrets" {
+  name = "aws-wazuh-lambda-slack-notify-secrets"
+  role = aws_iam_role.aws-wazuh-lambda-slack-notify-role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # alarm webhook 시크릿 1개만 읽기 (최소권한)
+        Sid      = "ReadAlarmWebhook"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-slack-alarm-webhook-*"
+      },
+      {
+        # 시크릿 복호화용 KMS (sm 키, Secrets Manager 경유만)
+        Sid      = "DecryptViaSM"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
 
 
 
@@ -202,15 +249,29 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-agent-cleanup-basic"
 resource "aws_iam_role_policy" "aws-wazuh-lambda-agent-cleanup-policy" {
   name = "aws-wazuh-lambda-agent-cleanup-policy"
   role = aws_iam_role.aws-wazuh-lambda-agent-cleanup-role.id
-
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid      = "SecretsManagerRead"
-      Effect   = "Allow"
-      Action   = ["secretsmanager:GetSecretValue"]
-      Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:wazuh/*"
-    }]
+    Statement = [
+      {
+        # 수정: wazuh/* → aws-wazuh-api-password (실제 시크릿 이름과 안 맞아 깨져있었음)
+        Sid      = "SecretsManagerRead"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-api-password-*"
+      },
+      {
+        # 추가: KMS 복호화 (이게 없어서 이름 고쳐도 또 막혔을 것)
+        Sid      = "DecryptApiSecretViaSM"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com"
+          }
+        }
+      }
+    ]
   })
 }
 

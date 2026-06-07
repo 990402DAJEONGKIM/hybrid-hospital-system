@@ -40,18 +40,34 @@
     <group>noise</group>
   </rule>
 
+  <!-- 주말 RDS WRITE (24시간) -->
+  <rule id="100122" level="10">
+    <if_sid>100102</if_sid>
+    <weekday>saturday,sunday</weekday>
+    <description>주말 RDS WRITE 쿼리 탐지 - 비정상 접근 의심</description>
+    <group>after_hours,database_change,weekend,</group>
+  </rule>
+
   <!-- 업무 시간 외 WRITE -->
   <rule id="100105" level="10">
     <if_sid>100102</if_sid>
-    <time>09:00 - 00:00</time>
+    <time>9 am - 12 am</time>
     <description>업무 시간 외 RDS WRITE 쿼리 탐지 - 비정상 접근 의심</description>
     <group>after_hours,database_change</group>
+  </rule>
+
+  <!-- 주말 RDS DDL (24시간) -->
+  <rule id="100123" level="12">
+    <if_sid>100101</if_sid>
+    <weekday>saturday,sunday</weekday>
+    <description>주말 RDS DDL 쿼리 탐지 - 비정상 접근 의심</description>
+    <group>after_hours,ddl,weekend,</group>
   </rule>
 
   <!-- 업무 시간 외 DDL -->
   <rule id="100106" level="12">
     <if_sid>100101</if_sid>
-    <time>09:00 - 00:00</time>
+    <time>9 am - 12 am</time>
     <description>업무 시간 외 RDS DDL 쿼리 탐지 - 비정상 접근 의심</description>
     <group>after_hours,ddl</group>
   </rule>
@@ -72,10 +88,18 @@
     <group>privilege_escalation,role_change</group>
   </rule>
 
+  <!-- 주말 RDS ROLE 변경 (24시간) -->
+  <rule id="100124" level="12">
+    <if_sid>100108</if_sid>
+    <weekday>saturday,sunday</weekday>
+    <description>주말 권한 변경 탐지 - 계정 탈취 의심</description>
+    <group>after_hours,privilege_escalation,weekend,</group>
+  </rule>
+
   <!-- 업무시간 외 ROLE 변경 -->
   <rule id="100109" level="12">
     <if_sid>100108</if_sid>
-    <time>18:00 - 09:00</time>
+    <time>9 am - 12 am</time>
     <description>업무시간 외 권한 변경 탐지 - 계정 탈취 의심</description>
     <group>after_hours,privilege_escalation</group>
   </rule>

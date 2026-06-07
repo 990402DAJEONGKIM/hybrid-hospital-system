@@ -1,5 +1,5 @@
 #local_rules.xml
-<group name="local,sudo,after_hours,fim">
+<group name="local,sudo,after_hours,fim,">
  
   <!-- ───────────────────────────────────── -->
   <!-- sudo 사용 탐지 -->
@@ -13,13 +13,22 @@
   </rule>
  
   <!-- 업무 시간 외 sudo -->
+  <!-- 주말 sudo (24시간 전부) -->
+  <rule id="100043" level="8">
+    <if_sid>100001</if_sid>
+    <weekday>saturday,sunday</weekday>
+    <description>주말 sudo 사용 탐지 - 사용자: $(srcuser)</description>
+    <group>after_hours,sudo_usage,weekend,</group>
+  </rule>
+
+  <!-- 평일 야간 sudo -->
   <rule id="100002" level="8">
     <if_sid>100001</if_sid>
-    <time>09:00 - 00:00</time>
+    <time>9 am - 12 am</time>
     <description>업무 시간 외 sudo 사용 탐지 - 사용자: $(srcuser)</description>
-    <group>after_hours,sudo_usage</group>
+    <group>after_hours,sudo_usage,</group>
   </rule>
- 
+
   <!-- root 권한 획득 -->
   <!-- dstuser는 static field라 안됨 → match로 변경 -->
   <rule id="100003" level="10">
@@ -84,7 +93,7 @@
  
 </group>
  
-<group name="web,nginx,attack,bruteforce,persistence">
+<group name="web,nginx,attack,bruteforce,persistence,">
  
   <!-- ───────────────────────────────────── -->
   <!-- 웹쉘 업로드 탐지 -->
@@ -171,11 +180,20 @@
   <!-- 업무 시간 외 로그인 -->
   <!-- ───────────────────────────────────── -->
  
+  <!-- 주말 SSH (24시간 전부) -->
+  <rule id="100042" level="10">
+    <if_sid>5715</if_sid>
+    <weekday>saturday,sunday</weekday>
+    <description>주말 SSH 로그인 성공 - 비정상 접근 의심</description>
+    <group>after_hours,authentication_success,weekend,</group>
+  </rule>
+
+  <!-- 평일 야간 SSH (KST 18~익09 = UTC 09~24) -->
   <rule id="100017" level="10">
     <if_sid>5715</if_sid>
-    <time>09:00 - 00:00</time>
+    <time>9 am - 12 am</time>
     <description>업무 시간 외 SSH 로그인 성공 - 계정 탈취 의심</description>
-    <group>after_hours,authentication_success</group>
+    <group>after_hours,authentication_success,</group>
   </rule>
  
   <!-- ───────────────────────────────────── -->
@@ -292,7 +310,7 @@
 
 </group>
 
-<group name="indexer,availability">
+<group name="indexer,availability,">
 
   <!-- ───────────────────────────────────── -->
   <!-- Filebeat → Indexer 연결 실패 탐지 -->

@@ -1,5 +1,5 @@
 # slack_notify.py
-
+import boto3   # Secrets Manager 호출용 (추가)
 import json
 import logging
 import os
@@ -10,7 +10,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    slack_webhook_url = os.environ["SLACK_WEBHOOK_URL"]
+    SECRET_NAME = os.environ["SLACK_WEBHOOK_SECRET"]   # 시크릿 이름
+    REGION = os.environ.get("AWS_REGION", "ap-south-2")
+    _sm = boto3.client("secretsmanager", region_name=REGION)
+    # SM에서 webhook URL 조회 (환경변수 평문 노출 제거 — ISMS-P)
+    slack_webhook_url = _sm.get_secret_value(SecretId=SECRET_NAME)["SecretString"]
 
     for record in event.get("Records", []):
         try:
