@@ -23,6 +23,10 @@ services:
       ALLOWED_HOSTS: "staff.mzclinic.cloud,172.30.1.76,localhost"
       ALLOWED_ORIGINS: "https://staff.mzclinic.cloud:8443"
       TZ: Asia/Seoul
+      VAULT_ADDR: ${VAULT_ADDR:-}
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
+      VAULT_ADDR: ${VAULT_ADDR:-}
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
     # nginx-onprem이 network_mode: service:api-onprem 으로 네트워크 공유 — by 김다정, 2026-06-06
     # nginx가 80/443 을 listen하므로 ports는 api-onprem에 선언
     ports:
