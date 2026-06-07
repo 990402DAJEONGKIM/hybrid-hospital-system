@@ -26,7 +26,7 @@ variable "s3-alerts-prefix-01" {
 # Bedrock: ap-south-2는 Global CRIS inference profile 필수
 # (공식: ap-south-2는 global.anthropic.* inference profile로만 접근)
 variable "bedrock-model-id-01" {
-  default = "global.anthropic.claude-haiku-4-5"
+  default = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
 
 
