@@ -16,7 +16,7 @@ cat > /usr/local/bin/gcp-dr-failover.sh <<'SCRIPT'
 set -euo pipefail
 
 PROJECT_ID="${project_id}"
-SLACK_WEBHOOK_URL="${slack_webhook_url}"
+SLACK_WEBHOOK_URL="$(gcloud secrets versions access latest --secret=gcp-dr-slack-webhook --project=${project_id})"
 ZONE="${zone}"
 MIG_NAME="${mig_name}"
 AWS_HEALTHCHECK_URL="${aws_healthcheck_url}"

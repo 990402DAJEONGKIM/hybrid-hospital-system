@@ -52,6 +52,18 @@ resource "google_secret_manager_secret" "jwt_secret" {
   depends_on = [google_project_service.secretmanager]
 }
 
+
+# Slack webhook 시크릿 (TC 변수 평문 제거 — startup 스크립트가 런타임에 읽음)
+resource "google_secret_manager_secret" "slack_webhook" {
+  secret_id = "gcp-dr-slack-webhook"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.secretmanager]
+}
+
 resource "google_secret_manager_secret" "api_key" {
   secret_id = var.api_key_secret_name
 
@@ -61,6 +73,20 @@ resource "google_secret_manager_secret" "api_key" {
 
   depends_on = [google_project_service.secretmanager]
 }
+
+# Slack webhook 시크릿 - 260607 김강환
+# startup-monitor 스크립트가 런타임에 SM에서 읽음.
+# AWS는 AWS Secrets Manager, GCP는 GCP Secret Manager로 webhook 중앙화
+resource "google_secret_manager_secret" "slack_webhook" {
+  secret_id = "gcp-dr-slack-webhook"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.secretmanager]
+}
+
 
 resource "google_service_account" "app" {
   account_id   = "gcp-dr-app-sa"
@@ -84,6 +110,15 @@ resource "google_secret_manager_secret_iam_member" "app_api_key_access" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.app.email}"
 }
+
+# 프록시 VM SA가 webhook 시크릿 읽기 - 260607 김강환
+# failover 스크립트가 프록시 VM(gcp-rds-proxy-01)에서 돌며 SM에서 webhook 읽음
+resource "google_secret_manager_secret_iam_member" "proxy_slack_webhook_access" {
+  secret_id = google_secret_manager_secret.slack_webhook.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${var.proxy_service_account_email}"
+}
+
 
 resource "google_storage_bucket_iam_member" "app_artifact_reader" {
   bucket = google_storage_bucket.artifact.name
@@ -114,7 +149,6 @@ resource "google_storage_bucket_object" "monitor_script" {
     gcp_dns_rrdatas     = join(",", [google_compute_global_address.dr_lb.address])
     failover_mode       = var.failover_mode
     enable_ops_agent    = var.enable_ops_agent
-    slack_webhook_url   = var.slack_webhook_url
   })
 }
 
