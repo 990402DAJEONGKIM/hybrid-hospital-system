@@ -50,7 +50,10 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
         Sid    = "SecretsManagerRead"
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-grafana-admin-password*"
+        Resource = [
+          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-grafana-admin-password*",
+          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-wazuh-slack-alarm-webhook*"
+        ]
       },
       {
         # Secrets Manager KMS 복호화 권한
