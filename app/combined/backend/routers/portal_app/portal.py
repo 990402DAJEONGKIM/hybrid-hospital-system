@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session as DbSession
 from core.database import get_db
 from core.security import get_current_user
 from models.db import (
+    Appointment, AppointmentStatus, AppointmentType,
     SyncAllergy, SyncDepartment, SyncDiagnosis, SyncEncounter,
     SyncPatient, SyncSurgery,
 )
@@ -232,6 +233,45 @@ def list_departments(
     return [
         {"department_code": d.department_code, "department_name": d.department_name}
         for d in depts
+    ]
+
+
+@router.get("/staff/appointments")
+def list_staff_appointments(
+    appt_date:   Optional[date_type] = None,
+    status_code: Optional[str]       = None,
+    current_user: dict               = Depends(get_current_user),
+    db:           DbSession          = Depends(get_db),
+):
+    if current_user.get("role") not in ("doctor", "nurse", "admin"):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+
+    query = db.query(Appointment)
+    if appt_date:
+        query = query.filter(Appointment.appointment_date == appt_date)
+    if status_code:
+        query = query.join(AppointmentStatus).filter(AppointmentStatus.status_code == status_code)
+
+    appts = query.order_by(Appointment.appointment_date.asc(), Appointment.appointment_time.asc()).all()
+
+    return [
+        {
+            "appointment_id":        str(a.appointment_id),
+            "patient_id_hash":       a.patient_id_hash,
+            "type_code":             a.appt_type.type_code   if a.appt_type   else None,
+            "type_name":             a.appt_type.type_name   if a.appt_type   else None,
+            "status_code":           a.appt_status.status_code if a.appt_status else None,
+            "status_name":           a.appt_status.status_name if a.appt_status else None,
+            "appointment_date":      str(a.appointment_date),
+            "appointment_time":      a.appointment_time.strftime("%H:%M") if a.appointment_time else None,
+            "department_code":       a.department_code,
+            "doctor_id":             str(a.doctor_id) if a.doctor_id else None,
+            "notes":                 a.notes,
+            "confirmed_at":          a.confirmed_at.isoformat() if a.confirmed_at else None,
+            "cancelled_at":          a.cancelled_at.isoformat() if a.cancelled_at else None,
+            "cancel_reason":         a.cancel_reason,
+        }
+        for a in appts
     ]
 
 
