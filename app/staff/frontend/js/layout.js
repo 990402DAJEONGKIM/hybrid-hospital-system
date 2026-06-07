@@ -50,7 +50,7 @@ async function initLayout() {
 
     // 사이드바 — 홈 고정 항목 + 역할별 바로가기 카드
     const isDashboard = currentPage === 'index.html' || currentPage === '';
-    const homeItem = me.role !== 'nurse' ? `<a href="index.html" class="sidebar-item${isDashboard ? ' sidebar-item--active' : ''}">
+    const homeItem = me.role === 'doctor' ? `<a href="index.html" class="sidebar-item${isDashboard ? ' sidebar-item--active' : ''}">
         <i class="fas fa-th-large"></i>
         <span>홈</span>
     </a>` : '';
@@ -101,7 +101,6 @@ async function initLayout() {
         <!-- 본문 (사이드바 + 콘텐츠) -->
         <div class="l-body">
             <aside class="l-sidebar">
-                <div class="l-sidebar__title">메뉴</div>
                 <nav class="l-sidebar__nav">
                     ${sidebarNav}
                 </nav>
@@ -118,7 +117,6 @@ async function initLayout() {
         <footer class="l-footer">
             <span>© 2026 김이박 클리닉</span>
             <span>대표전화: 02-1234-5678 &nbsp;|&nbsp; 진료시간: 평일 09:00 – 18:00</span>
-            <span>ISMS-P 2.9.1 적용 · 모든 접근이 감사 로그에 기록됩니다</span>
         </footer>
     `;
 
