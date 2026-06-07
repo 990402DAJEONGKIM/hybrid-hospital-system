@@ -32,3 +32,9 @@ data "aws_secretsmanager_secret" "proxy_staff_user" {
 data "aws_kms_key" "secretsmanager" {
   key_id = "alias/aws-kms-sm-01"
 }
+
+
+# S3 암호화 KMS 키 (Firehose 로그 SSE-KMS용) - 260607 김강환
+data "aws_kms_key" "s3" {
+  key_id = "alias/aws-kms-s3-01"
+}

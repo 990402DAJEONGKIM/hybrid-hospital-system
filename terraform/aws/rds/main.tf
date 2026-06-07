@@ -494,9 +494,10 @@ resource "aws_security_group" "aws_bastion_sg" {
   }
 }
 
+# 변경 후 - 260607 김강환 (S3 장기보관으로 이전, CloudWatch는 단기 버퍼)
 resource "aws_cloudwatch_log_group" "aws-cwl-rds-postgresql-01" {
   name              = "/aws/rds/cluster/aws-aurora-01/postgresql"
-  retention_in_days = 731
+  retention_in_days = 30
   tags = merge(local.common_tags, { Name = "aws-cwl-rds-postgresql-01" })
 }
 
