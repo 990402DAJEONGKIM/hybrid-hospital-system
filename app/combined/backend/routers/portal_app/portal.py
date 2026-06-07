@@ -231,7 +231,7 @@ def list_departments(
 ):
     if current_user.get("role") not in ("doctor", "nurse", "admin"):
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
-    depts = db.query(SyncDepartment).filter(SyncDepartment.is_active == True).all()
+    depts = db.query(OnpremDepartment).filter(OnpremDepartment.is_active == True).all()
     return [
         {"department_code": d.department_code, "department_name": d.department_name}
         for d in depts
