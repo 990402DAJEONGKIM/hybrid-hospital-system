@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, ForeignKey,
-    Integer, SmallInteger, String, Text, Uuid,
+    Integer, SmallInteger, String, Table, Text, Uuid,
 )
 from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.ext.declarative import declared_attr
@@ -16,6 +16,19 @@ from core.database import Base
 # RBAC
 # ============================================================
 
+role_permissions = Table(
+    "role_permissions", Base.metadata,
+    Column("role_id",       Integer, ForeignKey("roles.role_id",       ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.permission_id", ondelete="CASCADE"), primary_key=True),
+)
+
+role_menus = Table(
+    "role_menus", Base.metadata,
+    Column("role_id", Integer, ForeignKey("roles.role_id", ondelete="CASCADE"), primary_key=True),
+    Column("menu_id", Integer, ForeignKey("menus.menu_id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class Role(Base):
     __tablename__ = "roles"
 
@@ -27,7 +40,9 @@ class Role(Base):
     created_at  = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     synced_at   = Column(DateTime(timezone=True))
 
-    users = relationship("User", back_populates="role_rel")
+    users       = relationship("User",       back_populates="role_rel")
+    permissions = relationship("Permission", secondary="role_permissions")
+    menus       = relationship("Menu",       secondary="role_menus")
 
 
 class Permission(Base):
