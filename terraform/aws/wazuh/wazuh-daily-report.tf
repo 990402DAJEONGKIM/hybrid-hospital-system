@@ -5,17 +5,7 @@
 # 네이밍: 프로바이더-리소스-인덱스
 # =============================================================
 
-# ── 변수 ─────────────────────────────────────────────────────
-# TC-aws-KMS output: s3_kms_key_arn
-data "terraform_remote_state" "kms" {
-  backend = "remote"
-  config = {
-    organization = "k2p"
-    workspaces = {
-      name = "TC-aws-KMS"
-    }
-  }
-}
+
 
 data "aws_region" "current" {}
 
