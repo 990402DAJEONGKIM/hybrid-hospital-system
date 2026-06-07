@@ -107,7 +107,7 @@
         // 3. 직원인 경우 토큰을 URL 해시에 담아 버튼 href 설정
         //    URL 해시는 서버 로그에 남지 않아 query param 보다 안전
         const STAFF_ROLES = new Set(['doctor', 'nurse', 'admin']);
-        const ONPREM_URL  = 'https://office.mzclinic.local:8443';  // 임시 포트 — by 김다정, 2026-06-06
+        const ONPREM_URL  = 'https://staff.mzclinic.cloud:8443';
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
