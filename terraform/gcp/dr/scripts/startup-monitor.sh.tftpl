@@ -10,7 +10,7 @@ if [[ "${enable_ops_agent}" == "true" ]]; then
   bash add-google-cloud-ops-agent-repo.sh --also-install
 fi
 
-#SLACK_WEBHOOK_URL="${slack_webhook_url}" 추가 -> 260602 김강환
+# webhook은 GCP Secret Manager에서 읽도록 변경 (아래 SCRIPT 블록 내 gcloud secrets access) -260607 김강환
 cat > /usr/local/bin/gcp-dr-failover.sh <<'SCRIPT'
 #!/bin/bash
 set -euo pipefail

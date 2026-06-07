@@ -32,8 +32,8 @@ resource "aws_iam_role_policy_attachment" "aws-wazuh-ssm" {
 }
 
 # 인라인 정책: S3 + KMS + CloudWatch Logs
-resource "aws_iam_role_policy" "aws-wazuh-s3" {
-  name = "aws-wazuh-s3"
+resource "aws_iam_role_policy" "aws-wazuh-s3-policy" {
+  name = "aws-wazuh-s3-policy"
   role = aws_iam_role.aws-wazuh-ssm-role.id
 
   policy = jsonencode({
