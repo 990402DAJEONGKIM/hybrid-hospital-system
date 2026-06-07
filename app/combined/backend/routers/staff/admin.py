@@ -13,7 +13,7 @@ from core.security import get_current_user, get_client_ip, hash_password, verify
 from routers.staff.auth import validate_password
 from models.db import (
     AuditLog, Appointment, AppointmentStatus, LoginHistory, Menu, Notification,
-    PasswordPolicy, Permission, Role, RoleMenu, RolePermission,
+    OnpremDepartment, PasswordPolicy, Permission, Role, RoleMenu, RolePermission,
     Session as SessionModel, User,
 )
 
@@ -93,6 +93,65 @@ def _audit(db: DbSession, admin_id: str, action: str, target_id=None, request: R
     db.commit()
 
 
+# ── 진료과 목록 / 다음 직원번호 채번 ──────────────────────────
+
+@router.get("/departments")
+def list_departments_admin(
+    db:           DbSession = Depends(get_db),
+    _:            str       = Depends(verify_api_key),
+    current_user: dict      = Depends(require_admin),
+):
+    """진료과 목록 (계정 생성 시 의사 부서 선택용)."""
+    depts = (
+        db.query(OnpremDepartment)
+        .filter(OnpremDepartment.is_active == True)
+        .order_by(OnpremDepartment.department_code)
+        .all()
+    )
+    return [
+        {"department_code": d.department_code, "department_name": d.department_name}
+        for d in depts
+    ]
+
+
+@router.get("/next-member-number")
+def next_member_number(
+    role_code: str           = Query(...),
+    dept_code: Optional[str] = Query(default=None),
+    db:        DbSession     = Depends(get_db),
+    _:         str           = Depends(verify_api_key),
+    current_user: dict       = Depends(require_admin),
+):
+    """다음 직원번호 자동 채번.
+    doctor → dr-{DEPT}-{N+1}
+    nurse  → nurse-{N+1}
+    admin  → admin-{N+1}
+    """
+    if role_code == "doctor":
+        if not dept_code:
+            raise HTTPException(status_code=400, detail="의사 계정은 dept_code가 필요합니다.")
+        prefix = f"dr-{dept_code.upper()}-"
+    elif role_code == "nurse":
+        prefix = "nurse-"
+    elif role_code == "admin":
+        prefix = "admin-"
+    else:
+        raise HTTPException(status_code=400, detail="doctor / nurse / admin 만 지원합니다.")
+
+    rows = (
+        db.query(User.member_number)
+        .filter(User.member_number.like(f"{prefix}%"))
+        .all()
+    )
+    max_n = 0
+    for (mn,) in rows:
+        suffix = mn[len(prefix):]
+        if suffix.isdigit():
+            max_n = max(max_n, int(suffix))
+
+    return {"member_number": f"{prefix}{max_n + 1}"}
+
+
 # ── 사용자 관리 (SFR-030) ─────────────────────────────────────
 
 @router.post("/users", status_code=201)
@@ -123,9 +182,11 @@ def create_user(
         if db.query(User).filter(User.member_number == body.member_number).first():
             raise HTTPException(status_code=400, detail="이미 사용 중인 회원번호입니다.")
     else:
-        if not body.email:
-            raise HTTPException(status_code=400, detail="직원/의사 계정은 email이 필수입니다.")
-        if db.query(User).filter(User.email == body.email).first():
+        if not body.member_number:
+            raise HTTPException(status_code=400, detail="직원 계정은 직원번호(member_number)가 필수입니다.")
+        if db.query(User).filter(User.member_number == body.member_number).first():
+            raise HTTPException(status_code=400, detail="이미 사용 중인 직원번호입니다.")
+        if body.email and db.query(User).filter(User.email == body.email).first():
             raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
 
     doctor_uuid = None

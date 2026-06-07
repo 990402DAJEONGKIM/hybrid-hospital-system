@@ -71,20 +71,26 @@
         <h3><i class="fas fa-user-plus" style="margin-right:8px;color:#1d4ed8;"></i>신규 계정 생성</h3>
 
         <div class="form-group">
-            <label>직원번호</label>
-            <div style="display:flex;gap:8px;align-items:center;">
-                <input type="text" id="newMemberNumberStaff" readonly style="background:#f8fafc;color:#374151;flex:1;">
-                <button type="button" onclick="regenerateStaffNumber()" style="padding:9px 12px;background:#e3f2fd;color:#1565c0;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">재생성</button>
-            </div>
-            <div class="hint">자동 생성된 직원번호입니다.</div>
-        </div>
-        <div class="form-group">
             <label>역할 *</label>
-            <select id="newRole">
+            <select id="newRole" onchange="onNewRoleChange()">
                 <option value="doctor">의사</option>
                 <option value="nurse">간호사 / 원무과</option>
                 <option value="admin">관리자</option>
             </select>
+        </div>
+        <div class="form-group" id="deptGroup">
+            <label>진료과 *</label>
+            <select id="newDept" onchange="fetchNextMemberNumber()">
+                <option value="">-- 진료과 선택 --</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>직원번호</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" id="newMemberNumberStaff" readonly style="background:#f8fafc;color:#374151;flex:1;">
+                <button type="button" onclick="fetchNextMemberNumber()" style="padding:9px 12px;background:#e3f2fd;color:#1565c0;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">재조회</button>
+            </div>
+            <div class="hint">DB 기준 다음 번호가 자동 부여됩니다.</div>
         </div>
         <div class="form-group">
             <label>임시 비밀번호 *</label>
@@ -295,21 +301,54 @@
 
     // ── 계정 생성 ──────────────────────────────────────────────
 
-    function generateStaffNumber() {
-        const prefix = 'EMP';
-        const digits = Math.floor(100000 + Math.random() * 900000);
-        return `${prefix}${digits}`;
+    async function loadDepartments() {
+        const res = await apiCall('/admin/departments');
+        if (!res || !res.ok) return;
+        const depts = await res.json();
+        const sel = document.getElementById('newDept');
+        sel.innerHTML = '<option value="">-- 진료과 선택 --</option>' +
+            depts.map(d => `<option value="${d.department_code}">${d.department_name} (${d.department_code})</option>`).join('');
     }
 
-    function regenerateStaffNumber() {
-        document.getElementById('newMemberNumberStaff').value = generateStaffNumber();
+    async function fetchNextMemberNumber() {
+        const role     = document.getElementById('newRole').value;
+        const deptCode = document.getElementById('newDept').value;
+        const numEl    = document.getElementById('newMemberNumberStaff');
+
+        if (role === 'doctor' && !deptCode) {
+            numEl.value = '';
+            return;
+        }
+
+        const query = role === 'doctor'
+            ? `/admin/next-member-number?role_code=doctor&dept_code=${encodeURIComponent(deptCode)}`
+            : `/admin/next-member-number?role_code=${role}`;
+
+        numEl.value = '조회 중...';
+        const res = await apiCall(query);
+        if (res && res.ok) {
+            const data = await res.json();
+            numEl.value = data.member_number;
+        } else {
+            numEl.value = '';
+            document.getElementById('createErrMsg').textContent = '직원번호 조회 중 오류가 발생했습니다.';
+        }
     }
 
-    function openCreateModal() {
-        document.getElementById('newMemberNumberStaff').value = generateStaffNumber();
-        document.getElementById('newRole').value             = 'doctor';
-        document.getElementById('newPassword').value         = 'Test1234!';
-        document.getElementById('createErrMsg').textContent  = '';
+    function onNewRoleChange() {
+        const role = document.getElementById('newRole').value;
+        document.getElementById('deptGroup').style.display = role === 'doctor' ? '' : 'none';
+        document.getElementById('newMemberNumberStaff').value = '';
+        if (role !== 'doctor') fetchNextMemberNumber();
+    }
+
+    async function openCreateModal() {
+        document.getElementById('newRole').value            = 'doctor';
+        document.getElementById('newPassword').value        = 'Test1234!';
+        document.getElementById('createErrMsg').textContent = '';
+        document.getElementById('newMemberNumberStaff').value = '';
+        document.getElementById('deptGroup').style.display  = '';
+        await loadDepartments();
         document.getElementById('createModal').classList.add('open');
     }
     function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
@@ -317,11 +356,14 @@
     async function createUser() {
         const memberNo = document.getElementById('newMemberNumberStaff').value.trim();
         const roleCode = document.getElementById('newRole').value;
+        const deptCode = document.getElementById('newDept').value;
         const password = document.getElementById('newPassword').value;
         const errEl    = document.getElementById('createErrMsg');
         errEl.textContent = '';
 
-        if (!password) { errEl.textContent = '비밀번호를 입력하세요.'; return; }
+        if (roleCode === 'doctor' && !deptCode) { errEl.textContent = '진료과를 선택하세요.'; return; }
+        if (!memberNo)  { errEl.textContent = '직원번호를 먼저 조회하세요.'; return; }
+        if (!password)  { errEl.textContent = '비밀번호를 입력하세요.'; return; }
 
         const body = { role_code: roleCode, password, member_number: memberNo };
 
