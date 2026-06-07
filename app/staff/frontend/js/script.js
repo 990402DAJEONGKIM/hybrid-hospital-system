@@ -51,7 +51,7 @@ const _ONPREM_PATH_MAP = [
     ['/portal/doctor/staff/wards',             '/portal/wards'],
     ['/portal/doctor/staff/appointments',      '/portal/appointments'],  // 온프레미스에 없음 → 404
     // ── /portal/doctor/* 특수 경로 ───────────────────────
-    ['/portal/doctor/schedule',                '/portal/my/encounters'],
+    ['/portal/doctor/schedule',                '/portal/doctor/schedule'],
     ['/portal/doctor/appointment-types',       '/portal/departments'],   // fallback
     // ── /portal/doctor/nurse/* ───────────────────────────
     ['/portal/doctor/nurse/patients/',         '/portal/patients/'],     // reception-info 등
@@ -71,7 +71,7 @@ function _toOnpremPath(path) {
     }
     // /portal/doctor/appointments/today → /portal/my/encounters (의사 당일 진료 목록)
     if (base === '/portal/doctor/appointments/today') {
-        return '/portal/my/encounters' + query;
+        return '/portal/doctor/schedule' + query;
     }
 
     // ── 문자열 prefix 치환 (순서 중요: 구체적인 것 먼저) ─────

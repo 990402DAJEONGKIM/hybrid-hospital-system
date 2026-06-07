@@ -213,13 +213,27 @@ def delete_appointment(
     if encounter.status_code != "OPEN":
         raise HTTPException(status_code=400, detail="대기 중인 예약만 취소할 수 있습니다.")
 
-    db.delete(encounter)
+    encounter.status_code = "CANCELLED"
     db.commit()
 
     return {"message": "예약이 취소되었습니다."}
 
 
 # ── 의사/간호사 포털 ─────────────────────────────────────────
+
+@router.get("/departments")
+def list_departments(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    if current_user.get("role") not in ("doctor", "nurse", "admin"):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    depts = db.query(SyncDepartment).filter(SyncDepartment.is_active == True).all()
+    return [
+        {"department_code": d.department_code, "department_name": d.department_name}
+        for d in depts
+    ]
+
 
 @router.get("/doctor/schedule")
 def get_doctor_schedule(
