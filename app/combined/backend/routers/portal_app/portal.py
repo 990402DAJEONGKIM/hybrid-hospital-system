@@ -582,6 +582,7 @@ def list_wards(
             "room_type":      w.room_type,
             "total_beds":     w.total_beds,
             "available_beds": w.available_beds,
+            "synced_at":      w.synced_at.isoformat() if w.synced_at else None,
         }
         for w in wards
     ]
@@ -624,6 +625,7 @@ def nurse_search_patients(
         "total": total,
         "items": [
             {
+                "patient_id":      p.patient_id_hash,  # 프론트엔드가 patient_id로 조회
                 "patient_id_hash": p.patient_id_hash,
                 "patient_name":    p.patient_name,
                 "birth_date":      str(p.birth_date),

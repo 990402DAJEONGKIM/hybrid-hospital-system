@@ -307,14 +307,14 @@ def create_patient(
     current_user: dict      = Depends(_require_roles("nurse", "admin")),
     db:           DbSession = Depends(get_db),
 ):
-    import hashlib, secrets
+    import hashlib
     from datetime import date as date_type
     from models.db import Patient
 
     patient_id      = uuid.uuid4()
     patient_id_hash = hashlib.sha256(str(patient_id).encode()).hexdigest()
-    year            = str(date_type.today().year)
-    member_number   = f"P-{year}-{secrets.token_hex(3).upper()}"
+    seq           = db.query(Patient).count() + 1
+    member_number = f"P{seq:07d}"  # P0000001 ~ P9999999 (8자)
 
     patient = Patient(
         patient_id            = patient_id,
