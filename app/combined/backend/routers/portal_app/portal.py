@@ -11,8 +11,9 @@ from core.database import get_db
 from core.security import get_current_user
 from models.db import (
     Appointment, AppointmentStatus, AppointmentType,
+    OnpremDepartment, OnpremDoctor, Patient,
     SyncAllergy, SyncDepartment, SyncDiagnosis, SyncEncounter,
-    SyncPatient, SyncSurgery,
+    SyncPatient, SyncSurgery, SyncWard,
 )
 
 router = APIRouter(tags=["portal"])
@@ -397,5 +398,92 @@ def get_doctor_patient_detail(
         "surgeries": [
             {"surgery_name": s.surgery_name, "surgery_date": str(s.surgery_date)}
             for s in surgeries
+        ],
+    }
+
+
+# ── 온프레미스 전용 — 의사/병동/환자 목록 ─────────────────────────────
+
+@router.get("/doctors")
+def list_doctors(
+    department_code: Optional[str] = None,
+    current_user:    dict          = Depends(get_current_user),
+    db:              DbSession     = Depends(get_db),
+):
+    if current_user.get("role") not in ("doctor", "nurse", "admin"):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    query = db.query(OnpremDoctor).filter(OnpremDoctor.is_active == True)
+    if department_code:
+        query = query.filter(OnpremDoctor.department_code == department_code)
+    return [
+        {"doctor_id": str(d.doctor_id), "doctor_name": d.doctor_name, "department_code": d.department_code}
+        for d in query.all()
+    ]
+
+
+@router.get("/wards")
+def list_wards(
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    if current_user.get("role") not in ("doctor", "nurse", "admin"):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    wards = db.query(SyncWard).all()
+    return [
+        {
+            "ward_id":        str(w.ward_id),
+            "ward_name":      w.ward_name,
+            "room_type":      w.room_type,
+            "total_beds":     w.total_beds,
+            "available_beds": w.available_beds,
+        }
+        for w in wards
+    ]
+
+
+class _HashListBody(BaseModel):
+    hashes: list[str]
+
+
+@router.post("/patients/names-by-hashes")
+def patients_names_by_hashes(
+    body:         _HashListBody,
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    if current_user.get("role") not in ("doctor", "nurse", "admin"):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    patients = db.query(Patient).filter(Patient.patient_id_hash.in_(body.hashes)).all()
+    return {p.patient_id_hash: p.patient_name for p in patients}
+
+
+@router.get("/nurse/patients/search")
+def nurse_search_patients(
+    q:            str = None,
+    limit:        int = 20,
+    offset:       int = 0,
+    current_user: dict     = Depends(get_current_user),
+    db:           DbSession = Depends(get_db),
+):
+    if current_user.get("role") not in ("nurse", "admin"):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    if not q:
+        return []
+    query = db.query(Patient).filter(
+        Patient.patient_name.ilike(f"%{q}%") | Patient.member_number.ilike(f"%{q}%")
+    )
+    total = query.count()
+    patients = query.offset(offset).limit(limit).all()
+    return {
+        "total": total,
+        "items": [
+            {
+                "patient_id_hash": p.patient_id_hash,
+                "patient_name":    p.patient_name,
+                "birth_date":      str(p.birth_date),
+                "gender_code":     p.gender_code,
+                "member_number":   p.member_number,
+            }
+            for p in patients
         ],
     }
