@@ -40,6 +40,7 @@ const _ONPREM_PATH_MAP = [
     // ── /emr/doctor/* ─────────────────────────────────────
     ['/emr/doctor/patients/search',            '/portal/doctor/patients/search'],
     ['/emr/doctor/patients/',                  '/portal/doctor/patients/'],
+    ['/emr/doctor/patients',                   '/portal/doctor/patients'],       // 목록 조회 (슬래시 없음)
     ['/emr/doctor/encounters',                 '/portal/doctor/encounters'],
     // ── /emr/* (기타 공통) ─────────────────────────────────
     ['/emr/departments',                       '/portal/departments'],
