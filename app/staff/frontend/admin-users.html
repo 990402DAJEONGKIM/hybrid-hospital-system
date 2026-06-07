@@ -36,9 +36,6 @@
         .btn-cancel-m { padding:9px 18px; background:#eceff1; color:#546e7a; border:none; border-radius:6px; font-size:14px; cursor:pointer; }
         .err-msg { color:#e53935; font-size:12px; margin-top:5px; min-height:16px; }
         .hint { font-size:11px; color:#94a3b8; margin-top:3px; }
-        .role-tab { display:flex; gap:0; margin-bottom:14px; border-radius:6px; overflow:hidden; border:1px solid #e2e8f0; }
-        .role-tab button { flex:1; padding:8px; font-size:12px; font-weight:600; border:none; background:#f8fafc; color:#94a3b8; cursor:pointer; }
-        .role-tab button.active { background:#1d4ed8; color:#fff; }
     </style>
 </head>
 <body>
@@ -72,50 +69,27 @@
 <div class="modal-overlay" id="createModal">
     <div class="modal-box">
         <h3><i class="fas fa-user-plus" style="margin-right:8px;color:#1d4ed8;"></i>신규 계정 생성</h3>
-        <div class="role-tab">
-            <button id="tabStaff" class="active" onclick="setAccountType('staff')">직원/의사</button>
-            <button id="tabPatient" onclick="setAccountType('patient')">환자</button>
-        </div>
-
-        <!-- 직원 필드 -->
-        <div id="staffFields">
-            <div class="form-group">
-                <label>이메일 *</label>
-                <input type="email" id="newEmail" placeholder="user@hospital.com">
-            </div>
-            <div class="form-group">
-                <label>회원번호 (선택)</label>
-                <input type="text" id="newMemberNumberStaff" placeholder="staff-001">
-                <div class="hint">미입력 시 자동 미부여</div>
-            </div>
-        </div>
-
-        <!-- 환자 필드 -->
-        <div id="patientFields" style="display:none;">
-            <div class="form-group">
-                <label>회원번호 *</label>
-                <input type="text" id="newMemberNumber" placeholder="8자리 숫자">
-            </div>
-        </div>
 
         <div class="form-group">
-            <label>임시 비밀번호 *</label>
-            <input type="password" id="newPassword" placeholder="8자 이상, 대·소문자·숫자·특수문자">
-            <div class="hint">첫 로그인 시 변경 강제</div>
+            <label>직원번호</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" id="newMemberNumberStaff" readonly style="background:#f8fafc;color:#374151;flex:1;">
+                <button type="button" onclick="regenerateStaffNumber()" style="padding:9px 12px;background:#e3f2fd;color:#1565c0;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">재생성</button>
+            </div>
+            <div class="hint">자동 생성된 직원번호입니다.</div>
         </div>
         <div class="form-group">
             <label>역할 *</label>
-            <select id="newRole" onchange="onRoleChange()">
+            <select id="newRole">
                 <option value="doctor">의사</option>
                 <option value="nurse">간호사 / 원무과</option>
                 <option value="admin">관리자</option>
-                <option value="patient" id="patientOption">환자</option>
             </select>
         </div>
-        <div class="form-group" id="doctorIdGroup">
-            <label>Doctor ID (UUID)</label>
-            <input type="text" id="newDoctorId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-            <div class="hint">온프레미스 doctors 테이블의 doctor_id</div>
+        <div class="form-group">
+            <label>임시 비밀번호 *</label>
+            <input type="text" id="newPassword" value="Test1234!">
+            <div class="hint">첫 로그인 시 변경 강제</div>
         </div>
         <div class="err-msg" id="createErrMsg"></div>
         <div class="modal-footer">
@@ -131,16 +105,11 @@
         <h3><i class="fas fa-user-edit" style="margin-right:8px;color:#1565c0;"></i>계정 수정</h3>
         <div class="form-group">
             <label>역할</label>
-            <select id="editRole" onchange="onEditRoleChange()">
+            <select id="editRole">
                 <option value="doctor">의사</option>
                 <option value="nurse">간호사 / 원무과</option>
                 <option value="admin">관리자</option>
-                <option value="patient">환자</option>
             </select>
-        </div>
-        <div class="form-group" id="editDoctorGroup">
-            <label>Doctor ID</label>
-            <input type="text" id="editDoctorId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
         </div>
         <div class="err-msg" id="editErrMsg"></div>
         <div class="modal-footer">
@@ -192,7 +161,6 @@
             return;
         }
         const users = await res.json();
-        const now   = new Date();
         document.getElementById('userBody').innerHTML = users.map(u => {
             const isLocked   = u.is_locked;
             const isInactive = !u.is_active;
@@ -268,26 +236,17 @@
     function openEditModal(userId, roleCode) {
         _editUserId = userId;
         document.getElementById('editRole').value = roleCode || 'doctor';
-        document.getElementById('editDoctorId').value = '';
         document.getElementById('editErrMsg').textContent = '';
-        onEditRoleChange();
         document.getElementById('editModal').classList.add('open');
     }
     function closeEditModal() { document.getElementById('editModal').classList.remove('open'); _editUserId = null; }
-    function onEditRoleChange() {
-        document.getElementById('editDoctorGroup').style.display =
-            document.getElementById('editRole').value === 'doctor' ? '' : 'none';
-    }
     async function saveEdit() {
         const roleCode = document.getElementById('editRole').value;
-        const doctorId = document.getElementById('editDoctorId').value.trim();
         const errEl    = document.getElementById('editErrMsg');
         if (!_editUserId) return;
-        const body = { role_code: roleCode };
-        if (doctorId) body.doctor_id = doctorId;
         const res = await apiCall(`/admin/users/${_editUserId}`, {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ role_code: roleCode }),
         });
         if (res && res.ok) { closeEditModal(); await loadUsers(); }
         else errEl.textContent = (await res?.json().catch(()=>({}))).detail || '변경 중 오류';
@@ -336,67 +295,35 @@
 
     // ── 계정 생성 ──────────────────────────────────────────────
 
-    let _accountType = 'staff';
-
-    function setAccountType(type) {
-        _accountType = type;
-        document.getElementById('tabStaff').className    = type === 'staff' ? 'active' : '';
-        document.getElementById('tabPatient').className  = type === 'patient' ? 'active' : '';
-        document.getElementById('staffFields').style.display   = type === 'staff' ? '' : 'none';
-        document.getElementById('patientFields').style.display = type === 'patient' ? '' : 'none';
-        const roleEl = document.getElementById('newRole');
-        if (type === 'patient') {
-            roleEl.value = 'patient';
-            roleEl.disabled = true;
-        } else {
-            if (roleEl.value === 'patient') roleEl.value = 'doctor';
-            roleEl.disabled = false;
-        }
-        onRoleChange();
+    function generateStaffNumber() {
+        const prefix = 'EMP';
+        const digits = Math.floor(100000 + Math.random() * 900000);
+        return `${prefix}${digits}`;
     }
 
-    function onRoleChange() {
-        const role = document.getElementById('newRole').value;
-        document.getElementById('doctorIdGroup').style.display = role === 'doctor' ? '' : 'none';
+    function regenerateStaffNumber() {
+        document.getElementById('newMemberNumberStaff').value = generateStaffNumber();
     }
 
     function openCreateModal() {
-        _accountType = 'staff';
-        document.getElementById('newEmail').value            = '';
-        document.getElementById('newMemberNumberStaff').value = '';
-        document.getElementById('newMemberNumber').value     = '';
-        document.getElementById('newPassword').value         = '';
-        document.getElementById('newDoctorId').value         = '';
+        document.getElementById('newMemberNumberStaff').value = generateStaffNumber();
         document.getElementById('newRole').value             = 'doctor';
-        document.getElementById('newRole').disabled          = false;
+        document.getElementById('newPassword').value         = 'Test1234!';
         document.getElementById('createErrMsg').textContent  = '';
-        setAccountType('staff');
         document.getElementById('createModal').classList.add('open');
     }
     function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
 
     async function createUser() {
-        const password = document.getElementById('newPassword').value;
+        const memberNo = document.getElementById('newMemberNumberStaff').value.trim();
         const roleCode = document.getElementById('newRole').value;
-        const doctorId = document.getElementById('newDoctorId').value.trim();
+        const password = document.getElementById('newPassword').value;
         const errEl    = document.getElementById('createErrMsg');
         errEl.textContent = '';
 
-        const body = { role_code: roleCode, password };
-
-        if (_accountType === 'patient') {
-            const mn = document.getElementById('newMemberNumber').value.trim();
-            if (!mn) { errEl.textContent = '환자 계정은 회원번호가 필수입니다.'; return; }
-            body.member_number = mn;
-        } else {
-            const email = document.getElementById('newEmail').value.trim();
-            const mn    = document.getElementById('newMemberNumberStaff').value.trim();
-            if (!email) { errEl.textContent = '직원 계정은 이메일이 필수입니다.'; return; }
-            body.email = email;
-            if (mn) body.member_number = mn;
-        }
-        if (doctorId) body.doctor_id = doctorId;
         if (!password) { errEl.textContent = '비밀번호를 입력하세요.'; return; }
+
+        const body = { role_code: roleCode, password, member_number: memberNo };
 
         const res = await apiCall('/admin/users', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },

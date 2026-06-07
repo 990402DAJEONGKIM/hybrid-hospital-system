@@ -50,10 +50,10 @@ const _ONPREM_PATH_MAP = [
     ['/portal/doctor/staff/departments',       '/portal/departments'],
     ['/portal/doctor/staff/doctors',           '/portal/doctors'],
     ['/portal/doctor/staff/wards',             '/portal/wards'],
-    ['/portal/doctor/staff/appointments',      '/portal/appointments'],  // 온프레미스에 없음 → 404
+    ['/portal/doctor/staff/appointments',      '/portal/staff/appointments'],
     // ── /portal/doctor/* 특수 경로 ───────────────────────
     ['/portal/doctor/schedule',                '/portal/doctor/schedule'],
-    ['/portal/doctor/appointment-types',       '/portal/departments'],   // fallback
+    ['/portal/doctor/appointment-types',       '/portal/appointment-types'],
     // ── /portal/doctor/nurse/* ───────────────────────────
     ['/portal/doctor/nurse/patients/',         '/portal/patients/'],     // reception-info 등
 ];

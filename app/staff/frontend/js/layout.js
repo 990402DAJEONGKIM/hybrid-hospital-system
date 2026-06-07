@@ -20,10 +20,9 @@ const _SHORTCUTS = {
         { url:'my-patients.html',      icon:'user-injured',  color:'#6366f1', label:'내 환자 목록', desc:'담당 환자 목록 · EMR · 진료 기록' },
     ],
     admin: [
-        { url:'admin-users.html',  icon:'users',        color:'#0ea5e9', label:'사용자 관리',   desc:'계정 생성·수정·잠금·비활성화' },
-        { url:'admin-roles.html',  icon:'shield-alt',   color:'#10b981', label:'역할/권한 관리', desc:'역할 추가 및 권한 할당' },
-        { url:'admin-policy.html', icon:'lock',         color:'#6366f1', label:'보안 정책',     desc:'비밀번호 복잡도·만료 설정' },
-        { url:'admin-wazuh.html',  icon:'shield-virus', color:'#dc2626', label:'Wazuh',         desc:'보안 이벤트 모니터링 대시보드' },
+        { url:'admin-users.html',  icon:'users',      color:'#0ea5e9', label:'사용자 관리',    desc:'계정 생성·수정·잠금·비활성화' },
+        { url:'admin-roles.html',  icon:'shield-alt', color:'#10b981', label:'역할/권한 관리', desc:'역할 추가 및 권한 할당' },
+        { url:'admin-policy.html', icon:'lock',       color:'#6366f1', label:'보안 정책',      desc:'비밀번호 복잡도·만료 설정' },
     ],
 };
 

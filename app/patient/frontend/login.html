@@ -84,6 +84,12 @@
                     style="background:#1d4ed8;">
                     <i class="fas fa-hospital mr-2"></i>내부 진료 DB 바로가기
                 </a>
+                <!-- 관리자 전용 Wazuh 링크 -->
+                <a id="wazuhLinkBtn" href="#" target="_blank"
+                    class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
+                    style="display:none; background:#b91c1c;">
+                    <i class="fas fa-shield-virus mr-2"></i>Wazuh 보안 모니터링
+                </a>
             </div>
         </div>
 
@@ -145,6 +151,16 @@
                     const token       = data.access_token;
                     const internalUrl = `${ONPREM_URL}/#access_token=${encodeURIComponent(token)}`;
                     document.getElementById('internalLinkBtn').href = internalUrl;
+
+                    // 관리자 전용: Wazuh 모니터링 대시보드 링크
+                    if (role === 'admin') {
+                        const wazuhUrl = `${ONPREM_URL}/admin-wazuh.html#access_token=${encodeURIComponent(token)}`;
+                        const wazuhBtn = document.getElementById('wazuhLinkBtn');
+                        wazuhBtn.href = wazuhUrl;
+                        wazuhBtn.style.display = 'block';
+                        wazuhBtn.style.background = '#b91c1c';
+                    }
+
                     document.getElementById('internalLinkBox').style.display = 'block';
                     document.getElementById('loginForm').style.display = 'none';
                 } else {
