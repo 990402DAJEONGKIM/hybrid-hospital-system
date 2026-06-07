@@ -386,6 +386,29 @@ class SyncSurgery(Base):
 
 
 # ============================================================
+# 온프레미스 원본 테이블 — DB_MODE=onprem 전용
+# ============================================================
+
+class OnpremDepartment(Base):
+    __tablename__ = "departments"
+
+    department_code = Column(String(20),  primary_key=True)
+    department_name = Column(String(100))
+    is_active       = Column(Boolean)
+    updated_at      = Column(DateTime(timezone=False))
+
+
+class OnpremDoctor(Base):
+    __tablename__ = "doctors"
+
+    doctor_id       = Column(Uuid,       primary_key=True)
+    doctor_name     = Column(String(100))
+    department_code = Column(String(20))
+    is_active       = Column(Boolean)
+    updated_at      = Column(DateTime(timezone=False))
+
+
+# ============================================================
 # 감사 로그 — ISMS-P 2.9.1
 # ============================================================
 

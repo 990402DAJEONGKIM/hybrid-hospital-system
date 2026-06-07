@@ -119,7 +119,7 @@ async function initLayout() {
         <footer class="l-footer">
             <span>© 2026 김이박 클리닉</span>
             <span>대표전화: 02-1234-5678 &nbsp;|&nbsp; 진료시간: 평일 09:00 – 18:00</span>
-            <span>ISMS-P 2.5.4 적용 · 모든 접근이 감사 로그에 기록됩니다</span>
+            <span>ISMS-P 2.9.1 적용 · 모든 접근이 감사 로그에 기록됩니다</span>
         </footer>
     `;
 

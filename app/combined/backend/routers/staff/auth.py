@@ -17,7 +17,15 @@ from core.security import (
     verify_api_key, verify_password,
 )
 from core.ses import send_lockout_alert
-from models.db import AuditLog, LoginHistory, Menu, Role, RoleMenu, Session as SessionModel, SyncDepartment, SyncDoctor, User
+import os
+
+from models.db import (
+    AuditLog, LoginHistory, Menu, OnpremDepartment, OnpremDoctor,
+    Role, RoleMenu, Session as SessionModel,
+    SyncDepartment, SyncDoctor, User,
+)
+
+_DB_MODE = os.getenv("DB_MODE", "cloud")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -382,14 +390,24 @@ def me(
     if user.patient_id:
         result["patient_id_hash"] = str(user.patient_id)
     if user.doctor_id:
-        doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
-        if doctor:
-            result["department_code"] = doctor.department_code
-            result["doctor_name"]     = doctor.doctor_name
-            dept = db.query(SyncDepartment).filter(
-                SyncDepartment.department_code == doctor.department_code
-            ).first()
-            result["department_name"] = dept.department_name if dept else doctor.department_code
+        if _DB_MODE == "onprem":
+            doctor = db.query(OnpremDoctor).filter(OnpremDoctor.doctor_id == user.doctor_id).first()
+            if doctor:
+                result["department_code"] = doctor.department_code
+                result["doctor_name"]     = doctor.doctor_name
+                dept = db.query(OnpremDepartment).filter(
+                    OnpremDepartment.department_code == doctor.department_code
+                ).first()
+                result["department_name"] = dept.department_name if dept else doctor.department_code
+        else:
+            doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
+            if doctor:
+                result["department_code"] = doctor.department_code
+                result["doctor_name"]     = doctor.doctor_name
+                dept = db.query(SyncDepartment).filter(
+                    SyncDepartment.department_code == doctor.department_code
+                ).first()
+                result["department_name"] = dept.department_name if dept else doctor.department_code
     return result
 
 
