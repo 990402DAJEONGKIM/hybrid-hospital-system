@@ -66,7 +66,7 @@ variable "alert_email" {
 variable "frontend_domain" {
   description = "AWS 프론트엔드 도메인 (ALLOWED_HOSTS·ALLOWED_ORIGINS에 사용)"
   type        = string
-  default     = "staff.mzclinic.cloud"
+  default     = "mzclinic.cloud"
 }
 
 # ── 온프레미스 API ────────────────────────────────────────
