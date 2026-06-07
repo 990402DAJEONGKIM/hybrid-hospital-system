@@ -1,4 +1,57 @@
 #cloudwatch.tf
+
+# secrets.tf - 260607 김강환
+# Slack webhook + Indexer 자격증명 시크릿 껍데기 (값은 CLI로 주입, state 평문 방지)
+# CLI 수동 생성 → Terraform 관리로 전환. KMS는 aws-kms-sm-01 사용
+
+# 일일 보고서 → Slack webhook (report Lambda)
+resource "aws_secretsmanager_secret" "aws-wazuh-slack-report-webhook" {
+  name        = "aws-wazuh-slack-report-webhook"
+  description = "일일 보안 보고서 → Slack 전송용 webhook (report Lambda)"
+  kms_key_id  = data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn
+
+  tags = {
+    Project     = "msp-hospital"
+    Environment = "prod"
+    ManagedBy   = "terraform"
+    Workspace   = "TC-aws-wazuh"
+    Name        = "aws-wazuh-slack-report-webhook"
+  }
+}
+
+# CloudWatch 알람 → Slack webhook (slack_notify Lambda)
+resource "aws_secretsmanager_secret" "aws-wazuh-slack-alarm-webhook" {
+  name        = "aws-wazuh-slack-alarm-webhook"
+  description = "CloudWatch 알람 → Slack 전송용 webhook (slack_notify Lambda)"
+  kms_key_id  = data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn
+
+  tags = {
+    Project     = "msp-hospital"
+    Environment = "prod"
+    ManagedBy   = "terraform"
+    Workspace   = "TC-aws-wazuh"
+    Name        = "aws-wazuh-slack-alarm-webhook"
+  }
+}
+
+# Wazuh Indexer 조회 자격증명 (취약점 cron)
+resource "aws_secretsmanager_secret" "aws-wazuh-indexer-credentials" {
+  name        = "aws-wazuh-indexer-credentials"
+  description = "Wazuh Indexer 조회 자격증명 — 취약점 일일 보고서 cron에서 인덱서 쿼리 시 사용"
+  kms_key_id  = data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn
+
+  tags = {
+    Project     = "msp-hospital"
+    Environment = "prod"
+    ManagedBy   = "terraform"
+    Workspace   = "TC-aws-wazuh"
+    Name        = "aws-wazuh-indexer-credentials"
+  }
+}
+
+
+
+
 resource "aws_sns_topic_policy" "aws-wazuh-cw-alerts-01" {
   arn = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
   policy = jsonencode({
