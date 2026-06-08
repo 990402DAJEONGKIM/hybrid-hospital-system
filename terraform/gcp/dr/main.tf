@@ -14,7 +14,7 @@ resource "google_project_service" "storage" {
 }
 
 locals {
-  app_name        = "gcp-dr-staff"
+  app_name        = "gcp-dr-app"
   app_port        = 8000
   allowed_origins = length(var.allowed_origins) > 0 ? join(",", var.allowed_origins) : "https://mzclinic.cloud"
 }
@@ -31,7 +31,7 @@ resource "google_storage_bucket" "artifact" {
 }
 
 resource "google_storage_bucket_object" "dr_app" {
-  name   = "dr-staff-${data.archive_file.dr_app.output_md5}.zip"
+  name   = "dr-app-${data.archive_file.dr_app.output_md5}.zip"
   bucket = google_storage_bucket.artifact.name
   source = data.archive_file.dr_app.output_path
 }
@@ -299,7 +299,7 @@ resource "google_compute_instance_group_manager" "dr_app" {
 # ── Load Balancer ──────────────────────────────────────────────────────────────
 
 resource "google_compute_global_address" "dr_lb" {
-  name = "gcp-dr-staff-lb-ip"
+  name = "gcp-dr-app-lb-ip"
 }
 
 resource "google_compute_health_check" "dr_app" {
