@@ -24,9 +24,9 @@ apt-get install -y -q nginx python3 python3-pip python3-venv unzip curl
 # ── 아티팩트 다운로드 ──────────────────────────────────────────────────────────
 echo "[startup] GCS에서 앱 아티팩트 다운로드 중..."
 mkdir -p "$APP_DIR"
-gsutil cp "gs://$ARTIFACT_BUCKET/$DR_APP_OBJECT" /tmp/dr-staff.zip
-unzip -q /tmp/dr-staff.zip -d "$APP_DIR"
-rm /tmp/dr-staff.zip
+gsutil cp "gs://$ARTIFACT_BUCKET/$DR_APP_OBJECT" /tmp/dr-app.zip
+unzip -q /tmp/dr-app.zip -d "$APP_DIR"
+rm /tmp/dr-app.zip
 
 # ── Secret Manager 시크릿 조회 ─────────────────────────────────────────────────
 echo "[startup] Secret Manager에서 시크릿 조회 중..."
