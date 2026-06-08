@@ -123,7 +123,7 @@
         });
         if (!meRes.ok) { window.location.href = 'login.html'; return; }
         const me = await meRes.json();
-        if (me.role !== 'patient') { window.location.href = 'login.html'; return; }
+        if (!['patient', 'doctor', 'nurse'].includes(me.role)) { window.location.href = 'login.html'; return; }
         if (me.must_change_password || me.password_expired) {
             window.location.href = 'change-password.html'; return;
         }
