@@ -223,7 +223,22 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     expiration { days = var.wazuh_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
+# 온프레미스 감사 로그 365일 (ISMS-P 2.9.1) - 260608 김강환
+  rule {
+    id     = "onprem-audit-lifecycle"
+    status = "Enabled"
+    filter { prefix = "onprem/" }
+    transition {
+      days          = var.wazuh_log_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.wazuh_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
+
+
 }
+
 
 
 
