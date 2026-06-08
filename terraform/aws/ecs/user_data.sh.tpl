@@ -129,8 +129,8 @@ systemctl enable --now --no-block alloy
 
 
 # ── Vector 설치 (docker 로그 → S3 원본 보존) - 260608 김강환 ──
-curl --proto '=https' --tlsv1.2 -sSf https://sh.vector.dev \
-  | bash -s -- -y
+bash -c "$(curl -L https://setup.vector.dev)"
+dnf install -y vector
 mkdir -p /etc/vector
 cat > /etc/vector/vector.toml << 'VECTOREOF'
 data_dir = "/var/lib/vector"
@@ -190,7 +190,7 @@ Environment="PRIVATE_IP=$PRIVATE_IP"
 EOF
 
 systemctl daemon-reload
-systemctl enable --now --no-block vector
+systemctl enable --now --no-block vector || true
 
 
 
