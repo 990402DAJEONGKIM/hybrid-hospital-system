@@ -83,7 +83,7 @@
             });
             if (!res.ok) { window.location.href = 'login.html'; return; }
             const me = await res.json();
-            if (me.role !== 'patient') { window.location.href = 'login.html'; return; }
+            if (!['patient', 'doctor', 'nurse'].includes(me.role)) { window.location.href = 'login.html'; return; }
 
             document.getElementById('userEmail').textContent = me.email || '';
             document.getElementById('userEmail').classList.remove('hidden');
