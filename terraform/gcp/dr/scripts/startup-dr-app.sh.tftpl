@@ -18,7 +18,7 @@ APP_DIR="/opt/gcp-dr-app"
 
 # ── 아티팩트 다운로드 (코드만 — 패키지/venv는 이미지에 포함) ──────────────────
 echo "[startup] GCS에서 앱 아티팩트 다운로드 중..."
-gsutil cp "gs://$ARTIFACT_BUCKET/$DR_APP_OBJECT" /tmp/dr-app.zip
+gcloud storage cp "gs://$ARTIFACT_BUCKET/$DR_APP_OBJECT" /tmp/dr-app.zip
 unzip -q -o /tmp/dr-app.zip -d "$APP_DIR"
 rm /tmp/dr-app.zip
 
