@@ -1,39 +1,37 @@
 #!/bin/bash
 # packer/scripts/install.sh
 # Packer 빌드 VM에서 실행 — 패키지/앱 설치, systemd 등록
-# 시크릿 조회 및 서비스 시작은 하지 않는다 (startup script에서 수행)
+# 시크릿 조회 및 서비스 시작은 startup script에서 수행
 set -euo pipefail
 
-echo "[install] Python 의존성 설치"
-sudo pip3 install --break-system-packages --no-cache-dir \
-  "fastapi==0.115.6" \
-  "uvicorn[standard]==0.34.0" \
-  "SQLAlchemy==2.0.36" \
-  "psycopg2-binary==2.9.10" \
-  "python-dotenv==1.0.1" \
-  "python-jose[cryptography]==3.3.0" \
-  "passlib[bcrypt]==1.7.4" \
-  "bcrypt==4.0.1" \
-  "pydantic[email]==2.10.4"
+echo "[install] Python venv 생성 및 의존성 설치"
+sudo mkdir -p /opt/gcp-dr-app/backend
+sudo mkdir -p /opt/gcp-dr-app/frontend
 
-echo "[install] 앱 디렉토리 구성"
-sudo mkdir -p /opt/gcp-dr-reservation/backend
-sudo mkdir -p /opt/gcp-dr-reservation/frontend
+# requirements.txt 기반 설치 (venv)
+sudo python3 -m venv /opt/gcp-dr-app/backend/venv
+sudo /opt/gcp-dr-app/backend/venv/bin/pip install --no-cache-dir \
+  -r /tmp/dr-backend/requirements.txt
 
-sudo cp -r /tmp/dr-backend/. /opt/gcp-dr-reservation/backend/
-sudo cp -r /tmp/dr-frontend/. /opt/gcp-dr-reservation/frontend/
+echo "[install] 앱 코드 복사"
+sudo cp -r /tmp/dr-backend/. /opt/gcp-dr-app/backend/
+sudo cp -r /tmp/dr-frontend/. /opt/gcp-dr-app/frontend/
+
+# __pycache__ 정리
+sudo find /opt/gcp-dr-app -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+sudo find /opt/gcp-dr-app -name "*.pyc" -delete 2>/dev/null || true
 
 echo "[install] systemd 서비스 등록"
-sudo tee /etc/systemd/system/gcp-dr-reservation.service > /dev/null << 'UNIT'
+sudo tee /etc/systemd/system/gcp-dr-app.service > /dev/null << 'UNIT'
 [Unit]
-Description=GCP DR reservation FastAPI
+Description=GCP DR Staff App (FastAPI)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-WorkingDirectory=/opt/gcp-dr-reservation/backend
-EnvironmentFile=/opt/gcp-dr-reservation/backend/.env
-ExecStart=/usr/bin/python3 -m uvicorn main:app --host 127.0.0.1 --port 8000 --proxy-headers
+WorkingDirectory=/opt/gcp-dr-app/backend
+EnvironmentFile=/opt/gcp-dr-app/backend/.env
+ExecStart=/opt/gcp-dr-app/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers
 Restart=always
 RestartSec=3
 
@@ -43,10 +41,9 @@ UNIT
 
 echo "[install] nginx 기본 설정 제거 + 서비스 등록"
 sudo rm -f /etc/nginx/sites-enabled/default
-
 sudo systemctl daemon-reload
 # enable만 — start는 startup script에서 시크릿 주입 후 수행
-sudo systemctl enable gcp-dr-reservation
+sudo systemctl enable gcp-dr-app
 sudo systemctl enable nginx
 
 echo "[install] 완료"

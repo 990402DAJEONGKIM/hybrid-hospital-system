@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'app/dr-lite/**'
+      - 'app/dr-app/**'
       - 'packer/**'
 
   # 수동 트리거 (긴급 이미지 갱신 시)
@@ -46,7 +46,7 @@ jobs:
       # ── 4. Packer 빌드 ──────────────────────────────────────────────────────────
       - name: Packer Init
         working-directory: packer
-        run: packer init dr-lite.pkr.hcl
+        run: packer init dr-app.pkr.hcl
 
       - name: Packer Build
         working-directory: packer
@@ -54,7 +54,7 @@ jobs:
           packer build \
             -var "project_id=gcp-project-496802" \
             -var "zone=asia-northeast3-a" \
-            dr-lite.pkr.hcl
+            dr-app.pkr.hcl
 
       # ── 5. 이미지 이름 추출 ─────────────────────────────────────────────────────
       - name: Extract image name
@@ -75,7 +75,6 @@ jobs:
           WS_ID="ws-3wAP7iDiNKH8UHrR"
           IMAGE_PATH="${{ steps.image.outputs.full_path }}"
 
-          # 기존 변수 ID 조회
           VAR_ID=$(curl -sf \
             --header "Authorization: Bearer $TFC_TOKEN" \
             --header "Content-Type: application/vnd.api+json" \
@@ -93,7 +92,8 @@ jobs:
                   \"id\": \"$VAR_ID\",
                   \"type\": \"vars\",
                   \"attributes\": {
-                    \"value\": \"$IMAGE_PATH\"
+                    \"value\": \"$IMAGE_PATH\",
+                    \"description\": \"DR 앱 Custom Image — GitHub Actions에서 자동 업데이트\"
                   }
                 }
               }" \
