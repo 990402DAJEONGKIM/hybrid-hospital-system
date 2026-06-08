@@ -126,8 +126,11 @@ resource "aws_iam_role_policy" "ec2_vector_s3" {
       {
         Sid    = "S3Write"
         Effect = "Allow"
-        Action = ["s3:PutObject"]
-        Resource = "arn:aws:s3:::aws-k2p-storage-01/ecs/*"
+        Action = ["s3:PutObject","s3:ListBucket"]
+        Resource = [
+          "arn:aws:s3:::aws-k2p-storage-01",
+          "arn:aws:s3:::aws-k2p-storage-01/ecs/*"
+        ]
       },
       {
         Sid    = "KMSEncrypt"
