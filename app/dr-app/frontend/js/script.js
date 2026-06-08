@@ -118,7 +118,7 @@ async function requireLogin() {
         const res = await apiCall('/auth/me');
         if (!res || !res.ok) { window.location.href = 'login.html'; return null; }
         const me = await res.json();
-        if (me.role !== 'patient') { window.location.href = 'login.html'; return null; }
+        if (!['patient', 'doctor', 'nurse'].includes(me.role)) { window.location.href = 'login.html'; return null; }
         // must_change_password=true 또는 비밀번호 만료 시 변경 페이지 강제 이동 (SFR-038)
         if (me.must_change_password || me.password_expired) {
             if (!window.location.pathname.includes('change-password.html')) {
@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         if (res && res.ok) {
             const data = await res.json();
-            if (data.role === 'patient') me = data;
+            if (['patient', 'doctor', 'nurse'].includes(data.role)) me = data;
         }
     } catch {}
 
