@@ -77,7 +77,10 @@ resource "aws_launch_template" "ecs" {
     wazuh_server_ip = var.wazuh_server_ip
     aws_region      = var.aws_region
     monitoring_ip   = data.terraform_remote_state.monitoring.outputs.monitoring_private_ip
+    s3_bucket       = var.log_bucket_name  # 수정 - 260608 김강환
   }))
+
+  
 
   tag_specifications {
     resource_type = "instance"
