@@ -325,7 +325,7 @@ resource "google_compute_backend_service" "dr_app" {
 }
 
 resource "google_compute_url_map" "dr_app" {
-  name            = "gcp-dr-staff-urlmap"
+  name            = "gcp-dr-reservation-urlmap"
   default_service = google_compute_backend_service.dr_app.id
 }
 
