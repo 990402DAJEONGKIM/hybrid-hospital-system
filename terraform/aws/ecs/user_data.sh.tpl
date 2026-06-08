@@ -131,6 +131,7 @@ systemctl enable --now --no-block alloy
 # ── Vector 설치 (docker 로그 → S3 원본 보존) - 260608 김강환 ──
 curl --proto '=https' --tlsv1.2 -sSf https://sh.vector.dev \
   | bash -s -- -y
+mkdir -p /etc/vector
 cat > /etc/vector/vector.toml << 'VECTOREOF'
 data_dir = "/var/lib/vector"
 

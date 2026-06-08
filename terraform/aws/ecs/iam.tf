@@ -112,3 +112,29 @@ resource "aws_iam_instance_profile" "ec2_instance" {
   role = aws_iam_role.ec2_instance.name
 }
 
+
+
+# ECS EC2 Vector → S3 쓰기 + KMS 권한 - 260608 김강환
+# Vector가 docker 로그를 S3 ecs/ prefix에 저장하기 위한 최소 권한
+resource "aws_iam_role_policy" "ec2_vector_s3" {
+  name = "aws-ecs-ec2-vector-s3"
+  role = aws_iam_role.ec2_instance.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3Write"
+        Effect = "Allow"
+        Action = ["s3:PutObject"]
+        Resource = "arn:aws:s3:::aws-k2p-storage-01/ecs/*"
+      },
+      {
+        Sid    = "KMSEncrypt"
+        Effect = "Allow"
+        Action = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
+      }
+    ]
+  })
+}
