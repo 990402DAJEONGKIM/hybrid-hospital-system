@@ -1,6 +1,5 @@
-// ── API 공통 설정 — DR 환경 ───────────────────────────────────────────────────
-// DR 상황에서는 mzclinic.cloud가 GCP LB IP로 전환된 상태이므로
-// 온프레미스 직접 호출(staff.mzclinic.cloud) 없이 상대경로만 사용합니다.
-const BASE_URL        = '/api/staff';
-const ONPREM_BASE_URL = 'https://staff.mzclinic.cloud';   // DR 환경에서도 내부망 접속 시 온프레미스 직접 호출 가능
-const API_KEY         = '';
+// ── API 공통 설정 ──────────────────────────────────────────
+// BASE_URL: 상대 경로 사용 (NGINX가 /auth/, /portal/ 을 FastAPI로 프록시)
+// API_KEY : NGINX가 proxy_set_header로 주입 — 프론트엔드 노출 불필요
+const BASE_URL = '/api/patient';
+const API_KEY  = '';

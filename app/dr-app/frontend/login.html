@@ -3,55 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>직원 로그인 - 김이박 클리닉</title>
-    <link rel="stylesheet" href="/css/tailwind.min.css">
-    <link rel="stylesheet" href="/css/fa-all.min.css">
+    <title>로그인 - 김이박 클리닉 환자 포털</title>
+    <link rel="stylesheet" href="css/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <style>
         body {
-            background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 100%);
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%);
             min-height: 100vh;
         }
         .login-card {
-            border-top: 4px solid #1d4ed8;
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 8px 40px rgba(59, 130, 246, 0.12);
         }
         .login-btn {
-            background: #1d3a6e;
-            transition: background 0.2s;
+            background: linear-gradient(90deg, #2563eb, #06b6d4);
+            transition: opacity 0.2s;
         }
-        .login-btn:hover { background: #1e40af; }
-        .security-badge {
-            background: #fef3c7;
-            border: 1px solid #f59e0b;
-        }
+        .login-btn:hover { opacity: 0.9; }
     </style>
 </head>
-<body style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:1rem;">
+<body style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:2rem 1rem;">
 
     <div class="w-full max-w-md">
 
         <!-- 로고 영역 -->
-        <div class="text-center mb-4">
-            <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white bg-opacity-10 mb-2">
-                <i class="fas fa-shield-alt text-2xl text-blue-300"></i>
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+                <i class="fas fa-heartbeat text-3xl text-blue-500"></i>
             </div>
-            <h1 class="text-xl font-bold text-white">김이박 클리닉</h1>
-            <p class="text-xs text-blue-300 mt-0.5 font-medium tracking-widest uppercase">직원 전용 시스템</p>
+            <h1 class="text-2xl font-bold text-gray-800">김이박 클리닉</h1>
         </div>
 
         <!-- 카드 -->
-        <div class="login-card bg-white rounded-2xl p-6">
-
-            <form id="loginForm" class="space-y-3">
+        <div class="login-card bg-white rounded-2xl p-8">
+            <form id="loginForm" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">회원번호</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
                             <i class="fas fa-id-card text-sm"></i>
                         </span>
-                        <input type="text" id="loginMemberNumber" required placeholder="회원번호 입력" autocomplete="username"
-                            class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-700 outline-none bg-gray-50 focus:bg-white transition text-sm">
+                        <input type="text" id="loginMemberNumber" required placeholder="회원번호 입력" inputmode="numeric"
+                            class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white transition">
                     </div>
                 </div>
                 <div>
@@ -61,140 +54,133 @@
                             <i class="fas fa-lock text-sm"></i>
                         </span>
                         <input type="password" id="loginPw" required
-                            class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-700 outline-none bg-gray-50 focus:bg-white transition text-sm">
+                            class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white transition">
                     </div>
                 </div>
 
-                <div id="apiError" class="hidden p-2.5 bg-red-50 border border-red-300 rounded-xl text-xs text-red-700 flex items-center gap-2">
-                    <i class="fas fa-exclamation-circle flex-shrink-0"></i>
-                    <span id="apiErrorMsg"></span>
-                </div>
+                <p id="apiError" class="hidden text-sm text-red-600 text-center"><span id="apiErrorMsg"></span></p>
 
                 <button type="submit" id="submitBtn"
-                    class="login-btn w-full text-white py-2.5 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-                    <i class="fas fa-sign-in-alt mr-2"></i>로그인
+                    class="login-btn w-full text-white py-3 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                    로그인
                 </button>
             </form>
 
-            <!-- 직원용 안내 -->
-            <div class="mt-4 pt-3 border-t border-gray-100">
-                <p class="text-xs text-gray-400 text-center leading-relaxed">
-                    <i class="fas fa-info-circle mr-1"></i>
-                    계정 발급 및 비밀번호 초기화는 IT 지원팀에 문의하세요.
-                    로그인 5회 실패 시 계정이 잠깁니다.
+        <!-- 로그인 성공 후 내부망 이동 버튼 — by 김다정, 2026-06-06 -->
+            <!-- 의사/간호사/관리자 로그인 성공 시에만 표시, 환자에게는 보이지 않음 -->
+            <div id="internalLinkBox" style="display:none;" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <p class="text-sm font-bold text-blue-800 mb-1">
+                    <i class="fas fa-check-circle mr-1"></i>로그인 완료
                 </p>
+                <p class="text-xs text-blue-600 mb-3">
+                    <i class="fas fa-info-circle mr-1"></i>병원 내부망에서만 접속 가능합니다.
+                </p>
+                <a id="internalLinkBtn" href="#" target="_blank"
+                    class="block text-center text-white py-2.5 rounded-xl font-bold text-sm"
+                    style="background:#1d4ed8;">
+                    <i class="fas fa-hospital mr-2"></i>내부 진료 DB 바로가기
+                </a>
+                <!-- 관리자 전용 Wazuh 링크 -->
+                <a id="wazuhLinkBtn" href="#" target="_blank"
+                    class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
+                    style="display:none; background:#b91c1c;">
+                    <i class="fas fa-shield-virus mr-2"></i>Wazuh 보안 모니터링
+                </a>
             </div>
         </div>
 
-        <!-- 하단 -->
     </div>
 
     <script src="js/config.js"></script>
     <script>
-        // URL 해시 자동 로그인 — by 김다정, 2026-06-06
-        // mzclinic.cloud 에서 직원 로그인 후 "내부 진료 DB 바로가기" 버튼으로 진입 시
-        // URL 해시(#access_token=...)에서 토큰을 꺼내 /auth/set-token 으로 전달
-        // 서버가 HTTP-only 쿠키를 설정한 뒤 index.html 로 이동
-        function _parseJwt(t) {
+        // JWT payload 디코딩 (서명 검증 없이 role 확인용) — by 김다정, 2026-06-06
+        function parseJwtPayload(token) {
             try {
-                const b64 = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
                 return JSON.parse(atob(b64));
             } catch { return {}; }
         }
 
-        (async () => {
-            const hash = window.location.hash;
-            if (!hash.startsWith('#access_token=')) return;
-
-            const token = decodeURIComponent(hash.slice('#access_token='.length));
-            history.replaceState(null, '', window.location.pathname);  // 주소창에서 토큰 제거
-
-            const role = _parseJwt(token).role || '';
-            const redirectUrl = role === 'admin'  ? '/admin-users.html'   :
-                                role === 'doctor' ? '/doctor-schedule.html' :
-                                                   '/index.html';
-
-            try {
-                const res = await fetch('/auth/set-token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token }),
-                });
-                if (res.ok) {
-                    window.location.replace(redirectUrl);
-                } else {
-                    console.warn('토큰 검증 실패, 일반 로그인 화면을 표시합니다.');
-                }
-            } catch {
-                console.warn('set-token 요청 실패, 일반 로그인 화면을 표시합니다.');
-            }
-        })();
-
-        // 인증 기준 URL:
-        //   ONPREM_BASE_URL 설정 시 → 온프레미스 로그인 (병원 내부망)
-        //   미설정 시              → AWS 로그인 (외부 접속 폴백)
-        const _AUTH_BASE    = ONPREM_BASE_URL || BASE_URL;
-        const _authHeaders  = () => ONPREM_BASE_URL
-            ? { 'Content-Type': 'application/json' }
-            : { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
+        // 로그인 — by 김다정, 2026-06-06
+        // 1. /api/staff/auth/login 으로 통합 인증 (환자·직원 모두 처리)
+        // 2. JWT payload 의 role 로 분기
+        //    - doctor / nurse / admin → 내부 진료 DB 버튼 표시
+        //    - patient               → 환자 포털(index.html)로 이동
+        // 3. 직원인 경우 토큰을 URL 해시에 담아 버튼 href 설정
+        //    URL 해시는 서버 로그에 남지 않아 query param 보다 안전
+        const STAFF_ROLES = new Set(['doctor', 'nurse', 'admin']);
+        const ONPREM_URL  = 'https://staff.mzclinic.cloud';
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const memberNumber = document.getElementById('loginMemberNumber').value.trim();
             const pw           = document.getElementById('loginPw').value;
-            const errorBox  = document.getElementById('apiError');
-            const errorMsg  = document.getElementById('apiErrorMsg');
-            const submitBtn = document.getElementById('submitBtn');
+            const errorBox     = document.getElementById('apiError');
+            const errorMsg     = document.getElementById('apiErrorMsg');
+            const submitBtn    = document.getElementById('submitBtn');
 
             errorBox.classList.add('hidden');
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>확인 중...';
+            submitBtn.textContent = '로그인 중...';
 
             try {
-                // 1단계: 1차 로그인 (온프레미스 우선, 없으면 AWS)
-                const res = await fetch(`${_AUTH_BASE}/auth/login`, {
+                const res = await fetch('/api/staff/auth/login', {
                     method: 'POST',
                     credentials: 'include',
-                    headers: _authHeaders(),
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ member_number: memberNumber, password: pw }),
                 });
-
                 const data = await res.json();
 
-                if (res.ok) {
-                    // 2단계: 온프레미스 로그인 성공 시 AWS 세션도 동시 생성 (비민감 API 인증용)
-                    if (ONPREM_BASE_URL) {
-                        fetch(`${BASE_URL}/auth/login`, {
-                            method: 'POST',
-                            credentials: 'include',
-                            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-                            body: JSON.stringify({ member_number: memberNumber, password: pw }),
-                        }).catch(() => {});  // 실패해도 무시 (AWS DB에 계정 없을 수 있음)
-                    }
-
-                    // 3단계: 사용자 정보 확인
-                    const meRes = await fetch(`${_AUTH_BASE}/auth/me`, {
-                        credentials: 'include',
-                        headers: _authHeaders(),
-                    });
-                    const meData = await meRes.json();
-
-                    if (meData.must_change_password || meData.password_expired) {
-                        window.location.href = 'change-password.html';
-                        return;
-                    }
-                    window.location.href = 'index.html';
-                } else {
+                if (!res.ok) {
                     errorMsg.textContent = data.detail || '로그인 중 오류가 발생했습니다.';
                     errorBox.classList.remove('hidden');
+                    return;
+                }
+
+                const payload = parseJwtPayload(data.access_token);
+                const role    = payload.role || '';
+
+                if (STAFF_ROLES.has(role)) {
+                    const token = data.access_token;
+
+                    // 최초 로그인 / 비밀번호 만료 → 직원 포털 비밀번호 변경 페이지로 이동
+                    if (payload.must_change_password || payload.password_expired) {
+                        window.location.href = `${ONPREM_URL}/change-password.html#access_token=${encodeURIComponent(token)}`;
+                        return;
+                    }
+
+                    // 직원: 토큰을 URL 해시에 담아 온프레미스 버튼 활성화
+                    const internalUrl = `${ONPREM_URL}/#access_token=${encodeURIComponent(token)}`;
+                    document.getElementById('internalLinkBtn').href = internalUrl;
+
+                    // 관리자 전용: Wazuh 모니터링 대시보드 링크 (AWS)
+                    if (role === 'admin') {
+                        const wazuhBtn = document.getElementById('wazuhLinkBtn');
+                        wazuhBtn.href = 'https://wazuh.mzclinic.cloud';
+                        wazuhBtn.style.display = 'block';
+                    }
+
+                    document.getElementById('internalLinkBox').style.display = 'block';
+                    document.getElementById('loginForm').style.display = 'none';
+                } else {
+                    // 환자: 비밀번호 만료 확인 후 포털로 이동
+                    const meRes  = await fetch(`${BASE_URL}/auth/me`, {
+                        credentials: 'include',
+                        headers: { 'X-API-Key': API_KEY },
+                    });
+                    const meData = await meRes.json();
+                    window.location.href = (meData.password_expired || meData.must_change_password)
+                        ? 'change-password.html'
+                        : 'index.html';
                 }
             } catch {
                 errorMsg.textContent = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.';
                 errorBox.classList.remove('hidden');
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>로그인';
+                submitBtn.textContent = '로그인';
             }
         });
     </script>
