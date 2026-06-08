@@ -47,8 +47,3 @@ import {
   to = google_compute_instance_group_manager.dr_app
   id = "projects/gcp-project-496802/zones/asia-northeast3-a/instanceGroupManagers/gcp-dr-reservation-mig"
 }
-
-import {
-  to = google_compute_target_http_proxy.dr_app_redirect
-  id = "projects/gcp-project-496802/global/targetHttpProxies/gcp-dr-reservation-http-redirect-proxy"
-}
