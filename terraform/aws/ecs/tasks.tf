@@ -27,14 +27,6 @@ locals {
 }
 
 
-# ─────────────────────────────────────────────────────────
-# CloudWatch Log Group
-# ─────────────────────────────────────────────────────────
-resource "aws_cloudwatch_log_group" "hospital" {
-  name              = "/ecs/hospital"
-  retention_in_days = 90
-}
-
 
 # ─────────────────────────────────────────────────────────
 # Task Definition — 통합 병원 (nginx + api)
@@ -63,11 +55,10 @@ resource "aws_ecs_task_definition" "hospital" {
       environment = []
       secrets = local.nginx_secrets
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "json-file"
         options = {
-          "awslogs-group"         = "/ecs/hospital"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "nginx"
+          "max-size" = "10m"
+          "max-file" = "3"
         }
       }
       dependsOn = [{
@@ -93,11 +84,10 @@ resource "aws_ecs_task_definition" "hospital" {
       ]
       secrets = local.hospital_secrets
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "json-file"
         options = {
-          "awslogs-group"         = "/ecs/hospital"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "api"
+          "max-size" = "10m"
+          "max-file" = "3"
         }
       }
     }

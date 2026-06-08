@@ -127,6 +127,72 @@ ALLOYEOF
 # Alloy도 --no-block로 시작
 systemctl enable --now --no-block alloy
 
+
+# ── Vector 설치 (docker 로그 → S3 원본 보존) - 260608 김강환 ──
+curl --proto '=https' --tlsv1.2 -sSf https://sh.vector.dev \
+  | bash -s -- -y
+cat > /etc/vector/vector.toml << 'VECTOREOF'
+data_dir = "/var/lib/vector"
+
+# docker 컨테이너 로그 읽기
+[sources.docker_logs]
+type = "file"
+include = ["/var/lib/docker/containers/*/*-json.log"]
+read_from = "beginning"
+
+# fastapi_audit만 필터
+[transforms.fastapi_only]
+type = "filter"
+inputs = ["docker_logs"]
+condition = 'contains(string!(.message), "fastapi_audit")'
+
+# EC2 IP 메타데이터 추가 (어느 EC2인지 구분)
+[transforms.add_metadata]
+type = "remap"
+inputs = ["fastapi_only"]
+source = '''
+  .host = get_env_var!("PRIVATE_IP")
+'''
+
+# S3 원본 저장
+[sinks.s3_ecs]
+type = "aws_s3"
+inputs = ["add_metadata"]
+bucket = "${s3_bucket}"
+region = "${aws_region}"
+key_prefix = "ecs/%Y/%m/%d/"
+compression = "gzip"
+
+[sinks.s3_ecs.encoding]
+codec = "text"
+
+[sinks.s3_ecs.batch]
+timeout_secs = 300
+
+[sinks.s3_ecs.buffer]
+type = "memory"
+max_events = 1000
+when_full = "drop_newest"
+VECTOREOF
+
+# PRIVATE_IP 환경변수 설정
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/local-ipv4)
+
+# systemd override로 환경변수 주입
+mkdir -p /etc/systemd/system/vector.service.d
+cat > /etc/systemd/system/vector.service.d/env.conf << EOF
+[Service]
+Environment="PRIVATE_IP=$PRIVATE_IP"
+EOF
+
+systemctl daemon-reload
+systemctl enable --now --no-block vector
+
+
+
 # ── ECS agent 시작 (Wazuh/Alloy 설치 완료 후) ───────────
 # AWS 공식 권장: --no-block로 cloud-init 데드락 회피
 # enable 후 --now가 즉시 시작을 요청하지만 --no-block가 cloud-final 완료를 기다리지 않음

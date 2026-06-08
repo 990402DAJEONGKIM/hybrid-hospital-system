@@ -76,3 +76,10 @@ variable "onprem_base_url" {
   default     = "https://172.30.1.76"
 }
 
+
+# ── S3 로그 버킷 ───────────────────────────────────────── 260608 김강환
+variable "log_bucket_name" {
+  description = "로그 저장 S3 버킷 이름"
+  type        = string
+  default     = "aws-k2p-storage-01"
+}
