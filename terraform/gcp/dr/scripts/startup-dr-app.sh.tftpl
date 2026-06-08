@@ -16,14 +16,8 @@ ARTIFACT_BUCKET="${artifact_bucket}"
 DR_APP_OBJECT="${dr_app_object}"
 APP_DIR="/opt/gcp-dr-app"
 
-# ── 패키지 설치 ────────────────────────────────────────────────────────────────
-echo "[startup] 패키지 설치 중..."
-apt-get update -y -q
-apt-get install -y -q nginx python3 python3-pip python3-venv unzip curl
-
-# ── 아티팩트 다운로드 ──────────────────────────────────────────────────────────
+# ── 아티팩트 다운로드 (코드만 — 패키지/venv는 이미지에 포함) ──────────────────
 echo "[startup] GCS에서 앱 아티팩트 다운로드 중..."
-mkdir -p "$APP_DIR"
 gsutil cp "gs://$ARTIFACT_BUCKET/$DR_APP_OBJECT" /tmp/dr-app.zip
 unzip -q -o /tmp/dr-app.zip -d "$APP_DIR"
 rm /tmp/dr-app.zip
@@ -52,11 +46,6 @@ print(f"postgresql+psycopg2://{user}:{password}@{host}:5432/{name}")
 PY
 )
 
-# ── Python venv + 의존성 설치 ──────────────────────────────────────────────────
-echo "[startup] Python 의존성 설치 중..."
-python3 -m venv "$APP_DIR/backend/venv"
-"$APP_DIR/backend/venv/bin/pip" install -q -r "$APP_DIR/backend/requirements.txt"
-
 # ── .env 생성 ──────────────────────────────────────────────────────────────────
 echo "[startup] .env 파일 생성 중..."
 umask 077
@@ -73,25 +62,6 @@ ALLOWED_HOSTS=*
 ENV
 chmod 0600 "$APP_DIR/backend/.env"
 
-# ── systemd 서비스 등록 ────────────────────────────────────────────────────────
-echo "[startup] systemd 서비스 등록 중..."
-cat > /etc/systemd/system/gcp-dr-app.service << UNIT
-[Unit]
-Description=GCP DR Staff App (FastAPI)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-WorkingDirectory=$APP_DIR/backend
-EnvironmentFile=$APP_DIR/backend/.env
-ExecStart=$APP_DIR/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port $APP_PORT --workers 2
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
 # ── nginx 설정 ─────────────────────────────────────────────────────────────────
 echo "[startup] nginx 설정 생성 중..."
 python3 - "$API_KEY_VALUE" "$APP_PORT" "$APP_DIR" <<'PY'
@@ -101,7 +71,6 @@ api_key  = sys.argv[1].replace("\\", "\\\\").replace('"', '\\"')
 app_port = sys.argv[2]
 app_dir  = sys.argv[3]
 
-# API Key 주입이 필요한 백엔드 라우팅 location 생성
 def proxy_location(path, upstream_path=None):
     upstream = upstream_path or path
     return f'''
@@ -156,11 +125,5 @@ systemctl daemon-reload
 systemctl enable --now gcp-dr-app
 nginx -t
 systemctl restart nginx
-
-%{ if enable_ops_agent }
-echo "[startup] Ops Agent 설치 중..."
-curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
-bash add-google-cloud-ops-agent-repo.sh --also-install
-%{ endif }
 
 echo "[startup] 완료"
