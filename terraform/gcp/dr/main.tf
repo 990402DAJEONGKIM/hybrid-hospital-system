@@ -228,7 +228,7 @@ resource "google_compute_firewall" "allow_iap_ssh_dr" {
 # ── MIG / Instance Template ────────────────────────────────────────────────────
 
 resource "google_compute_instance_template" "dr_app" {
-  name_prefix  = "gcp-dr-staff-"
+  name_prefix  = "gcp-dr-reservation-"
   machine_type = var.dr_machine_type
   tags         = ["dr-app", "cloud-sql-client"]
 
@@ -281,9 +281,9 @@ resource "google_compute_instance_template" "dr_app" {
 }
 
 resource "google_compute_instance_group_manager" "dr_app" {
-  name               = "gcp-dr-staff-mig"
+  name               = "gcp-dr-reservation-mig"
   zone               = var.zone
-  base_instance_name = "gcp-dr-staff"
+  base_instance_name = "gcp-dr-reservation"
   target_size        = var.initial_dr_capacity
 
   version {
@@ -312,7 +312,7 @@ resource "google_compute_health_check" "dr_app" {
 }
 
 resource "google_compute_backend_service" "dr_app" {
-  name                  = "gcp-dr-staff-backend"
+  name                  = "gcp-dr-reservation-backend"
   protocol              = "HTTP"
   port_name             = "http"
   load_balancing_scheme = "EXTERNAL_MANAGED"
