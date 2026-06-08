@@ -13,6 +13,6 @@ data "google_sql_database_instance" "main" {
 
 data "archive_file" "dr_app" {
   type        = "zip"
-  source_dir  = "${path.module}/../../../app/dr-lite"
-  output_path = "${path.module}/dr-lite.zip"
+  source_dir  = "${path.module}/../../../app/dr-app"
+  output_path = "${path.module}/dr-app.zip"
 }
