@@ -14,7 +14,7 @@ ALLOWED_ORIGINS="${allowed_origins}"
 APP_PORT="${app_port}"
 ARTIFACT_BUCKET="${artifact_bucket}"
 DR_APP_OBJECT="${dr_app_object}"
-APP_DIR="/opt/gcp-dr-staff"
+APP_DIR="/opt/gcp-dr-app"
 
 # ── 패키지 설치 ────────────────────────────────────────────────────────────────
 echo "[startup] 패키지 설치 중..."
@@ -74,7 +74,7 @@ chmod 0600 "$APP_DIR/backend/.env"
 
 # ── systemd 서비스 등록 ────────────────────────────────────────────────────────
 echo "[startup] systemd 서비스 등록 중..."
-cat > /etc/systemd/system/gcp-dr-staff.service << UNIT
+cat > /etc/systemd/system/gcp-dr-app.service << UNIT
 [Unit]
 Description=GCP DR Staff App (FastAPI)
 After=network-online.target
@@ -141,18 +141,18 @@ config = f'''server {{
     }}
 }}
 '''
-with open("/etc/nginx/sites-available/gcp-dr-staff", "w") as f:
+with open("/etc/nginx/sites-available/gcp-dr-app", "w") as f:
     f.write(config)
 PY
 
 rm -f /etc/nginx/sites-enabled/default
-ln -sf /etc/nginx/sites-available/gcp-dr-staff \
-       /etc/nginx/sites-enabled/gcp-dr-staff
+ln -sf /etc/nginx/sites-available/gcp-dr-app \
+       /etc/nginx/sites-enabled/gcp-dr-app
 
 # ── 서비스 시작 ────────────────────────────────────────────────────────────────
 echo "[startup] 서비스 시작 중..."
 systemctl daemon-reload
-systemctl enable --now gcp-dr-staff
+systemctl enable --now gcp-dr-app
 nginx -t
 systemctl restart nginx
 
