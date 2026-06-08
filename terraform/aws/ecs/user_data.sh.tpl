@@ -137,9 +137,8 @@ data_dir = "/var/lib/vector"
 
 # docker 컨테이너 로그 읽기
 [sources.docker_logs]
-type = "file"
-include = ["/var/lib/docker/containers/*/*-json.log"]
-read_from = "beginning"
+type = "docker_logs"
+
 
 # fastapi_audit만 필터
 [transforms.fastapi_only]
@@ -188,7 +187,8 @@ cat > /etc/systemd/system/vector.service.d/env.conf << EOF
 [Service]
 Environment="PRIVATE_IP=$PRIVATE_IP"
 EOF
-
+usermod -aG docker vector
+echo 'VECTOR_CONFIG=/etc/vector/vector.toml' >> /etc/default/vector
 systemctl daemon-reload
 systemctl enable --now --no-block vector || true
 
