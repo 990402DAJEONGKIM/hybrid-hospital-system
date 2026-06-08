@@ -20,7 +20,7 @@ resource "google_compute_managed_ssl_certificate" "dr_app" {
   name = "gcp-dr-ssl-cert"
 
   managed {
-    domains = ["dr.mzclinic.cloud"]
+    domains = ["mzclinic.cloud"]
   }
 }
 
