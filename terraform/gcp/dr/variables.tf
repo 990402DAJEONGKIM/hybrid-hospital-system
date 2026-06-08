@@ -58,12 +58,9 @@ variable "proxy_service_account_email" {
 }
 
 variable "aws_healthcheck_url" {
-  description = <<-EOT
-    AWS 메인 예약 서비스 health check URL.
-    enable_monitor = true 일 때만 실제로 사용됩니다.
-  EOT
-  type    = string
-  default = "http://localhost/health"
+  description = "AWS 메인 서비스 health check URL."
+  type        = string
+  default     = "https://mzclinic.cloud/health"
 }
 
 variable "healthcheck_interval_seconds" {
@@ -99,51 +96,43 @@ variable "dr_machine_type" {
 }
 
 variable "dr_source_image" {
-  description = "DR 앱/모니터 VM에 사용할 OS 이미지. 운영에서는 검증된 custom image 사용 권장"
+  description = "DR 앱 VM에 사용할 OS 이미지"
   type        = string
   default     = "debian-cloud/debian-12"
 }
 
-# ── DNS ────────────────────────────────────────────────────────────────────────
+# ── Cloudflare DNS ─────────────────────────────────────────────────────────────
+# API Token / Zone ID / 레코드 값은 Secret Manager에 저장합니다.
+# secret 이름만 변수로 관리합니다.
 
-variable "dns_managed_zone" {
-  description = <<-EOT
-    Cloud DNS managed zone 이름.
-    enable_monitor = true 일 때만 실제로 사용됩니다.
-    Terraform Cloud 워크스페이스 변수에서 실제 zone 이름으로 설정하세요.
-  EOT
-  type    = string
-  default = ""
-}
-
-variable "dns_record_name" {
-  description = <<-EOT
-    전환할 FQDN. 끝에 점 포함. 예: booking.example.com.
-    enable_monitor = true 일 때만 실제로 사용됩니다.
-  EOT
-  type    = string
-  default = ""
-}
-
-variable "dns_record_type" {
-  description = "전환할 DNS 레코드 타입. AWS 복귀 대상이 ALB면 CNAME 서브도메인 권장"
+variable "cf_api_token_secret_name" {
+  description = "Cloudflare API Token이 저장된 Secret Manager secret 이름"
   type        = string
-  default     = "A"
+  default     = "cloudflare-api-token"
 }
 
-variable "dns_ttl" {
-  description = "DNS TTL (초)"
-  type        = number
-  default     = 30
+variable "cf_zone_id_secret_name" {
+  description = "Cloudflare Zone ID가 저장된 Secret Manager secret 이름"
+  type        = string
+  default     = "cloudflare-zone-id"
 }
 
-variable "aws_dns_rrdatas" {
-  description = <<-EOT
-    AWS 정상 상태 레코드 값. 예: ["aws-alb.example.com."] 또는 ["1.2.3.4"]
-    enable_monitor = true 일 때만 실제로 사용됩니다.
-  EOT
-  type    = list(string)
-  default = []
+variable "cf_record_name" {
+  description = "전환할 Cloudflare DNS 레코드 이름. 예: mzclinic.cloud"
+  type        = string
+  default     = "mzclinic.cloud"
+}
+
+variable "aws_record_content" {
+  description = "AWS 정상 상태 CNAME 값 (복귀 시 사용). 예: aws-hospital-alb-xxx.ap-south-2.elb.amazonaws.com"
+  type        = string
+  default     = "aws-hospital-alb-142886199.ap-south-2.elb.amazonaws.com"
+}
+
+variable "gcp_cname_target" {
+  description = "DR 발동 시 CNAME 대상. dr.mzclinic.cloud → GCP LB IP로 resolve됨"
+  type        = string
+  default     = "dr.mzclinic.cloud"
 }
 
 # ── Secret Manager ─────────────────────────────────────────────────────────────
@@ -169,9 +158,9 @@ variable "api_key_secret_name" {
 # ── 기타 ───────────────────────────────────────────────────────────────────────
 
 variable "allowed_origins" {
-  description = "DR 앱 CORS 허용 origin 목록. 비우면 dns_record_name 기반 http origin을 사용"
+  description = "DR 앱 CORS 허용 origin 목록"
   type        = list(string)
-  default     = []
+  default     = ["https://mzclinic.cloud"]
 }
 
 variable "enable_ops_agent" {
@@ -188,10 +177,11 @@ variable "failover_mode" {
   validation {
     condition     = contains(["manual", "automatic"], var.failover_mode)
     error_message = "failover_mode는 manual 또는 automatic이어야 합니다."
-  }  
+  }
 }
+
 variable "cookie_secure" {
   description = "COOKIE_SECURE 환경변수. HTTPS 적용 전 false, 적용 후 true로 변경"
   type        = bool
-  default     = false
+  default     = true
 }

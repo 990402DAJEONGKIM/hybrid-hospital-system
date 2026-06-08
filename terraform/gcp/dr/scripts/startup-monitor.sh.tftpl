@@ -1,75 +1,107 @@
 #!/bin/bash
+# terraform/gcp/dr/scripts/startup-monitor.sh.tftpl
 set -euo pipefail
-
 
 apt-get update -y
 apt-get install -y curl jq
 
-if [[ "${enable_ops_agent}" == "true" ]]; then
-  curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
-  bash add-google-cloud-ops-agent-repo.sh --also-install
-fi
+%{ if enable_ops_agent }
+curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+bash add-google-cloud-ops-agent-repo.sh --also-install
+%{ endif }
 
-# webhook은 GCP Secret Manager에서 읽도록 변경 (아래 SCRIPT 블록 내 gcloud secrets access) -260607 김강환
 cat > /usr/local/bin/gcp-dr-failover.sh <<'SCRIPT'
 #!/bin/bash
 set -euo pipefail
 
+# ── 렌더링된 값 ────────────────────────────────────────────────────────────────
 PROJECT_ID="${project_id}"
-SLACK_WEBHOOK_URL="$(gcloud secrets versions access latest --secret=gcp-dr-slack-webhook --project=${project_id})"
 ZONE="${zone}"
 MIG_NAME="${mig_name}"
 AWS_HEALTHCHECK_URL="${aws_healthcheck_url}"
 INTERVAL_SECONDS="${interval_seconds}"
 FAILURE_THRESHOLD="${failure_threshold}"
 RECOVERY_THRESHOLD="${recovery_threshold}"
-DNS_MANAGED_ZONE="${dns_managed_zone}"
-DNS_RECORD_NAME="${dns_record_name}"
-DNS_RECORD_TYPE="${dns_record_type}"
-DNS_TTL="${dns_ttl}"
-AWS_DNS_RRDATAS="${aws_dns_rrdatas}"
-GCP_DNS_RRDATAS="${gcp_dns_rrdatas}"
+CF_API_TOKEN_SECRET="${cf_api_token_secret}"
+CF_ZONE_ID_SECRET="${cf_zone_id_secret}"
+CF_RECORD_NAME="${cf_record_name}"
+GCP_CNAME_TARGET="${gcp_cname_target}"
+AWS_CNAME_TARGET="${aws_record_content}"
 FAILOVER_MODE="${failover_mode}"
+
 STATE_FILE="/var/lib/gcp-dr-failover/state"
 EVENT_FILE="/var/lib/gcp-dr-failover/events.log"
 
 mkdir -p "$(dirname "$STATE_FILE")"
 
-log_event() {
-  local event="$1"
-  local message="$2"
-  local now
-  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  printf '{"ts":"%s","event":"%s","mode":"%s","state":"%s","message":"%s"}\n' \
-    "$now" "$event" "$FAILOVER_MODE" "$(current_state)" "$message" >> "$EVENT_FILE"
-  logger -t gcp-dr-failover "event=$event mode=$FAILOVER_MODE state=$(current_state) $message"
-}
+# ── Secret Manager에서 Cloudflare 크레덴셜 로드 ────────────────────────────────
+CF_API_TOKEN=$(gcloud secrets versions access latest \
+  --secret="$CF_API_TOKEN_SECRET" --project="$PROJECT_ID")
+CF_ZONE_ID=$(gcloud secrets versions access latest \
+  --secret="$CF_ZONE_ID_SECRET" --project="$PROJECT_ID")
+SLACK_WEBHOOK_URL=$(gcloud secrets versions access latest \
+  --secret=gcp-dr-slack-webhook --project="$PROJECT_ID")
 
-send_slack() {
-  local message="$1"
-  curl -s -X POST "$SLACK_WEBHOOK_URL" \
-    -H "Content-Type: application/json" \
-    -d "{\"text\": \"$message\"}" || true
-}
-
-
-
-read_state() {
-  if [[ -f "$STATE_FILE" ]]; then
-    cat "$STATE_FILE"
-  else
-    echo "aws"
-  fi
+# ── 유틸 함수 ──────────────────────────────────────────────────────────────────
+current_state() {
+  [[ -f "$STATE_FILE" ]] && head -n 1 "$STATE_FILE" || echo "aws"
 }
 
 write_state() {
   printf '%s\nupdated_at=%s\n' "$1" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$STATE_FILE"
 }
 
-current_state() {
-  read_state | head -n 1
+log_event() {
+  local event="$1" message="$2"
+  local now; now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"ts":"%s","event":"%s","mode":"%s","state":"%s","message":"%s"}\n' \
+    "$now" "$event" "$FAILOVER_MODE" "$(current_state)" "$message" >> "$EVENT_FILE"
+  logger -t gcp-dr-failover "event=$event mode=$FAILOVER_MODE state=$(current_state) $message"
 }
 
+send_slack() {
+  curl -s -X POST "$SLACK_WEBHOOK_URL" \
+    -H "Content-Type: application/json" \
+    -d "{\"text\": \"$1\"}" || true
+}
+
+# ── Cloudflare CNAME 전환 ──────────────────────────────────────────────────────
+# $1: CNAME 대상 (dr.mzclinic.cloud 또는 AWS ALB 주소)
+cf_dns_switch() {
+  local target="$1"
+
+  # 기존 CNAME 레코드 ID 조회
+  local record_id
+  record_id=$(curl -s -X GET \
+    "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=CNAME&name=$CF_RECORD_NAME" \
+    -H "Authorization: Bearer $CF_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    | jq -r '.result[0].id')
+
+  if [[ "$record_id" == "null" || -z "$record_id" ]]; then
+    logger -t gcp-dr-failover "ERROR: Cloudflare CNAME 레코드를 찾을 수 없음 name=$CF_RECORD_NAME"
+    return 1
+  fi
+
+  # CNAME 값 교체 (TTL 60초, proxied=false)
+  local result
+  result=$(curl -s -X PATCH \
+    "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$record_id" \
+    -H "Authorization: Bearer $CF_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"type\":\"CNAME\",\"name\":\"$CF_RECORD_NAME\",\"content\":\"$target\",\"ttl\":60,\"proxied\":false}")
+
+  local success
+  success=$(echo "$result" | jq -r '.success')
+  if [[ "$success" != "true" ]]; then
+    logger -t gcp-dr-failover "ERROR: Cloudflare DNS 업데이트 실패: $result"
+    return 1
+  fi
+
+  logger -t gcp-dr-failover "Cloudflare CNAME 업데이트 완료: $CF_RECORD_NAME → $target"
+}
+
+# ── MIG resize ────────────────────────────────────────────────────────────────
 resize_mig() {
   gcloud compute instance-groups managed resize "$MIG_NAME" \
     --project="$PROJECT_ID" \
@@ -78,81 +110,45 @@ resize_mig() {
     --quiet
 }
 
-dns_switch() {
-  local rrdatas_csv="$1"
-  local tmpdir
-  tmpdir="$(mktemp -d)"
-
-  gcloud dns record-sets transaction start \
-    --project="$PROJECT_ID" \
-    --zone="$DNS_MANAGED_ZONE" \
-    --transaction-file="$tmpdir/txn.yaml"
-
-  mapfile -t existing < <(gcloud dns record-sets list \
-    --project="$PROJECT_ID" \
-    --zone="$DNS_MANAGED_ZONE" \
-    --name="$DNS_RECORD_NAME" \
-    --type="$DNS_RECORD_TYPE" \
-    --format='value(rrdatas[])' | tr ';' '\n' | sed '/^$/d')
-
-  if [[ "$${#existing[@]}" -gt 0 ]]; then
-    gcloud dns record-sets transaction remove "$${existing[@]}" \
-      --project="$PROJECT_ID" \
-      --zone="$DNS_MANAGED_ZONE" \
-      --transaction-file="$tmpdir/txn.yaml" \
-      --name="$DNS_RECORD_NAME" \
-      --ttl="$DNS_TTL" \
-      --type="$DNS_RECORD_TYPE"
-  fi
-
-  IFS=',' read -ra new_rrdatas <<< "$rrdatas_csv"
-  gcloud dns record-sets transaction add "$${new_rrdatas[@]}" \
-    --project="$PROJECT_ID" \
-    --zone="$DNS_MANAGED_ZONE" \
-    --transaction-file="$tmpdir/txn.yaml" \
-    --name="$DNS_RECORD_NAME" \
-    --ttl="$DNS_TTL" \
-    --type="$DNS_RECORD_TYPE"
-
-  gcloud dns record-sets transaction execute \
-    --project="$PROJECT_ID" \
-    --zone="$DNS_MANAGED_ZONE" \
-    --transaction-file="$tmpdir/txn.yaml"
-
-  rm -rf "$tmpdir"
-}
-
+# ── Failover / Recovery ────────────────────────────────────────────────────────
 failover_to_gcp() {
-  send_slack "🚨 DR Failover — AWS 장애 감지. GCP로 전환합니다."
-  log_event "aws_unhealthy" "failure_threshold=$FAILURE_THRESHOLD gcp_rrdatas=$GCP_DNS_RRDATAS"
+  send_slack "🚨 *DR Failover* — AWS 장애 감지. GCP로 전환합니다.\n도메인: $CF_RECORD_NAME → $GCP_CNAME_TARGET"
+  log_event "aws_unhealthy" "failure_threshold=$FAILURE_THRESHOLD"
+
   if [[ "$FAILOVER_MODE" == "manual" ]]; then
-    log_event "manual_mode_skip_failover" "MIG resize and DNS switch skipped"
+    log_event "manual_mode_skip_failover" "MIG resize and DNS switch skipped — manual intervention required"
     return
   fi
+
   resize_mig 1
-  dns_switch "$GCP_DNS_RRDATAS"
+  cf_dns_switch "$GCP_CNAME_TARGET"
   write_state "gcp"
-  log_event "failover_to_gcp" "mig_size=1 dns_record=$DNS_RECORD_NAME dns_rrdatas=$GCP_DNS_RRDATAS"
+  log_event "failover_to_gcp" "mig_size=1 dns=$CF_RECORD_NAME→$GCP_CNAME_TARGET"
 }
 
 return_to_aws() {
-  send_slack "✅ DR Recovery — AWS 복구됨. AWS로 복귀합니다."
-  log_event "aws_recovered" "recovery_threshold=$RECOVERY_THRESHOLD aws_rrdatas=$AWS_DNS_RRDATAS"
+  send_slack "✅ *DR Recovery* — AWS 복구됨. AWS로 복귀합니다.\n도메인: $CF_RECORD_NAME → $AWS_CNAME_TARGET"
+  log_event "aws_recovered" "recovery_threshold=$RECOVERY_THRESHOLD"
+
   if [[ "$FAILOVER_MODE" == "manual" ]]; then
-    log_event "manual_mode_skip_return" "DNS switch and MIG resize skipped"
+    log_event "manual_mode_skip_return" "DNS switch and MIG resize skipped — manual intervention required"
     return
   fi
-  dns_switch "$AWS_DNS_RRDATAS"
+
+  cf_dns_switch "$AWS_CNAME_TARGET"
   resize_mig 0
   write_state "aws"
-  log_event "return_to_aws" "mig_size=0 dns_record=$DNS_RECORD_NAME dns_rrdatas=$AWS_DNS_RRDATAS"
+  log_event "return_to_aws" "mig_size=0 dns=$CF_RECORD_NAME→$AWS_CNAME_TARGET"
 }
 
+# ── 메인 루프 ──────────────────────────────────────────────────────────────────
 failures=0
 successes=0
 
+logger -t gcp-dr-failover "모니터 시작: mode=$FAILOVER_MODE interval=${interval_seconds}s failure_threshold=${failure_threshold} recovery_threshold=${recovery_threshold}"
+
 while true; do
-  if curl -fsS --max-time 5 "$AWS_HEALTHCHECK_URL" >/dev/null; then
+  if curl -fsS --max-time 5 "$AWS_HEALTHCHECK_URL" >/dev/null 2>&1; then
     failures=0
     successes=$((successes + 1))
     if [[ "$(current_state)" == "gcp" && "$successes" -ge "$RECOVERY_THRESHOLD" ]]; then
@@ -162,6 +158,7 @@ while true; do
   else
     successes=0
     failures=$((failures + 1))
+    logger -t gcp-dr-failover "healthcheck 실패 ($failures/$FAILURE_THRESHOLD)"
     if [[ "$(current_state)" == "aws" && "$failures" -ge "$FAILURE_THRESHOLD" ]]; then
       failover_to_gcp
       failures=0

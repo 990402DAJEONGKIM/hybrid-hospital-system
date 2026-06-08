@@ -3,11 +3,6 @@ resource "google_project_service" "compute" {
   disable_on_destroy = false
 }
 
-resource "google_project_service" "dns" {
-  service            = "dns.googleapis.com"
-  disable_on_destroy = false
-}
-
 resource "google_project_service" "secretmanager" {
   service            = "secretmanager.googleapis.com"
   disable_on_destroy = false
@@ -19,13 +14,12 @@ resource "google_project_service" "storage" {
 }
 
 locals {
-  app_name          = "gcp-dr-reservation"
-  app_port          = 8000
-  allowed_origins   = length(var.allowed_origins) > 0 ? join(",", var.allowed_origins) : "http://${trimsuffix(var.dns_record_name, ".")}"
-  gcp_dns_rrdatas   = [google_compute_global_address.dr_lb.address]
-  aws_dns_rrdatas   = join(",", var.aws_dns_rrdatas)
-  gcp_dns_rrdatas_s = join(",", local.gcp_dns_rrdatas)
+  app_name        = "gcp-dr-staff"
+  app_port        = 8000
+  allowed_origins = length(var.allowed_origins) > 0 ? join(",", var.allowed_origins) : "https://mzclinic.cloud"
 }
+
+# ── GCS 아티팩트 버킷 ──────────────────────────────────────────────────────────
 
 resource "google_storage_bucket" "artifact" {
   name                        = "${var.project_id}-dr-app-artifacts"
@@ -37,51 +31,75 @@ resource "google_storage_bucket" "artifact" {
 }
 
 resource "google_storage_bucket_object" "dr_app" {
-  name   = "dr-lite-${data.archive_file.dr_app.output_md5}.zip"
+  name   = "dr-staff-${data.archive_file.dr_app.output_md5}.zip"
   bucket = google_storage_bucket.artifact.name
   source = data.archive_file.dr_app.output_path
 }
 
-resource "google_secret_manager_secret" "jwt_secret" {
-  secret_id = var.jwt_secret_name
-
-  replication {
-    auto {}
-  }
-
-  depends_on = [google_project_service.secretmanager]
+# 모니터 설치 스크립트 GCS 업로드
+# variables 변경 후 apply → gcp-rds-proxy-01 reset 으로 반영
+resource "google_storage_bucket_object" "monitor_script" {
+  name   = "dr-monitor-install.sh"
+  bucket = google_storage_bucket.artifact.name
+  content = templatefile("${path.module}/scripts/startup-monitor.sh.tftpl", {
+    project_id              = var.project_id
+    zone                    = var.zone
+    mig_name                = google_compute_instance_group_manager.dr_app.name
+    aws_healthcheck_url     = var.aws_healthcheck_url
+    interval_seconds        = var.healthcheck_interval_seconds
+    failure_threshold       = var.failure_threshold
+    recovery_threshold      = var.recovery_threshold
+    cf_api_token_secret     = var.cf_api_token_secret_name
+    cf_zone_id_secret       = var.cf_zone_id_secret_name
+    cf_record_name          = var.cf_record_name
+    gcp_cname_target        = var.gcp_cname_target
+    aws_record_content      = var.aws_record_content
+    failover_mode           = var.failover_mode
+    enable_ops_agent        = var.enable_ops_agent
+  })
 }
 
+# ── Secret Manager ─────────────────────────────────────────────────────────────
 
+resource "google_secret_manager_secret" "jwt_secret" {
+  secret_id = var.jwt_secret_name
+  replication { auto {} }
+  depends_on = [google_project_service.secretmanager]
+}
 
 resource "google_secret_manager_secret" "api_key" {
   secret_id = var.api_key_secret_name
-
-  replication {
-    auto {}
-  }
-
+  replication { auto {} }
   depends_on = [google_project_service.secretmanager]
 }
 
-# Slack webhook 시크릿 - 260607 김강환
-# startup-monitor 스크립트가 런타임에 SM에서 읽음.
-# AWS는 AWS Secrets Manager, GCP는 GCP Secret Manager로 webhook 중앙화
 resource "google_secret_manager_secret" "slack_webhook" {
   secret_id = "gcp-dr-slack-webhook"
-
-  replication {
-    auto {}
-  }
-
+  replication { auto {} }
   depends_on = [google_project_service.secretmanager]
 }
 
+# Cloudflare 시크릿 — 프록시 VM 모니터 스크립트가 런타임에 읽음
+resource "google_secret_manager_secret" "cf_api_token" {
+  secret_id = var.cf_api_token_secret_name
+  replication { auto {} }
+  depends_on = [google_project_service.secretmanager]
+}
+
+resource "google_secret_manager_secret" "cf_zone_id" {
+  secret_id = var.cf_zone_id_secret_name
+  replication { auto {} }
+  depends_on = [google_project_service.secretmanager]
+}
+
+# ── Service Account ────────────────────────────────────────────────────────────
 
 resource "google_service_account" "app" {
   account_id   = "gcp-dr-app-sa"
-  display_name = "GCP DR reservation app"
+  display_name = "GCP DR staff app"
 }
+
+# ── IAM 바인딩 — DR 앱 SA ──────────────────────────────────────────────────────
 
 resource "google_secret_manager_secret_iam_member" "app_db_password_access" {
   secret_id = var.db_password_secret_name
@@ -101,14 +119,11 @@ resource "google_secret_manager_secret_iam_member" "app_api_key_access" {
   member    = "serviceAccount:${google_service_account.app.email}"
 }
 
-# 프록시 VM SA가 webhook 시크릿 읽기 - 260607 김강환
-# failover 스크립트가 프록시 VM(gcp-rds-proxy-01)에서 돌며 SM에서 webhook 읽음
-resource "google_secret_manager_secret_iam_member" "proxy_slack_webhook_access" {
-  secret_id = google_secret_manager_secret.slack_webhook.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${var.proxy_service_account_email}"
+resource "google_project_iam_member" "app_log_writer" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.app.email}"
 }
-
 
 resource "google_storage_bucket_iam_member" "app_artifact_reader" {
   bucket = google_storage_bucket.artifact.name
@@ -116,59 +131,44 @@ resource "google_storage_bucket_iam_member" "app_artifact_reader" {
   member = "serviceAccount:${google_service_account.app.email}"
 }
 
-# 렌더링된 모니터 설치 스크립트를 GCS에 업로드
-# DR 변수 변경 후 apply하면 자동으로 최신 스크립트로 교체됩니다.
-# 반영하려면 프록시 VM을 재시작하세요:
-#   gcloud compute instances reset gcp-rds-proxy-01 --zone asia-northeast3-a
-resource "google_storage_bucket_object" "monitor_script" {
-  name   = "dr-monitor-install.sh"
-  bucket = google_storage_bucket.artifact.name
-  content = templatefile("${path.module}/scripts/startup-monitor.sh.tftpl", {
-    project_id          = var.project_id
-    zone                = var.zone
-    mig_name            = google_compute_instance_group_manager.dr_app.name
-    aws_healthcheck_url = var.aws_healthcheck_url
-    interval_seconds    = var.healthcheck_interval_seconds
-    failure_threshold   = var.failure_threshold
-    recovery_threshold  = var.recovery_threshold
-    dns_managed_zone    = var.dns_managed_zone
-    dns_record_name     = var.dns_record_name
-    dns_record_type     = var.dns_record_type
-    dns_ttl             = var.dns_ttl
-    aws_dns_rrdatas     = join(",", var.aws_dns_rrdatas)
-    gcp_dns_rrdatas     = join(",", [google_compute_global_address.dr_lb.address])
-    failover_mode       = var.failover_mode
-    enable_ops_agent    = var.enable_ops_agent
-  })
+# ── IAM 바인딩 — 프록시 VM SA (모니터 스크립트) ────────────────────────────────
+
+resource "google_secret_manager_secret_iam_member" "proxy_slack_webhook_access" {
+  secret_id = google_secret_manager_secret.slack_webhook.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${var.proxy_service_account_email}"
 }
 
-# 프록시 VM SA에 아티팩트 버킷 읽기 권한 부여
+resource "google_secret_manager_secret_iam_member" "proxy_cf_api_token_access" {
+  secret_id = google_secret_manager_secret.cf_api_token.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${var.proxy_service_account_email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "proxy_cf_zone_id_access" {
+  secret_id = google_secret_manager_secret.cf_zone_id.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${var.proxy_service_account_email}"
+}
+
 resource "google_storage_bucket_iam_member" "proxy_artifact_reader" {
   bucket = google_storage_bucket.artifact.name
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${var.proxy_service_account_email}"
 }
 
+# 프록시 VM SA — MIG resize 전용 커스텀 역할
 resource "google_project_iam_custom_role" "dr_monitor" {
   role_id     = "gcpDrFailoverMonitor"
   title       = "GCP DR Failover Monitor"
-  description = "Least-privilege role for DR MIG resize and Cloud DNS record switching"
+  description = "DR MIG resize 전용 최소 권한 역할 (DNS 전환은 Cloudflare API로 처리)"
   permissions = [
     "compute.instanceGroupManagers.get",
     "compute.instanceGroupManagers.update",
     "compute.instanceGroups.get",
-    "dns.changes.create",
-    "dns.changes.get",
-    "dns.managedZones.get",
-    "dns.resourceRecordSets.create",
-    "dns.resourceRecordSets.delete",
-    "dns.resourceRecordSets.list",
-    "dns.resourceRecordSets.update",
   ]
 }
 
-# 모니터 역할을 프록시 VM(gcp-rds-proxy-01) 서비스 계정에 부여합니다.
-# 별도의 모니터 VM 없이 프록시 VM에서 DR failover 스크립트를 실행합니다.
 resource "google_project_iam_member" "proxy_failover_role" {
   project = var.project_id
   role    = google_project_iam_custom_role.dr_monitor.name
@@ -181,17 +181,13 @@ resource "google_service_account_iam_member" "proxy_can_use_app_sa" {
   member             = "serviceAccount:${var.proxy_service_account_email}"
 }
 
-resource "google_project_iam_member" "app_log_writer" {
-  project = var.project_id
-  role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${google_service_account.app.email}"
-}
-
 resource "google_project_iam_member" "proxy_log_writer" {
   project = var.project_id
   role    = "roles/logging.logWriter"
   member  = "serviceAccount:${var.proxy_service_account_email}"
 }
+
+# ── 방화벽 ─────────────────────────────────────────────────────────────────────
 
 resource "google_compute_firewall" "allow_lb_to_dr_app" {
   name    = "gcp-fw-allow-lb-to-dr-app"
@@ -219,8 +215,10 @@ resource "google_compute_firewall" "allow_iap_ssh_dr" {
   target_tags   = ["dr-app"]
 }
 
+# ── MIG / Instance Template ────────────────────────────────────────────────────
+
 resource "google_compute_instance_template" "dr_app" {
-  name_prefix  = "gcp-dr-reservation-"
+  name_prefix  = "gcp-dr-staff-"
   machine_type = var.dr_machine_type
   tags         = ["dr-app", "cloud-sql-client"]
 
@@ -256,6 +254,8 @@ resource "google_compute_instance_template" "dr_app" {
       enable_ops_agent        = var.enable_ops_agent
       app_port                = local.app_port
       cookie_secure           = var.cookie_secure
+      artifact_bucket         = google_storage_bucket.artifact.name
+      dr_app_object           = google_storage_bucket_object.dr_app.name
     })
   }
 
@@ -271,9 +271,9 @@ resource "google_compute_instance_template" "dr_app" {
 }
 
 resource "google_compute_instance_group_manager" "dr_app" {
-  name               = "gcp-dr-reservation-mig"
+  name               = "gcp-dr-staff-mig"
   zone               = var.zone
-  base_instance_name = "gcp-dr-reservation"
+  base_instance_name = "gcp-dr-staff"
   target_size        = var.initial_dr_capacity
 
   version {
@@ -286,12 +286,14 @@ resource "google_compute_instance_group_manager" "dr_app" {
   }
 }
 
+# ── Load Balancer ──────────────────────────────────────────────────────────────
+
 resource "google_compute_global_address" "dr_lb" {
-  name = "gcp-dr-reservation-lb-ip"
+  name = "gcp-dr-staff-lb-ip"
 }
 
 resource "google_compute_health_check" "dr_app" {
-  name = "gcp-dr-reservation-hc"
+  name = "gcp-dr-staff-hc"
 
   http_health_check {
     port         = 80
@@ -300,7 +302,7 @@ resource "google_compute_health_check" "dr_app" {
 }
 
 resource "google_compute_backend_service" "dr_app" {
-  name                  = "gcp-dr-reservation-backend"
+  name                  = "gcp-dr-staff-backend"
   protocol              = "HTTP"
   port_name             = "http"
   load_balancing_scheme = "EXTERNAL_MANAGED"
@@ -313,32 +315,25 @@ resource "google_compute_backend_service" "dr_app" {
 }
 
 resource "google_compute_url_map" "dr_app" {
-  name            = "gcp-dr-reservation-urlmap"
+  name            = "gcp-dr-staff-urlmap"
   default_service = google_compute_backend_service.dr_app.id
 }
 
 resource "google_compute_target_http_proxy" "dr_app" {
-  name    = "gcp-dr-reservation-http-proxy"
+  name    = "gcp-dr-staff-http-proxy"
   url_map = google_compute_url_map.dr_app.id
 }
 
 resource "google_compute_global_forwarding_rule" "dr_app" {
-  name                  = "gcp-dr-reservation-http"
+  name                  = "gcp-dr-staff-http"
   ip_address            = google_compute_global_address.dr_lb.id
   port_range            = "80"
-  target                = google_compute_target_http_proxy.dr_app_redirect.id
+  target                = google_compute_target_http_proxy.dr_app.id
   load_balancing_scheme = "EXTERNAL_MANAGED"
 }
 
+# ── IAM — Terraform Cloud DR SA ────────────────────────────────────────────────
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# IAM — SA, WIF, 역할 바인딩
-# gcloud로 수동 설정했던 것들을 Terraform으로 관리합니다.
-# DR destroy 시 함께 삭제됩니다.
-# ══════════════════════════════════════════════════════════════════════════════
-
-# ── Terraform Cloud DR 전용 SA ─────────────────────────────────────────────────
 resource "google_service_account" "terraform_dr" {
   account_id   = "gcp-sa-dr-terraform"
   display_name = "Terraform Cloud DR SA"
@@ -356,7 +351,6 @@ locals {
     "roles/storage.admin",
     "roles/secretmanager.admin",
     "roles/serviceusage.serviceUsageAdmin",
-    "roles/dns.admin",
     "roles/cloudsql.viewer",
     "roles/logging.admin",
   ]
@@ -369,14 +363,53 @@ resource "google_project_iam_member" "terraform_dr_roles" {
   member   = "serviceAccount:${google_service_account.terraform_dr.email}"
 }
 
-# gcp-dr-app-sa impersonate 허용 (instance template 연결 시 필요)
 resource "google_service_account_iam_member" "terraform_dr_use_app_sa" {
   service_account_id = google_service_account.app.name
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.terraform_dr.email}"
 }
 
-# ── GitHub Actions Packer SA ───────────────────────────────────────────────────
+# ── WIF — Terraform Cloud ──────────────────────────────────────────────────────
+
+resource "google_iam_workload_identity_pool" "terraform_cloud" {
+  workload_identity_pool_id = "terraform-cloud-pool"
+  display_name              = "terraform-cloud-pool"
+  description               = "Terraform Cloud WIF Pool"
+}
+
+resource "google_iam_workload_identity_pool_provider" "terraform_cloud" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.terraform_cloud.workload_identity_pool_id
+  workload_identity_pool_provider_id = "tfc-provider"
+  display_name                       = "tfc-provider"
+
+  oidc {
+    issuer_uri = "https://app.terraform.io"
+  }
+
+  attribute_mapping = {
+    "google.subject"                        = "assertion.sub"
+    "attribute.aud"                         = "assertion.aud"
+    "attribute.terraform_workspace_id"      = "assertion.terraform_workspace_id"
+    "attribute.terraform_organization_name" = "assertion.terraform_organization_name"
+  }
+
+  attribute_condition = "assertion.sub.startsWith(\"organization:k2p\")"
+}
+
+resource "google_service_account_iam_member" "tfc_dr_workload_identity" {
+  service_account_id = google_service_account.terraform_dr.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.terraform_cloud.name}/attribute.terraform_workspace_id/ws-3wAP7iDiNKH8UHrR"
+}
+
+resource "google_service_account_iam_member" "tfc_dr_token_creator" {
+  service_account_id = google_service_account.terraform_dr.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.terraform_cloud.name}/attribute.terraform_workspace_id/ws-3wAP7iDiNKH8UHrR"
+}
+
+# ── WIF — GitHub Actions ───────────────────────────────────────────────────────
+
 resource "google_service_account" "github_packer" {
   account_id   = "gcp-sa-github-packer"
   display_name = "GitHub Actions Packer SA"
@@ -399,46 +432,6 @@ resource "google_project_iam_member" "github_packer_roles" {
   member   = "serviceAccount:${google_service_account.github_packer.email}"
 }
 
-# ── WIF Pool — Terraform Cloud ────────────────────────────────────────────────
-resource "google_iam_workload_identity_pool" "terraform_cloud" {
-  workload_identity_pool_id = "terraform-cloud-pool"
-  display_name              = "terraform-cloud-pool"
-  description               = "Terraform Cloud WIF Pool"
-}
-
-resource "google_iam_workload_identity_pool_provider" "terraform_cloud" {
-  workload_identity_pool_id          = google_iam_workload_identity_pool.terraform_cloud.workload_identity_pool_id
-  workload_identity_pool_provider_id = "tfc-provider"
-  display_name                       = "tfc-provider"
-
-  oidc {
-    issuer_uri = "https://app.terraform.io"
-  }
-
-  attribute_mapping = {
-    "google.subject"                  = "assertion.sub"
-    "attribute.aud"                   = "assertion.aud"
-    "attribute.terraform_workspace_id" = "assertion.terraform_workspace_id"
-    "attribute.terraform_organization_name" = "assertion.terraform_organization_name"
-  }
-
-  attribute_condition = "assertion.sub.startsWith(\"organization:k2p\")"
-}
-
-# TC-gcp-dr 워크스페이스 → gcp-sa-dr-terraform impersonate 허용
-resource "google_service_account_iam_member" "tfc_dr_workload_identity" {
-  service_account_id = google_service_account.terraform_dr.name
-  role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.terraform_cloud.name}/attribute.terraform_workspace_id/ws-3wAP7iDiNKH8UHrR"
-}
-
-resource "google_service_account_iam_member" "tfc_dr_token_creator" {
-  service_account_id = google_service_account.terraform_dr.name
-  role               = "roles/iam.serviceAccountTokenCreator"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.terraform_cloud.name}/attribute.terraform_workspace_id/ws-3wAP7iDiNKH8UHrR"
-}
-
-# ── WIF Pool — GitHub Actions ─────────────────────────────────────────────────
 resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "github-pool"
   display_name              = "GitHub Actions Pool"
@@ -455,14 +448,13 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   }
 
   attribute_mapping = {
-    "google.subject"        = "assertion.sub"
-    "attribute.repository"  = "assertion.repository"
+    "google.subject"       = "assertion.sub"
+    "attribute.repository" = "assertion.repository"
   }
 
   attribute_condition = "assertion.repository=='990402DAJEONGKIM/hybrid-hospital-system'"
 }
 
-# GitHub Actions → gcp-sa-github-packer impersonate 허용
 resource "google_service_account_iam_member" "github_packer_workload_identity" {
   service_account_id = google_service_account.github_packer.name
   role               = "roles/iam.workloadIdentityUser"
@@ -475,28 +467,11 @@ resource "google_service_account_iam_member" "github_packer_token_creator" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
 }
 
+# ── Cloud Logging ──────────────────────────────────────────────────────────────
 
 resource "google_logging_project_bucket_config" "default" {
   project        = var.project_id
   location       = "global"
   bucket_id      = "_Default"
   retention_days = 365
-}
-
-# ── Cloud DNS ─────────────────────────────────────────────────────────────────
-
-resource "google_dns_managed_zone" "dr" {
-  name        = var.dns_managed_zone
-  dns_name    = var.dns_record_name
-  description = "DR 앱 전용 DNS zone (dr.mzclinic.cloud)"
-
-  depends_on = [google_project_service.dns]
-}
-
-resource "google_dns_record_set" "dr_app" {
-  name         = var.dns_record_name
-  type         = var.dns_record_type
-  ttl          = var.dns_ttl
-  managed_zone = google_dns_managed_zone.dr.name
-  rrdatas      = local.gcp_dns_rrdatas
 }
