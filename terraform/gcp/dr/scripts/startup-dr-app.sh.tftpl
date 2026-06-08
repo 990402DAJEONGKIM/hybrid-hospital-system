@@ -104,6 +104,7 @@ config = f'''server {{
 {proxy_location("/portal/")}
 {proxy_location("/api/portal/", "/portal/")}
 {proxy_location("/patient/")}
+{proxy_location("/api/patient/", "/patient/")}
 {proxy_location("/emr/")}
 
     location / {{
