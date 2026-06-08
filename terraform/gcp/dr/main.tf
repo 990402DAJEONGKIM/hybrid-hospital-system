@@ -303,7 +303,7 @@ resource "google_compute_global_address" "dr_lb" {
 }
 
 resource "google_compute_health_check" "dr_app" {
-  name = "gcp-dr-staff-hc"
+  name = "gcp-dr-reservation-hc"
 
   http_health_check {
     port         = 80
