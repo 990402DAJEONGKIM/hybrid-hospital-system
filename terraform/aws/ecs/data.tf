@@ -88,3 +88,14 @@ data "terraform_remote_state" "monitoring" {
     workspaces = { name = "TC-aws-monitoring" }
   }
 }
+
+
+
+# TC-aws-KMS 워크스페이스 output 참조 - 260608 김강환
+data "terraform_remote_state" "kms" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = { name = "TC-aws-KMS" }
+  }
+}
