@@ -41,4 +41,8 @@ Thumbs.db
 **/*.key
 .DS_Store
 docker-compose.yml
-local-dev-seed.sql
+local-dev-seed.sqldump-state*.json
+function-source.zip
+*.dump
+hospital_schema.sql
+response.json
