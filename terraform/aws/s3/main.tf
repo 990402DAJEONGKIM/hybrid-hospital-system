@@ -235,6 +235,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     expiration { days = var.wazuh_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
+  # ECS fastapi 감사 로그 365일 (ISMS-P 2.9.1) - 260608 김강환
+  rule {
+    id     = "ecs-lifecycle"
+    status = "Enabled"
+    filter { prefix = "ecs/" }
+    transition {
+      days          = var.wazuh_log_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.wazuh_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
 
 
 }
@@ -420,6 +432,17 @@ resource "aws_s3_bucket_policy" "storage" {
           }
         }
       },
+      # ECS EC2 Vector → S3 쓰기 권한 - 260608 김강환
+      {
+        Sid    = "AllowECSEC2Vector"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-ecs-ec2-instance-role"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/ecs/*"
+      },
+
       {
         Sid       = "DenyNonSSL"
         Effect    = "Deny"
