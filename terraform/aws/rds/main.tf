@@ -253,7 +253,7 @@ resource "aws_rds_cluster" "main" {
   db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.pglogical.name  # pglogical
 
   backup_retention_period      = var.backup_retention_days
-  preferred_backup_window      = "07:33-08:03"
+  preferred_backup_window      = "18:00-18:30"
   preferred_maintenance_window = "tue:13:25-tue:13:55"
 
   storage_encrypted = false  # 기존 RDS랑 맞게 false로 변경
