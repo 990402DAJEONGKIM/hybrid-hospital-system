@@ -47,3 +47,7 @@ sudo systemctl enable gcp-dr-app
 sudo systemctl enable nginx
 
 echo "[install] 완료"
+
+echo "[install] Ops Agent 설치"
+curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+sudo bash add-google-cloud-ops-agent-repo.sh --also-install
