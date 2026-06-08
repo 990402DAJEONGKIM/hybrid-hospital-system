@@ -63,32 +63,42 @@ resource "google_storage_bucket_object" "monitor_script" {
 
 resource "google_secret_manager_secret" "jwt_secret" {
   secret_id = var.jwt_secret_name
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret" "api_key" {
   secret_id = var.api_key_secret_name
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret" "slack_webhook" {
   secret_id = "gcp-dr-slack-webhook"
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.secretmanager]
 }
 
 # Cloudflare 시크릿 — 프록시 VM 모니터 스크립트가 런타임에 읽음
 resource "google_secret_manager_secret" "cf_api_token" {
   secret_id = var.cf_api_token_secret_name
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret" "cf_zone_id" {
   secret_id = var.cf_zone_id_secret_name
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.secretmanager]
 }
 
