@@ -24,6 +24,16 @@ resource "aws_security_group" "aws-monitoring-sg" {
     description = "Prometheus remote write from Alloy push (VPC/GCP/onprem)"
   }
 
+  # #260609 박경수 — nginx 80 포트, ALB SG에서만 허용 (ISMS-P 2.6.1)
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [tolist(data.aws_lb.hospital.security_groups)[0]]
+    description     = "nginx from ALB only"
+  }
+  # #260609 박경수 end
+
 
   egress {
     from_port   = 0
@@ -200,16 +210,8 @@ data "aws_lb_listener" "https" {
   port              = 443
 }
 
-# nginx 80 포트 — ALB SG에서만 허용 (ISMS-P 2.6.1)
-resource "aws_security_group_rule" "keycloak_from_alb" {
-  description              = "nginx from ALB only"
-  type                     = "ingress"
-  from_port                = 80
-  to_port                  = 80
-  protocol                 = "tcp"
-  source_security_group_id = tolist(data.aws_lb.hospital.security_groups)[0]
-  security_group_id        = aws_security_group.aws-monitoring-sg.id
-}
+# #260609 박경수 — nginx 80 포트는 aws_security_group 리소스 내 ingress로 관리
+# aws_security_group_rule 대신 기존 SG ingress 블록에 추가 (state 충돌 방지)
 
 # Aurora (5432) — monitoring EC2 → Keycloak DB 접근
 resource "aws_security_group_rule" "aurora_from_monitoring" {
@@ -242,6 +244,10 @@ resource "aws_lb_target_group" "keycloak" {
   }
 
   tags = { Name = "aws-keycloak-tg" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_lb_target_group_attachment" "keycloak" {
