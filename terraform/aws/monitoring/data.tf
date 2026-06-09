@@ -6,7 +6,7 @@ data "aws_vpc" "main" {
     values = ["aws-vpc-01"]
   }
 }
-
+ 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
@@ -62,5 +62,11 @@ output "monitoring_portal_url" {
 output "keycloak_admin_url" {
   description = "Keycloak 관리 콘솔 URL"
   value       = "https://${var.monitoring_domain}/auth/admin"
+}
+# #260609 박경수 end
+
+# #260609 박경수 — Keycloak 설치 스크립트용 S3 버킷
+data "aws_s3_bucket" "scripts" {
+  bucket = "aws-k2p-storage-01"
 }
 # #260609 박경수 end
