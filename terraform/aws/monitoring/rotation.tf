@@ -65,7 +65,7 @@ resource "aws_lambda_function" "keycloak_db_rotator" {
       MASTER_SECRET_ARN    = "arn:aws:secretsmanager:${var.aws_region}:476293896981:secret:rds!cluster-1073d242-a1f9-49fa-8855-054d05d6af5b"
       AURORA_HOST          = var.aurora_endpoint
       KEYCLOAK_INSTANCE_ID = aws_instance.aws-monitoring-01.id
-      AWS_REGION           = var.aws_region
+      # AWS_REGION는 Lambda 예약 환경변수 — 자동 주입됨
     }
   }
 
