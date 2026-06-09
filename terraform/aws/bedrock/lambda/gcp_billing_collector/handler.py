@@ -7,6 +7,7 @@ import csv
 import io
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, timedelta
@@ -71,8 +72,13 @@ def _get_gcp_access_token(audience: str, sa_impersonation_url: str) -> str:
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST"
     )
-    with urllib.request.urlopen(req) as resp:
-        federated_token = json.loads(resp.read())["access_token"]
+    try:
+        with urllib.request.urlopen(req) as resp:
+            federated_token = json.loads(resp.read())["access_token"]
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        print(f"GCP STS 오류 {e.code}: {error_body}")
+        raise
 
     # 5. billing-reader-sa impersonation으로 최종 access token 획득
     req = urllib.request.Request(
