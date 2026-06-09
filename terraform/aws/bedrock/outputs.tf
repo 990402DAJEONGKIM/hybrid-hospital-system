@@ -1,0 +1,24 @@
+output "bucket_name" {
+  value       = data.terraform_remote_state.s3.outputs.storage_bucket_name
+  description = "비용 데이터 S3 버킷"
+}
+
+output "knowledge_base_id" {
+  value       = aws_bedrockagent_knowledge_base.cost.id
+  description = "Bedrock Knowledge Base ID"
+}
+
+output "collection_arn" {
+  value       = aws_opensearchserverless_collection.kb.arn
+  description = "OpenSearch Serverless 컬렉션 ARN"
+}
+
+output "chat_api_url" {
+  value       = "${aws_api_gateway_stage.prod.invoke_url}/chat"
+  description = "RAG 챗봇 API 엔드포인트"
+}
+
+output "chat_api_key_id" {
+  value       = aws_api_gateway_api_key.cost_chat.id
+  description = "API Gateway 키 ID (콘솔에서 값 확인)"
+}

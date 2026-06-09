@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>멀티클라우드 비용 분석</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Pretendard:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0e14;
+    --bg2:       #0f1520;
+    --bg3:       #141d2b;
+    --bg4:       #1a2535;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.12);
+    --accent:    #00d4aa;
+    --accent2:   #0099ff;
+    --accent3:   #7c6dff;
+    --text:      #e2e8f0;
+    --text2:     #8899aa;
+    --text3:     #4a5568;
+    --mono:      'DM Mono', monospace;
+    --sans:      'Pretendard', sans-serif;
+    --radius:    12px;
+    --radius-sm: 8px;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* grid bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* glow orbs */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0,153,255,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── BRAND NAV ── */
+  .brand-nav-bar {
+    position: relative;
+    z-index: 11;
+    display: flex;
+    align-items: stretch;
+    height: 44px;
+    padding: 0 28px;
+    background: rgba(8,11,18,0.97);
+    border-bottom: 1px solid var(--border2);
+    backdrop-filter: blur(12px);
+  }
+  .brand-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .nav-item {
+    padding: 0 16px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .nav-item:hover { color: var(--text2); }
+  .nav-item.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 28px;
+    background: rgba(10,14,20,0.9);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent3));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .header-title {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+
+  .header-subtitle {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 2px;
+    font-family: var(--mono);
+  }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .status-dot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .dot-pulse {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text3);
+    transition: background 0.3s;
+  }
+  .dot-pulse.active { background: var(--accent); animation: pulse 2s infinite; }
+  .dot-pulse.error  { background: #ff5f5f; animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── CONFIG BAR ── */
+  .config-bar {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 28px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .config-bar label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .config-bar input {
+    flex: 1;
+    max-width: 440px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 7px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .config-bar input::placeholder { color: var(--text3); }
+  .config-bar input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,212,170,0.1);
+  }
+
+  /* ── CHAT WINDOW ── */
+  #chat-window {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: relative;
+    z-index: 1;
+    scroll-behavior: smooth;
+  }
+
+  #chat-window::-webkit-scrollbar { width: 4px; }
+  #chat-window::-webkit-scrollbar-track { background: transparent; }
+  #chat-window::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 4px; }
+
+  /* ── MESSAGES ── */
+  .message {
+    display: flex;
+    gap: 14px;
+    max-width: 780px;
+    animation: fadeUp 0.25s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .message.bot .avatar {
+    background: linear-gradient(135deg, rgba(0,212,170,0.2), rgba(0,153,255,0.2));
+    border: 1px solid rgba(0,212,170,0.3);
+    color: var(--accent);
+  }
+
+  .message.user .avatar {
+    background: linear-gradient(135deg, rgba(124,109,255,0.2), rgba(0,153,255,0.2));
+    border: 1px solid rgba(124,109,255,0.3);
+    color: var(--accent3);
+  }
+
+  .bubble {
+    padding: 14px 18px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    line-height: 1.7;
+    max-width: 660px;
+  }
+
+  .message.bot .bubble {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-top-left-radius: 4px;
+  }
+
+  .message.user .bubble {
+    background: linear-gradient(135deg, rgba(124,109,255,0.15), rgba(0,153,255,0.1));
+    border: 1px solid rgba(124,109,255,0.25);
+    color: var(--text);
+    border-top-right-radius: 4px;
+  }
+
+  /* timestamp */
+  .msg-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 6px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .message.user .msg-meta { justify-content: flex-end; }
+
+  /* sources */
+  .sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .src-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: rgba(0,212,170,0.08);
+    border: 1px solid rgba(0,212,170,0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+
+  /* thinking */
+  .thinking-bubble {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 18px;
+  }
+
+  .thinking-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.4s infinite;
+    opacity: 0.3;
+  }
+
+  .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes blink {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
+    40% { opacity: 1; transform: scale(1.3); }
+  }
+
+  .thinking-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    margin-left: 4px;
+  }
+
+  /* error */
+  .bubble.error {
+    border-color: rgba(255,95,95,0.3);
+    background: rgba(255,95,95,0.05);
+  }
+
+  /* ── SUGGESTIONS ── */
+  .suggestions {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px 28px 0;
+  }
+
+  .suggestion-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.01em;
+  }
+
+  .suggestion-btn:hover {
+    color: var(--accent);
+    border-color: rgba(0,212,170,0.4);
+    background: rgba(0,212,170,0.05);
+  }
+
+  /* ── INPUT AREA ── */
+  .input-area {
+    position: relative;
+    z-index: 10;
+    padding: 16px 28px 20px;
+    background: rgba(10,14,20,0.95);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+  }
+
+  .input-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .input-wrapper:focus-within {
+    border-color: rgba(0,212,170,0.4);
+    box-shadow: 0 0 0 3px rgba(0,212,170,0.07);
+  }
+
+  #question {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: var(--sans);
+    font-size: 14px;
+    color: var(--text);
+    resize: none;
+    min-height: 24px;
+    max-height: 120px;
+    line-height: 1.6;
+  }
+
+  #question::placeholder { color: var(--text3); }
+
+  #send-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #0a0e14;
+    border: none;
+    border-radius: var(--radius-sm);
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.2s, transform 0.1s;
+    font-weight: 600;
+  }
+
+  #send-btn:hover  { opacity: 0.9; }
+  #send-btn:active { transform: scale(0.95); }
+  #send-btn:disabled { opacity: 0.3; cursor: default; transform: none; }
+
+  .input-hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 8px;
+    padding-left: 2px;
+  }
+
+  /* welcome card */
+  .welcome-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    max-width: 520px;
+  }
+
+  .welcome-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: 0.03em;
+  }
+
+  .welcome-body {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+
+  .cloud-badges {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .cloud-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+
+  .badge-aws   { color: #ff9900; border-color: rgba(255,153,0,0.3); background: rgba(255,153,0,0.06); }
+  .badge-gcp   { color: #4285f4; border-color: rgba(66,133,244,0.3); background: rgba(66,133,244,0.06); }
+  .badge-onprem{ color: #00d4aa; border-color: rgba(0,212,170,0.3); background: rgba(0,212,170,0.06); }
+</style>
+</head>
+<body>
+
+<div class="brand-nav-bar">
+  <nav class="brand-nav">
+    <div class="nav-item active">재무 분석</div>
+    <div class="nav-item">예산 현황</div>
+    <div class="nav-item">비용 추이</div>
+    <div class="nav-item">보고서</div>
+  </nav>
+</div>
+
+<header>
+  <div class="logo-icon">☁</div>
+  <div>
+    <div class="header-title">multicloud cost analyzer</div>
+    <div class="header-subtitle">AWS · GCP · On-premises</div>
+  </div>
+  <div class="header-right">
+    <div class="status-dot">
+      <div class="dot-pulse" id="status-dot"></div>
+      <span id="status-text">대기 중</span>
+    </div>
+  </div>
+</header>
+
+<div class="config-bar">
+  <label>endpoint</label>
+  <input id="api-url" type="text" placeholder="https://xxxxxx.execute-api.ap-south-2.amazonaws.com/prod/chat">
+  <label>key</label>
+  <input id="api-key" type="password" placeholder="x-api-key" style="max-width:180px">
+</div>
+
+<div id="chat-window">
+  <div class="message bot">
+    <div class="avatar">AI</div>
+    <div>
+      <div class="bubble welcome-card" style="padding:20px 24px; max-width:520px">
+        <div class="welcome-title">// 멀티클라우드 비용 분석 준비 완료</div>
+        <div class="welcome-body">
+          AWS, GCP, 온프레미스 인프라 비용에 대해<br>
+          무엇이든 질문하세요. 데이터 기반으로 답변합니다.
+        </div>
+        <div class="cloud-badges">
+          <span class="cloud-badge badge-aws">AWS CUR</span>
+          <span class="cloud-badge badge-gcp">GCP BigQuery</span>
+          <span class="cloud-badge badge-onprem">VMware vCenter</span>
+        </div>
+      </div>
+      <div class="msg-meta">지금</div>
+    </div>
+  </div>
+</div>
+
+<div class="suggestions">
+  <button class="suggestion-btn" onclick="fillQuestion('이번 달 전체 인프라 비용은 얼마야?')">이번 달 전체 비용</button>
+  <button class="suggestion-btn" onclick="fillQuestion('GCP 비용이 왜 이렇게 올랐어?')">GCP 비용 급등 원인</button>
+  <button class="suggestion-btn" onclick="fillQuestion('온프레미스 CAPEX vs OPEX 비율은?')">CAPEX / OPEX</button>
+  <button class="suggestion-btn" onclick="fillQuestion('연간 예산 집행률과 잔여 예산은?')">예산 집행률</button>
+  <button class="suggestion-btn" onclick="fillQuestion('비용 절감 방법을 추천해줘')">절감 추천</button>
+</div>
+
+<div class="input-area">
+  <div class="input-wrapper">
+    <textarea id="question" placeholder="비용 관련 질문을 입력하세요..." rows="1"></textarea>
+    <button id="send-btn" onclick="sendQuestion()" title="전송">↑</button>
+  </div>
+  <div class="input-hint">Enter 전송 &nbsp;·&nbsp; Shift+Enter 줄바꿈</div>
+</div>
+
+<script>
+  const chatWindow = document.getElementById('chat-window');
+  const questionEl = document.getElementById('question');
+  const sendBtn    = document.getElementById('send-btn');
+  const statusText = document.getElementById('status-text');
+  const statusDot  = document.getElementById('status-dot');
+
+  questionEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+  });
+
+  questionEl.addEventListener('input', () => {
+    questionEl.style.height = 'auto';
+    questionEl.style.height = Math.min(questionEl.scrollHeight, 120) + 'px';
+  });
+
+  function fillQuestion(text) {
+    questionEl.value = text;
+    questionEl.focus();
+  }
+
+  function now() {
+    return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function appendMessage(role, text, sources) {
+    const msg    = document.createElement('div');
+    msg.className = `message ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? 'YOU' : 'AI';
+
+    const wrap   = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+
+    if (sources && sources.length > 0) {
+      const srcDiv = document.createElement('div');
+      srcDiv.className = 'sources';
+      sources.forEach(s => {
+        const parts = s.split('/');
+        const tag = document.createElement('span');
+        tag.className = 'src-tag';
+        tag.textContent = parts.slice(-2).join('/');
+        srcDiv.appendChild(tag);
+      });
+      bubble.appendChild(srcDiv);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = now();
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    msg.appendChild(avatar);
+    msg.appendChild(wrap);
+    chatWindow.appendChild(msg);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return bubble;
+  }
+
+  function appendThinking() {
+    const msg = document.createElement('div');
+    msg.className = 'message bot';
+    msg.id = 'thinking-msg';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = 'AI';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble thinking-bubble';
+    bubble.innerHTML = `
+      <div class="thinking-dot"></div>
+      <div class="thinking-dot"></div>
+      <div class="thinking-dot"></div>
+      <span class="thinking-label">분석 중...</span>
+    `;
+
+    msg.appendChild(avatar);
+    msg.appendChild(bubble);
+    chatWindow.appendChild(msg);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+
+  function removeThinking() {
+    const el = document.getElementById('thinking-msg');
+    if (el) el.remove();
+  }
+
+  function setStatus(state) {
+    const map = {
+      idle:     { text: '대기 중',    cls: '' },
+      loading:  { text: '응답 생성 중', cls: 'active' },
+      connected:{ text: '연결됨',     cls: 'active' },
+      error:    { text: '오류',       cls: 'error' },
+    };
+    const s = map[state] || map.idle;
+    statusText.textContent = s.text;
+    statusDot.className = 'dot-pulse ' + s.cls;
+  }
+
+  async function sendQuestion() {
+    const apiUrl  = document.getElementById('api-url').value.trim();
+    const apiKey  = document.getElementById('api-key').value.trim();
+    const question = questionEl.value.trim();
+
+    if (!apiUrl)  { alert('API 엔드포인트를 입력하세요.'); return; }
+    if (!question) return;
+
+    appendMessage('user', question);
+    questionEl.value = '';
+    questionEl.style.height = 'auto';
+    sendBtn.disabled = true;
+    appendThinking();
+    setStatus('loading');
+
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ question }),
+      });
+
+      const data = await resp.json();
+      removeThinking();
+
+      if (!resp.ok) {
+        const b = appendMessage('bot', data.error || '오류가 발생했습니다.');
+        b.classList.add('error');
+        setStatus('error');
+      } else {
+        appendMessage('bot', data.answer, data.sources);
+        setStatus('connected');
+      }
+    } catch (err) {
+      removeThinking();
+      const b = appendMessage('bot', `네트워크 오류: ${err.message}`);
+      b.classList.add('error');
+      setStatus('error');
+    } finally {
+      sendBtn.disabled = false;
+      questionEl.focus();
+    }
+  }
+</script>
+</body>
+</html>
