@@ -31,3 +31,9 @@ variable "aws_account_id" {
   description = "AWS 계정 ID (WIF 프로바이더 및 attribute_condition에 사용)"
   type        = string
 }
+
+variable "cf_api_key" {
+  description = "Cloud Function 호출 인증키 (AWS Lambda에서 X-Api-Key 헤더로 전달)"
+  type        = string
+  sensitive   = true
+}
