@@ -1,6 +1,7 @@
 """
 GCP Billing Collector Lambda
 BigQuery에서 이전 달 서비스별 비용을 조회해 S3에 CSV로 저장
+WIF(Workload Identity Federation)로 AWS Lambda IAM Role → GCP 인증
 """
 import csv
 import io
@@ -9,11 +10,13 @@ import os
 from datetime import date, timedelta
 
 import boto3
+import google.auth
+from google.cloud import bigquery
 
 SSM = boto3.client("ssm")
 S3 = boto3.client("s3")
 
-BUCKET = os.environ["BUCKET"]
+BUCKET = os.environ["RAW_BUCKET"]
 RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost-raw")
 
 
@@ -28,11 +31,7 @@ def _get_target_month() -> tuple[str, str]:
     return str(last_month.year), f"{last_month.month:02d}"
 
 
-def _query_bigquery(project_id: str, dataset: str, year: str, month: str, key_json: dict) -> list[dict]:
-    from google.cloud import bigquery
-    from google.oauth2 import service_account
-
-    credentials = service_account.Credentials.from_service_account_info(key_json)
+def _query_bigquery(project_id: str, dataset: str, year: str, month: str, credentials) -> list[dict]:
     client = bigquery.Client(project=project_id, credentials=credentials)
 
     query = f"""
@@ -71,11 +70,16 @@ def _rows_to_csv(rows: list[dict]) -> str:
 def lambda_handler(event, context):
     year, month = _get_target_month()
 
-    key_json = json.loads(_get_param(os.environ["SSM_GCP_KEY"]))
+    wif_config = json.loads(_get_param(os.environ["SSM_WIF_CONFIG"]))
     project_id = _get_param(os.environ["SSM_GCP_PROJECT"])
     dataset = _get_param(os.environ["SSM_GCP_DATASET"])
 
-    rows = _query_bigquery(project_id, dataset, year, month, key_json)
+    credentials, _ = google.auth.load_credentials_from_dict(
+        wif_config,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+
+    rows = _query_bigquery(project_id, dataset, year, month, credentials)
 
     s3_key = f"{RAW_PREFIX}/gcp/{year}/{month}/gcp_cost.csv"
     S3.put_object(
