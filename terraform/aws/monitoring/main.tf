@@ -316,14 +316,5 @@ resource "aws_security_group_rule" "monitoring_443_from_wazuh" {
   security_group_id        = aws_security_group.aws-monitoring-sg.id
 }
 
-# #260609 박경수 — Wazuh EC2 → monitoring EC2 80 포트 (Keycloak OIDC)
-resource "aws_security_group_rule" "monitoring_80_from_wazuh" {
-  description              = "Keycloak OIDC from Wazuh EC2 HTTP"
-  type                     = "ingress"
-  from_port                = 80
-  to_port                  = 80
-  protocol                 = "tcp"
-  source_security_group_id = "sg-0e75baea0d53bc77b"
-  security_group_id        = aws_security_group.aws-monitoring-sg.id
-}
+
 # #260609 박경수 end
