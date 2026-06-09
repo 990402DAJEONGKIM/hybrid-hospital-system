@@ -99,8 +99,6 @@ resource "aws_lambda_function" "gcp_billing_collector" {
   memory_size      = 256
   filename         = data.archive_file.gcp_billing_collector.output_path
   source_code_hash = data.archive_file.gcp_billing_collector.output_base64sha256
-  layers           = ["arn:aws:lambda:ap-south-2:476293896981:layer:gcp-python-deps:1"]
-
   environment {
     variables = {
       RAW_BUCKET    = data.terraform_remote_state.s3.outputs.storage_bucket_name
