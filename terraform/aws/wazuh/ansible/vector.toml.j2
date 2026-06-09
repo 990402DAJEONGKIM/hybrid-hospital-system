@@ -45,3 +45,34 @@ type = "disk"
 max_size = 1073741824
 when_full = "block"
 
+
+
+# ── audit_archive 그룹만 필터 (온프레미스 감사) - 260608 김강환 ──
+[transforms.audit_archive]
+type = "filter"
+inputs = ["wazuh_alerts"]
+condition = 'contains(string!(.rule.groups), "audit_archive")'
+
+# ── 온프레미스 감사 S3 보존 ──
+[sinks.s3_audit]
+type = "aws_s3"
+inputs = ["audit_archive"]
+bucket = "aws-k2p-storage-01"
+region = "ap-south-2"
+key_prefix = "onprem/%Y/%m/%d/"
+filename_time_format = "audit-%Y-%m-%d-%H-%M"
+filename_extension = "json.gz"
+filename_append_uuid = false
+compression = "gzip"
+
+[sinks.s3_audit.encoding]
+codec = "text"
+
+[sinks.s3_audit.batch]
+timeout_secs = 300
+max_bytes = 10737418242
+
+[sinks.s3_audit.buffer]
+type = "disk"
+max_size = 1073741824
+when_full = "block"

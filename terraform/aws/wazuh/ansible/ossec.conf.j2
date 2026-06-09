@@ -135,10 +135,11 @@
   <!-- ======================================= -->
   <!-- Slack 연동 (level 10 이상)               -->
   <!-- ======================================= -->
-  {% if slack_webhook_url is defined and slack_webhook_url %}
+  {% set _webhook = lookup('amazon.aws.aws_secret', 'aws-wazuh-slack-alarm-webhook', region=aws_region) %}
+  {% if _webhook %}
   <integration>
     <name>slack</name>
-    <hook_url>{{ slack_webhook_url }}</hook_url>
+    <hook_url>{{ _webhook }}</hook_url>
     <level>10</level>
     <alert_format>json</alert_format>
   </integration>

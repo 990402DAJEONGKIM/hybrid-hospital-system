@@ -5,6 +5,7 @@
         <decoded_as>json</decoded_as>
         <field name="action_type">^LOGIN$</field>
         <description>Cloud SQL DB 접속 — source_ip: $(source_ip)</description>
+        <location>/var/log/cloudsql-audit.log</location> 
         <group>cloudsql,login,</group>
     </rule>
 
