@@ -22,3 +22,8 @@ output "chat_api_key_id" {
   value       = aws_api_gateway_api_key.cost_chat.id
   description = "API Gateway 키 ID (콘솔에서 값 확인)"
 }
+
+output "aws_account_id" {
+  value       = data.aws_caller_identity.current.account_id
+  description = "AWS 계정 ID"
+}
