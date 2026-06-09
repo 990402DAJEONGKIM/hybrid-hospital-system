@@ -207,7 +207,7 @@ resource "aws_security_group_rule" "keycloak_from_alb" {
   from_port                = 8080
   to_port                  = 8080
   protocol                 = "tcp"
-  source_security_group_id = tolist(data.aws_lb.hospital.security_groups)[0]
+  source_security_group_id = data.aws_lb.hospital.security_groups[0]
   security_group_id        = aws_security_group.aws-monitoring-sg.id
 }
 
@@ -272,9 +272,19 @@ resource "aws_lb_listener_rule" "monitoring" {
 resource "cloudflare_record" "monitoring" {
   zone_id = var.cloudflare_zone_id
   name    = "monitoring"
-  value   = data.aws_lb.hospital.dns_name
+  content = data.aws_lb.hospital.dns_name
   type    = "CNAME"
   ttl     = 1
   proxied = true
+}
+# #260609 박경수 end
+
+# #260609 박경수 — Keycloak 설치 스크립트 S3 업로드
+# user_data 16KB 제한으로 S3 분리
+resource "aws_s3_object" "keycloak_setup" {
+  bucket = data.aws_s3_bucket.scripts.id
+  key    = "monitoring/keycloak_setup.sh"
+  source = "${path.module}/keycloak_setup.sh"
+  etag   = filemd5("${path.module}/keycloak_setup.sh")
 }
 # #260609 박경수 end

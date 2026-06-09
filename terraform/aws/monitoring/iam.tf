@@ -184,6 +184,12 @@ resource "aws_iam_role_policy" "monitoring_keycloak_secrets" {
         Action = ["ssm:GetParameter", "ssm:GetParameters"]
         Resource = "arn:aws:ssm:${var.aws_region}:476293896981:parameter/mzclinic/keycloak/*"
       },
+      {
+        Sid    = "KeycloakS3ScriptRead"
+        Effect = "Allow"
+        Action = ["s3:GetObject"]
+        Resource = "arn:aws:s3:::aws-k2p-storage-01/monitoring/*"
+      },
     ]
   })
 }
