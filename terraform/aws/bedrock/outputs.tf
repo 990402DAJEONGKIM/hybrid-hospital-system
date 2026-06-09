@@ -3,15 +3,6 @@ output "bucket_name" {
   description = "비용 데이터 S3 버킷"
 }
 
-output "knowledge_base_id" {
-  value       = aws_bedrockagent_knowledge_base.cost.id
-  description = "Bedrock Knowledge Base ID"
-}
-
-output "collection_arn" {
-  value       = aws_opensearchserverless_collection.kb.arn
-  description = "OpenSearch Serverless 컬렉션 ARN"
-}
 
 output "chat_api_url" {
   value       = "${aws_api_gateway_stage.prod.invoke_url}/chat"

@@ -1,0 +1,5 @@
+service,total_cost
+Compute Engine,800.00
+Cloud SQL,200.00
+Cloud Storage,45.00
+Cloud Functions,8.50
