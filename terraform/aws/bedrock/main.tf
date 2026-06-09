@@ -149,6 +149,88 @@ resource "aws_iam_role_policy" "bedrock_kb" {
 }
 
 # ---------------------------------------------------------
+# OpenSearch 인덱스 사전 생성 (Bedrock KB 생성 전에 필수)
+# ---------------------------------------------------------
+resource "null_resource" "opensearch_index" {
+  provider = null
+
+  depends_on = [
+    aws_opensearchserverless_collection.kb,
+    aws_opensearchserverless_access_policy.kb,
+    aws_iam_role_policy.bedrock_kb,
+  ]
+
+  triggers = {
+    collection_id = aws_opensearchserverless_collection.kb.id
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOF
+python3 << 'PYEOF'
+import boto3, json, time, urllib.request, urllib.error, ssl
+
+region = "${var.bedrock_region}"
+client  = boto3.client("opensearchserverless", region_name=region)
+
+# 컬렉션이 ACTIVE 상태인지 확인 (AWS provider가 대기하지만 안전을 위해 재확인)
+for i in range(20):
+    r       = client.batch_get_collection(names=["aws-cost-kb"])
+    details = r.get("collectionDetails", [])
+    if details and details[0]["status"] == "ACTIVE":
+        endpoint = details[0]["collectionEndpoint"]
+        print(f"Collection ACTIVE: {endpoint}")
+        break
+    status = details[0]["status"] if details else "NOT_FOUND"
+    print(f"Waiting for collection ({status})... [{i+1}/20]")
+    time.sleep(30)
+else:
+    raise RuntimeError("Collection did not reach ACTIVE state")
+
+from botocore.auth     import SigV4Auth
+from botocore.awsrequest import AWSRequest
+
+url  = f"{endpoint}/aws-cost-idx"
+body = json.dumps({
+    "settings": {"index.knn": True},
+    "mappings": {
+        "properties": {
+            "embedding": {
+                "type":      "knn_vector",
+                "dimension": 1024,
+                "method": {
+                    "engine":     "faiss",
+                    "space_type": "l2",
+                    "name":       "hnsw"
+                }
+            },
+            "text":     {"type": "text"},
+            "metadata": {"type": "text"}
+        }
+    }
+}).encode()
+
+sess    = boto3.session.Session()
+creds   = sess.get_credentials().get_frozen_credentials()
+aws_req = AWSRequest(method="PUT", url=url, data=body,
+                     headers={"Content-Type": "application/json"})
+SigV4Auth(creds, "aoss", region).add_auth(aws_req)
+
+req = urllib.request.Request(url, data=body, headers=dict(aws_req.headers), method="PUT")
+try:
+    with urllib.request.urlopen(req, context=ssl.create_default_context()) as resp:
+        print("Index created:", resp.read().decode())
+except urllib.error.HTTPError as e:
+    err = e.read().decode()
+    if "resource_already_exists_exception" in err:
+        print("Index already exists, skipping")
+    else:
+        raise RuntimeError(f"Index creation failed [{e.code}]: {err}")
+PYEOF
+EOF
+  }
+}
+
+# ---------------------------------------------------------
 # Bedrock Knowledge Base
 # ---------------------------------------------------------
 resource "aws_bedrockagent_knowledge_base" "cost" {
@@ -182,6 +264,7 @@ resource "aws_bedrockagent_knowledge_base" "cost" {
   depends_on = [
     aws_iam_role_policy.bedrock_kb,
     aws_opensearchserverless_access_policy.kb,
+    null_resource.opensearch_index,
   ]
 }
 
@@ -254,7 +337,7 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Sid    = "SSMParameters"
         Effect = "Allow"
         Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
-        Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/aws-cost/*"
+        Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/cost/*"
       },
       {
         Sid    = "Bedrock"
@@ -311,9 +394,9 @@ resource "aws_lambda_function" "gcp_billing_collector" {
     variables = {
       BUCKET          = data.terraform_remote_state.s3.outputs.storage_bucket_name
       RAW_PREFIX      = "cost/raw"
-      SSM_GCP_KEY     = "/aws-cost/gcp/service-account-key"
-      SSM_GCP_PROJECT = "/aws-cost/gcp/project-id"
-      SSM_GCP_DATASET = "/aws-cost/gcp/billing-dataset"
+      SSM_GCP_KEY     = "/mzclinic/cost/gcp/service-account-key"
+      SSM_GCP_PROJECT = "/mzclinic/cost/gcp/project-id"
+      SSM_GCP_DATASET = "/mzclinic/cost/gcp/billing-dataset"
     }
   }
 
@@ -350,10 +433,10 @@ resource "aws_lambda_function" "onprem_cost_calculator" {
     variables = {
       BUCKET           = data.terraform_remote_state.s3.outputs.storage_bucket_name
       RAW_PREFIX       = "cost/raw"
-      SSM_VCENTER_HOST = "/aws-cost/vcenter/host"
-      SSM_VCENTER_USER = "/aws-cost/vcenter/username"
-      SSM_VCENTER_PASS = "/aws-cost/vcenter/password"
-      SSM_COST_PARAMS  = "/aws-cost/onprem/cost-params"
+      SSM_VCENTER_HOST = "/mzclinic/cost/vcenter/host"
+      SSM_VCENTER_USER = "/mzclinic/cost/vcenter/username"
+      SSM_VCENTER_PASS = "/mzclinic/cost/vcenter/password"
+      SSM_COST_PARAMS  = "/mzclinic/cost/onprem/cost-params"
     }
   }
 
@@ -395,7 +478,7 @@ resource "aws_lambda_function" "cost_to_kb" {
       KB_DS_ID          = aws_bedrockagent_data_source.cost_chunks.data_source_id
       BEDROCK_REGION    = var.bedrock_region
       ANNUAL_BUDGET_KRW = tostring(var.annual_budget_krw)
-      SSM_EXIM_API_KEY  = "/aws-cost/exim/api-key"
+      SSM_EXIM_API_KEY  = "/mzclinic/cost/exim/api-key"
     }
   }
 
