@@ -90,3 +90,101 @@ resource "aws_iam_instance_profile" "aws-monitoring-profile" {
   name = "aws-monitoring-instance-profile"
   role = aws_iam_role.aws-monitoring-role.name
 }
+# #260609 박경수 — Keycloak DB rotator Lambda IAM role
+resource "aws_iam_role" "keycloak_db_rotator" {
+  name = "mzclinic-keycloak-db-rotator-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = { Name = "mzclinic-keycloak-db-rotator-role" }
+}
+
+resource "aws_iam_role_policy_attachment" "keycloak_rotator_vpc" {
+  role       = aws_iam_role.keycloak_db_rotator.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+resource "aws_iam_role_policy" "keycloak_db_rotator" {
+  name = "mzclinic-keycloak-db-rotator-policy"
+  role = aws_iam_role.keycloak_db_rotator.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "KeycloakSecretRotation"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:UpdateSecretVersionStage",
+          "secretsmanager:DescribeSecret",
+        ]
+        Resource = aws_secretsmanager_secret.keycloak_db.arn
+      },
+      {
+        Sid      = "MasterSecretRead"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:476293896981:secret:rds!cluster-1073d242-a1f9-49fa-8855-054d05d6af5b"
+      },
+      {
+        Sid    = "SSMRunCommand"
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation",
+        ]
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}:476293896981:instance/${aws_instance.aws-monitoring-01.id}",
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+        ]
+      },
+      {
+        Sid    = "SSMParameterRead"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter", "ssm:GetParameters"]
+        Resource = "arn:aws:ssm:${var.aws_region}:476293896981:parameter/mzclinic/keycloak/*"
+      },
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+    ]
+  })
+}
+
+# EC2 인스턴스 역할에 Keycloak 시크릿 읽기 추가
+# (설치 스크립트 + 재시작 시 Secrets Manager 조회)
+resource "aws_iam_role_policy" "monitoring_keycloak_secrets" {
+  name = "mzclinic-monitoring-keycloak-secrets"
+  role = aws_iam_role.aws-monitoring-role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "KeycloakSecretsRead"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = aws_secretsmanager_secret.keycloak_db.arn
+      },
+      {
+        Sid    = "KeycloakSSMParamRead"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter", "ssm:GetParameters"]
+        Resource = "arn:aws:ssm:${var.aws_region}:476293896981:parameter/mzclinic/keycloak/*"
+      },
+    ]
+  })
+}
+# #260609 박경수 end
