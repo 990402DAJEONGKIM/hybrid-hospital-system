@@ -190,6 +190,12 @@ resource "aws_iam_role_policy" "monitoring_keycloak_secrets" {
         Action = ["s3:GetObject"]
         Resource = "arn:aws:s3:::aws-k2p-storage-01/monitoring/*"
       },
+      {
+        Sid    = "KeycloakS3KMSDecrypt"
+        Effect = "Allow"
+        Action = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = "arn:aws:kms:ap-south-2:476293896981:key/e2b6e04e-e603-4388-ae54-c397fb72dee2"
+      },
     ]
   })
 }
