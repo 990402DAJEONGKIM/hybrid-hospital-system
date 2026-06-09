@@ -173,6 +173,17 @@ timeout_secs = 300
 type = "memory"
 max_events = 1000
 when_full = "drop_newest"
+
+
+[sinks.file_wazuh]
+type = "file"
+inputs = ["add_metadata"]
+path = "/var/log/ecs-fastapi-audit.log"
+
+[sinks.file_wazuh.encoding]
+codec = "json"
+
+
 VECTOREOF
 
 # PRIVATE_IP 환경변수 설정
