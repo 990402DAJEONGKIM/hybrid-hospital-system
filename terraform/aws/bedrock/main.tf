@@ -254,7 +254,7 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Sid    = "SSMParameters"
         Effect = "Allow"
         Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
-        Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/aws-cost/*"
+        Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/cost/*"
       },
       {
         Sid    = "Bedrock"
@@ -311,9 +311,9 @@ resource "aws_lambda_function" "gcp_billing_collector" {
     variables = {
       BUCKET          = data.terraform_remote_state.s3.outputs.storage_bucket_name
       RAW_PREFIX      = "cost/raw"
-      SSM_GCP_KEY     = "/aws-cost/gcp/service-account-key"
-      SSM_GCP_PROJECT = "/aws-cost/gcp/project-id"
-      SSM_GCP_DATASET = "/aws-cost/gcp/billing-dataset"
+      SSM_GCP_KEY     = "/mzclinic/cost/gcp/service-account-key"
+      SSM_GCP_PROJECT = "/mzclinic/cost/gcp/project-id"
+      SSM_GCP_DATASET = "/mzclinic/cost/gcp/billing-dataset"
     }
   }
 
@@ -350,10 +350,10 @@ resource "aws_lambda_function" "onprem_cost_calculator" {
     variables = {
       BUCKET           = data.terraform_remote_state.s3.outputs.storage_bucket_name
       RAW_PREFIX       = "cost/raw"
-      SSM_VCENTER_HOST = "/aws-cost/vcenter/host"
-      SSM_VCENTER_USER = "/aws-cost/vcenter/username"
-      SSM_VCENTER_PASS = "/aws-cost/vcenter/password"
-      SSM_COST_PARAMS  = "/aws-cost/onprem/cost-params"
+      SSM_VCENTER_HOST = "/mzclinic/cost/vcenter/host"
+      SSM_VCENTER_USER = "/mzclinic/cost/vcenter/username"
+      SSM_VCENTER_PASS = "/mzclinic/cost/vcenter/password"
+      SSM_COST_PARAMS  = "/mzclinic/cost/onprem/cost-params"
     }
   }
 
@@ -395,7 +395,7 @@ resource "aws_lambda_function" "cost_to_kb" {
       KB_DS_ID          = aws_bedrockagent_data_source.cost_chunks.data_source_id
       BEDROCK_REGION    = var.bedrock_region
       ANNUAL_BUDGET_KRW = tostring(var.annual_budget_krw)
-      SSM_EXIM_API_KEY  = "/aws-cost/exim/api-key"
+      SSM_EXIM_API_KEY  = "/mzclinic/cost/exim/api-key"
     }
   }
 
