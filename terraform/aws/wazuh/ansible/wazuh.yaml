@@ -20,6 +20,12 @@
       tags: always
 
 
+    - name: Wazuh Indexer credentials SM에서 읽기 # [2026-06-10 박경수] Dashboard -> Indexer 인증용 kibanaserver password를 Secrets Manager에서 조회
+      set_fact:
+        wazuh_indexer_credentials_effective: "{{ lookup('amazon.aws.aws_secret', 'aws-wazuh-indexer-credentials', region=aws_region | default('ap-south-2')) | from_json }}"
+      no_log: true
+      tags: always
+
     - name: Wazuh OIDC client secret 변수 사용 # [2026-06-10 박경수]
       set_fact:
         wazuh_openid_client_secret_effective: "{{ wazuh_openid_client_secret }}"
@@ -444,16 +450,89 @@
     - name: Dashboard opensearch.hosts
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
-        regexp: 'opensearch.hosts:.*'
+        regexp: '^opensearch.hosts:'
         line: 'opensearch.hosts: ["https://{{ wazuh_indexer_ip }}:9200"]'
       tags: config
 
-    - name: monitoring 도메인 내부 해석 고정 # [2026-06-10 박경수] Keycloak OIDC 내부 접근 안정화
+    - name: monitoring.mzclinic.cloud hosts 고정 제거 # [2026-06-10 박경수] Cloudflare 우회용 hosts 고정은 HTTPS timeout을 유발하므로 제거
       lineinfile:
         path: /etc/hosts
-        regexp: '.*\smonitoring\.mzclinic\.cloud$'
-        line: "{{ monitoring_private_ip | default('10.0.12.128') }} monitoring.mzclinic.cloud"
-        state: present
+        regexp: '.*monitoring\.mzclinic\.cloud.*'
+        state: absent
+      tags: config
+
+    - name: Wazuh Dashboard 로컬 OIDC discovery 디렉터리 생성 # [2026-06-10 박경수] Cloudflare 403 회피용
+      file:
+        path: /etc/wazuh-dashboard/oidc
+        state: directory
+        owner: root
+        group: wazuh-dashboard
+        mode: '0755'
+      tags: config
+
+    - name: Wazuh Dashboard 로컬 OIDC discovery JSON 생성 # [2026-06-10 박경수] 브라우저용 endpoint는 공개 도메인, 서버 간 token/jwks는 내부 monitoring EC2 사용
+      copy:
+        dest: /etc/wazuh-dashboard/oidc/keycloak-local.json
+        owner: root
+        group: wazuh-dashboard
+        mode: '0644'
+        content: |
+          {
+            "issuer": "{{ keycloak_base_url | default('https://monitoring.mzclinic.cloud') }}/realms/{{ keycloak_realm | default('mzclinic') }}",
+            "authorization_endpoint": "{{ keycloak_base_url | default('https://monitoring.mzclinic.cloud') }}/realms/{{ keycloak_realm | default('mzclinic') }}/protocol/openid-connect/auth",
+            "token_endpoint": "http://{{ monitoring_private_ip | default('10.0.12.128') }}/realms/{{ keycloak_realm | default('mzclinic') }}/protocol/openid-connect/token",
+            "userinfo_endpoint": "http://{{ monitoring_private_ip | default('10.0.12.128') }}/realms/{{ keycloak_realm | default('mzclinic') }}/protocol/openid-connect/userinfo",
+            "jwks_uri": "http://{{ monitoring_private_ip | default('10.0.12.128') }}/realms/{{ keycloak_realm | default('mzclinic') }}/protocol/openid-connect/certs",
+            "end_session_endpoint": "{{ keycloak_base_url | default('https://monitoring.mzclinic.cloud') }}/realms/{{ keycloak_realm | default('mzclinic') }}/protocol/openid-connect/logout",
+            "response_types_supported": ["code"],
+            "subject_types_supported": ["public"],
+            "id_token_signing_alg_values_supported": ["RS256"],
+            "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "scopes_supported": ["openid", "email", "profile"],
+            "claims_supported": ["sub", "preferred_username", "email", "name", "realm_access", "roles"]
+          }
+      tags: config
+
+    - name: Wazuh Dashboard 로컬 OIDC discovery 서버 systemd 등록 # [2026-06-10 박경수] Dashboard 기동 시 Cloudflare 403 없이 discovery 문서 조회
+      copy:
+        dest: /etc/systemd/system/wazuh-oidc-local.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          # [2026-06-10 박경수] Cloudflare 403 회피를 위한 Wazuh Dashboard 내부 OIDC discovery 서버
+          [Unit]
+          Description=Wazuh local OIDC discovery file server
+          After=network-online.target
+
+          [Service]
+          Type=simple
+          WorkingDirectory=/etc/wazuh-dashboard/oidc
+          ExecStart=/usr/bin/python3 -m http.server 18080 --bind 127.0.0.1
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+      tags: config
+
+    - name: Wazuh Dashboard 로컬 OIDC discovery 서버 시작 # [2026-06-10 박경수]
+      systemd:
+        name: wazuh-oidc-local
+        daemon_reload: yes
+        enabled: yes
+        state: started
+      tags: config
+
+    - name: Wazuh Dashboard 로컬 OIDC discovery 사전 확인 # [2026-06-10 박경수]
+      uri:
+        url: "http://127.0.0.1:18080/keycloak-local.json"
+        method: GET
+        return_content: yes
+        timeout: 5
+        status_code: 200
+      register: wazuh_local_oidc_discovery_check
       tags: config
 
     - name: Dashboard opensearch.username 설정 # [2026-06-10 박경수] Dashboard -> Indexer 인증 계정 명시
@@ -464,14 +543,16 @@
         state: present
       tags: config
 
-    - name: Dashboard opensearch.password 평문 설정 제거 # [2026-06-10 박경수] 비밀번호는 keystore 사용
+    - name: Dashboard opensearch.password 런타임 설정 # [2026-06-10 박경수] aws-wazuh-indexer-credentials의 kibanaserver password 사용
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^#?\s*opensearch.password:'
-        state: absent
+        line: 'opensearch.password: "{{ wazuh_indexer_credentials_effective.password | default(kibanaserver_password) }}"'
+        state: present
+      no_log: true
       tags: config
 
-    - name: Dashboard OIDC auth type 설정 # [2026-06-10 박경수] Keycloak SSO
+    - name: Dashboard OIDC auth type 설정 # [2026-06-10 박경수] Keycloak SSO 유지
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^opensearch_security.auth.type:'
@@ -479,11 +560,19 @@
         state: present
       tags: config
 
-    - name: Dashboard OIDC connect_url 설정 # [2026-06-10 박경수]
+    - name: Dashboard OIDC connect_url 설정 # [2026-06-10 박경수] Cloudflare 403 회피를 위해 Wazuh Dashboard 서버 내부 discovery 사용
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^opensearch_security.openid.connect_url:'
-        line: 'opensearch_security.openid.connect_url: "{{ keycloak_base_url | default(''https://monitoring.mzclinic.cloud'') }}/realms/{{ keycloak_realm | default(''mzclinic'') }}/.well-known/openid-configuration"'
+        line: 'opensearch_security.openid.connect_url: "http://127.0.0.1:18080/keycloak-local.json"'
+        state: present
+      tags: config
+
+    - name: Dashboard OIDC connect_url 주석 추가 # [2026-06-10 박경수]
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        insertbefore: '^opensearch_security.openid.connect_url:'
+        line: '# [2026-06-10 박경수] Cloudflare 403 회피를 위해 Wazuh Dashboard 서버 내부 OIDC discovery 사용'
         state: present
       tags: config
 
@@ -495,11 +584,13 @@
         state: present
       tags: config
 
-    - name: Dashboard OIDC client_secret 평문 설정 제거 # [2026-06-10 박경수] secret은 keystore 사용
+    - name: Dashboard OIDC client_secret 런타임 설정 # [2026-06-10 박경수] Secret 값은 Terraform 코드에 저장하지 않고 Secrets Manager에서 조회
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^opensearch_security.openid.client_secret:'
-        state: absent
+        line: 'opensearch_security.openid.client_secret: "{{ wazuh_openid_client_secret_effective }}"'
+        state: present
+      no_log: true
       tags: config
 
     - name: Dashboard OIDC base_redirect_url 설정 # [2026-06-10 박경수]
@@ -526,11 +617,13 @@
         state: present
       tags: config
 
-    - name: Dashboard cookie.password 평문 설정 제거 # [2026-06-10 박경수] cookie password는 keystore 사용
+    - name: Dashboard cookie.password 런타임 설정 # [2026-06-10 박경수] Secret 값은 Terraform 코드에 저장하지 않고 Secrets Manager에서 조회
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^opensearch_security.cookie.password:'
-        state: absent
+        line: 'opensearch_security.cookie.password: "{{ wazuh_dashboard_cookie_password_effective }}"'
+        state: present
+      no_log: true
       tags: config
 
     - name: Dashboard verbose logging 제거 # [2026-06-10 박경수] 디버깅 로그 운영 반영 방지
@@ -538,6 +631,23 @@
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^logging.verbose:'
         state: absent
+      tags: config
+
+    - name: Dashboard 설정 파일 권한 고정 # [2026-06-10 박경수] 런타임 secret이 포함되므로 root/wazuh-dashboard만 읽기 허용
+      file:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        owner: root
+        group: wazuh-dashboard
+        mode: '0640'
+      tags: config
+
+    - name: Dashboard -> Indexer 인증 사전 검증 # [2026-06-10 박경수] 재시작 전 kibanaserver 인증 실패를 차단
+      shell: |
+        curl -sk --connect-timeout 5 --max-time 12           -u 'kibanaserver:{{ wazuh_indexer_credentials_effective.password | default(kibanaserver_password) }}'           'https://{{ wazuh_indexer_ip }}:9200/_cluster/health'           -o /tmp/wazuh-indexer-health.json           -w '%{http_code}'
+      register: wazuh_dashboard_indexer_auth_check
+      changed_when: false
+      failed_when: wazuh_dashboard_indexer_auth_check.stdout != '200'
+      no_log: true
       tags: config
 
     - name: systemd override 디렉토리 생성
@@ -582,36 +692,10 @@
     - meta: flush_handlers
       tags: always
 
-    - name: Dashboard keystore kibanaserver 비밀번호 업데이트
-      shell: |
-        echo '{{ kibanaserver_password }}' | \
-        sudo -u wazuh-dashboard \
-        NODE_OPTIONS="--max-old-space-size=2048" \
-        /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
-        add opensearch.password --force --stdin
-      no_log: true
+    - name: Dashboard keystore 기반 secret 주입 비활성화 # [2026-06-10 박경수] 현재 Wazuh Dashboard는 yml 런타임 주입 방식으로 안정화
+      debug:
+        msg: "Wazuh Dashboard secrets are injected into opensearch_dashboards.yml at runtime. Keystore injection is intentionally skipped."
       tags: config
-
-    - name: Dashboard keystore OIDC client secret 업데이트 # [2026-06-10 박경수] Keycloak wazuh client secret
-      shell: |
-        echo '{{ wazuh_openid_client_secret_effective }}' | \
-        sudo -u wazuh-dashboard \
-        NODE_OPTIONS="--max-old-space-size=2048" \
-        /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
-        add opensearch_security.openid.client_secret --force --stdin
-      no_log: true
-      tags: config
-
-    - name: Dashboard keystore cookie password 업데이트 # [2026-06-10 박경수] OIDC 세션 저장용 고정 secret
-      shell: |
-        echo '{{ wazuh_dashboard_cookie_password_effective }}' | \
-        sudo -u wazuh-dashboard \
-        NODE_OPTIONS="--max-old-space-size=2048" \
-        /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
-        add opensearch_security.cookie.password --force --stdin
-      no_log: true
-      tags: config
-
 
 
     - name: wazuh.yml 디렉토리 생성
