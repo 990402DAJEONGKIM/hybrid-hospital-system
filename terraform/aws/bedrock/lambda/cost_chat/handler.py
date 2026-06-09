@@ -15,7 +15,7 @@ CHUNKS_PREFIX = "cost-chunks"
 S3 = boto3.client("s3")
 BEDROCK = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
 
-MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
