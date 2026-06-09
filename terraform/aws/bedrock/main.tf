@@ -140,11 +140,8 @@ resource "aws_lambda_function" "onprem_cost_calculator" {
 
   environment {
     variables = {
-      RAW_BUCKET       = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      SSM_VCENTER_HOST = "/mzclinic/cost/vcenter/host"
-      SSM_VCENTER_USER = "/mzclinic/cost/vcenter/username"
-      SSM_VCENTER_PASS = "/mzclinic/cost/vcenter/password"
-      SSM_COST_PARAMS  = "/mzclinic/cost/onprem/cost-params"
+      RAW_BUCKET      = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      SSM_COST_PARAMS = "/mzclinic/cost/onprem/cost-params"
     }
   }
 
