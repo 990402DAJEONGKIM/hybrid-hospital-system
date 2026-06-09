@@ -26,3 +26,8 @@ variable "billing_reader_sa_account_id" {
   type        = string
   default     = "billing-reader-sa"
 }
+
+variable "aws_account_id" {
+  description = "AWS 계정 ID (WIF 프로바이더 및 attribute_condition에 사용)"
+  type        = string
+}
