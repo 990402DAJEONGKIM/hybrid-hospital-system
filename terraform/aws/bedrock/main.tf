@@ -12,7 +12,7 @@ data "aws_region" "bedrock" {
 # ---------------------------------------------------------
 # OpenSearch Serverless — 벡터 스토어
 # ---------------------------------------------------------
-resource "aws_opensearchserverless_encryption_policy" "kb" {
+resource "aws_opensearchserverless_security_policy" "kb_encryption" {
   provider    = aws.bedrock
   name        = "aws-cost-kb"
   type        = "encryption"
@@ -27,7 +27,7 @@ resource "aws_opensearchserverless_encryption_policy" "kb" {
   })
 }
 
-resource "aws_opensearchserverless_network_policy" "kb" {
+resource "aws_opensearchserverless_security_policy" "kb_network" {
   provider    = aws.bedrock
   name        = "aws-cost-kb"
   type        = "network"
@@ -83,8 +83,8 @@ resource "aws_opensearchserverless_collection" "kb" {
   tags        = local.common_tags
 
   depends_on = [
-    aws_opensearchserverless_encryption_policy.kb,
-    aws_opensearchserverless_network_policy.kb,
+    aws_opensearchserverless_security_policy.kb_encryption,
+    aws_opensearchserverless_security_policy.kb_network,
   ]
 }
 
