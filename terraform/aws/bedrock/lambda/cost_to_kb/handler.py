@@ -47,7 +47,7 @@ def _get_usd_krw_rate(year: str, month: str) -> float:
     for delta in range(7):
         d = last_day - timedelta(days=delta)
         url = (
-            "https://www.koreaexim.go.kr/site/program/financial/exchangeJSON"
+            "https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON"
             f"?authkey={api_key}&searchdate={d.strftime('%Y%m%d')}&data=AP01"
         )
         try:
