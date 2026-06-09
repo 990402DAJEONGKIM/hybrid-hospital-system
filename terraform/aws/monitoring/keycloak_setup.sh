@@ -1,6 +1,6 @@
 #!/bin/bash
 # #260609 박경수 — Keycloak + nginx 통합 포털 설치 스크립트
-# user_data 16KB 제한으로 인해 S3에서 별도 실행
+# user_data 16KB 제한으로 S3에서 별도 실행
 set -e
 
 REGION="ap-south-2"
@@ -32,71 +32,81 @@ MONITORING_DOMAIN=$(aws ssm get-parameter \
   --region $REGION \
   --output text)
 
+# Aurora IP 조회 (Docker bridge 네트워크에서 DNS 해석용)
+AURORA_IP=$(dig +short $AURORA_HOST | head -1)
+
 # ── Docker 설치 ──────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
   apt-get update -y
-  apt-get install -y docker.io docker-compose
+  apt-get install -y docker.io dnsutils
   systemctl enable --now docker
 fi
 
 # ── nginx 설치 ───────────────────────────────────────────
 apt-get install -y nginx
 
-# ── Keycloak docker-compose ──────────────────────────────
-mkdir -p /opt/keycloak
-cat > /opt/keycloak/docker-compose.yml <<COMPOSE
-version: "3.8"
-services:
-  keycloak:
-    image: quay.io/keycloak/keycloak:24.0
-    container_name: keycloak
-    restart: unless-stopped
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://${AURORA_HOST}:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${KC_DB_PASS}
-      KC_HOSTNAME: ${MONITORING_DOMAIN}
-      KC_HOSTNAME_STRICT: "false"
-      KC_HTTP_ENABLED: "true"
-      KC_HTTP_HOST: "127.0.0.1"
-      KC_PROXY: edge
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASS}
-    ports:
-      - "127.0.0.1:8080:8080"
-    command: start
-COMPOSE
+# ── Keycloak docker run ──────────────────────────────────
+docker rm -f keycloak 2>/dev/null || true
 
-cd /opt/keycloak && docker-compose up -d
+docker run -d \
+  --name keycloak \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  --add-host="${AURORA_HOST}:${AURORA_IP}" \
+  -e KC_DB=postgres \
+  -e KC_DB_URL="jdbc:postgresql://${AURORA_HOST}:5432/keycloak" \
+  -e KC_DB_USERNAME=keycloak \
+  -e KC_DB_PASSWORD="${KC_DB_PASS}" \
+  -e KC_HOSTNAME="${MONITORING_DOMAIN}" \
+  -e KC_HOSTNAME_STRICT=false \
+  -e KC_HTTP_ENABLED=true \
+  -e KC_PROXY=edge \
+  -e KEYCLOAK_ADMIN=admin \
+  -e KEYCLOAK_ADMIN_PASSWORD="${KC_ADMIN_PASS}" \
+  quay.io/keycloak/keycloak:24.0 start
 
 # ── nginx 설정 (ALB가 SSL termination, nginx는 HTTP:80만) ─
-cat > /etc/nginx/sites-available/monitoring <<NGINX
+cat > /etc/nginx/sites-available/monitoring << 'NGINX'
 server {
     listen 80;
-    server_name ${MONITORING_DOMAIN};
+    server_name MONITORING_DOMAIN_PLACEHOLDER;
 
+    # 통합 포털 HTML (정적 파일 우선, 없으면 Keycloak으로)
     location / {
         root /var/www/monitoring;
         index index.html;
+        try_files $uri $uri/ @keycloak;
     }
 
-    location /auth/ {
+    location @keycloak {
         proxy_pass          http://127.0.0.1:8080;
-        proxy_set_header    Host \$host;
-        proxy_set_header    X-Real-IP \$remote_addr;
-        proxy_set_header    X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header    Host $host;
+        proxy_set_header    X-Real-IP $remote_addr;
+        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto https;
+    }
+
+    # /auth/ 경로 → Keycloak (rewrite)
+    location /auth/ {
+        rewrite ^/auth/(.*)$ /$1 break;
+        proxy_pass          http://127.0.0.1:8080;
+        proxy_set_header    Host $host;
+        proxy_set_header    X-Real-IP $remote_addr;
+        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header    X-Forwarded-Proto https;
     }
 }
 NGINX
+
+# 도메인 치환
+sed -i "s/MONITORING_DOMAIN_PLACEHOLDER/${MONITORING_DOMAIN}/" /etc/nginx/sites-available/monitoring
 
 ln -sf /etc/nginx/sites-available/monitoring /etc/nginx/sites-enabled/monitoring
 rm -f /etc/nginx/sites-enabled/default
 
 # ── 통합 포털 HTML ───────────────────────────────────────
 mkdir -p /var/www/monitoring
-cat > /var/www/monitoring/index.html <<'HTML'
+cat > /var/www/monitoring/index.html << 'HTML'
 <!DOCTYPE html>
 <html lang="ko">
 <head>
