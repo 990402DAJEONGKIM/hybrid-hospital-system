@@ -54,6 +54,12 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/cost/*"
       },
       {
+        Sid      = "KMS"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = data.aws_kms_key.s3.arn
+      },
+      {
         Sid      = "Bedrock"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
