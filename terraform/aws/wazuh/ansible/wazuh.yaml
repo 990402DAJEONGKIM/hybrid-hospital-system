@@ -386,6 +386,14 @@
         regexp: '^opensearch_security.session.keepalive:'
         line: 'opensearch_security.session.keepalive: true'
       tags: config
+          
+    # Dashboard session keepalive 설정 다음에 추가 260609 박경수
+    - name: Dashboard CSP frame-ancestors 설정 
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^csp.rules:'
+        line: 'csp.rules: ["script-src ''unsafe-eval'' ''unsafe-inline'' ''self''; worker-src blob: ''self''; frame-ancestors ''self'' https://monitoring.mzclinic.cloud"]'
+      tags: config
 
     - name: Filebeat 설정 배포
       template:
@@ -968,4 +976,10 @@
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
         regexp: '^server.customResponseHeaders:'
         line: 'server.customResponseHeaders: {"X-Frame-Options": "ALLOWALL"}'
+      tags: config
+
+    - name: Dashboard X-Frame-Options 적용 후 재시작 # #260609 박경수
+      systemd:
+        name: wazuh-dashboard
+        state: restarted
       tags: config
