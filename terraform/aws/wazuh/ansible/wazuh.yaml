@@ -19,6 +19,35 @@
         slack_webhook_url: "{{ lookup('amazon.aws.aws_secret', 'aws-wazuh-slack-alarm-webhook', region='ap-south-2') }}"
       tags: always
 
+
+    - name: Wazuh OIDC client secret 변수 사용 # [2026-06-10 박경수]
+      set_fact:
+        wazuh_openid_client_secret_effective: "{{ wazuh_openid_client_secret }}"
+      when: wazuh_openid_client_secret is defined
+      no_log: true
+      tags: always
+
+    - name: Wazuh OIDC client secret SM에서 읽기 # [2026-06-10 박경수]
+      set_fact:
+        wazuh_openid_client_secret_effective: "{{ lookup('amazon.aws.aws_secret', 'aws-wazuh-openid-client-secret', region=aws_region | default('ap-south-2')) }}"
+      when: wazuh_openid_client_secret is not defined
+      no_log: true
+      tags: always
+
+    - name: Wazuh Dashboard cookie password 변수 사용 # [2026-06-10 박경수]
+      set_fact:
+        wazuh_dashboard_cookie_password_effective: "{{ wazuh_dashboard_cookie_password }}"
+      when: wazuh_dashboard_cookie_password is defined
+      no_log: true
+      tags: always
+
+    - name: Wazuh Dashboard cookie password SM에서 읽기 # [2026-06-10 박경수]
+      set_fact:
+        wazuh_dashboard_cookie_password_effective: "{{ lookup('amazon.aws.aws_secret', 'aws-wazuh-dashboard-cookie-password', region=aws_region | default('ap-south-2')) }}"
+      when: wazuh_dashboard_cookie_password is not defined
+      no_log: true
+      tags: always
+
     # ──────────────────────────────────────────
     # 시스템 기본 설정
     # ──────────────────────────────────────────
@@ -419,6 +448,98 @@
         line: 'opensearch.hosts: ["https://{{ wazuh_indexer_ip }}:9200"]'
       tags: config
 
+    - name: monitoring 도메인 내부 해석 고정 # [2026-06-10 박경수] Keycloak OIDC 내부 접근 안정화
+      lineinfile:
+        path: /etc/hosts
+        regexp: '.*\smonitoring\.mzclinic\.cloud$'
+        line: "{{ monitoring_private_ip | default('10.0.12.128') }} monitoring.mzclinic.cloud"
+        state: present
+      tags: config
+
+    - name: Dashboard opensearch.username 설정 # [2026-06-10 박경수] Dashboard -> Indexer 인증 계정 명시
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^#?\s*opensearch.username:'
+        line: 'opensearch.username: kibanaserver'
+        state: present
+      tags: config
+
+    - name: Dashboard opensearch.password 평문 설정 제거 # [2026-06-10 박경수] 비밀번호는 keystore 사용
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^#?\s*opensearch.password:'
+        state: absent
+      tags: config
+
+    - name: Dashboard OIDC auth type 설정 # [2026-06-10 박경수] Keycloak SSO
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.auth.type:'
+        line: 'opensearch_security.auth.type: "openid"'
+        state: present
+      tags: config
+
+    - name: Dashboard OIDC connect_url 설정 # [2026-06-10 박경수]
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.openid.connect_url:'
+        line: 'opensearch_security.openid.connect_url: "{{ keycloak_base_url | default(''https://monitoring.mzclinic.cloud'') }}/realms/{{ keycloak_realm | default(''mzclinic'') }}/.well-known/openid-configuration"'
+        state: present
+      tags: config
+
+    - name: Dashboard OIDC client_id 설정 # [2026-06-10 박경수]
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.openid.client_id:'
+        line: 'opensearch_security.openid.client_id: "wazuh"'
+        state: present
+      tags: config
+
+    - name: Dashboard OIDC client_secret 평문 설정 제거 # [2026-06-10 박경수] secret은 keystore 사용
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.openid.client_secret:'
+        state: absent
+      tags: config
+
+    - name: Dashboard OIDC base_redirect_url 설정 # [2026-06-10 박경수]
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.openid.base_redirect_url:'
+        line: 'opensearch_security.openid.base_redirect_url: "{{ wazuh_dashboard_public_url | default(''https://wazuh.mzclinic.cloud'') }}"'
+        state: present
+      tags: config
+
+    - name: Dashboard OIDC logout_url 설정 # [2026-06-10 박경수]
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.openid.logout_url:'
+        line: 'opensearch_security.openid.logout_url: "{{ keycloak_base_url | default(''https://monitoring.mzclinic.cloud'') }}/realms/{{ keycloak_realm | default(''mzclinic'') }}/protocol/openid-connect/logout"'
+        state: present
+      tags: config
+
+    - name: Dashboard cookie secure 설정 # [2026-06-10 박경수] HTTPS 세션 쿠키 강제
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.cookie.secure:'
+        line: 'opensearch_security.cookie.secure: true'
+        state: present
+      tags: config
+
+    - name: Dashboard cookie.password 평문 설정 제거 # [2026-06-10 박경수] cookie password는 keystore 사용
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^opensearch_security.cookie.password:'
+        state: absent
+      tags: config
+
+    - name: Dashboard verbose logging 제거 # [2026-06-10 박경수] 디버깅 로그 운영 반영 방지
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^logging.verbose:'
+        state: absent
+      tags: config
+
     - name: systemd override 디렉토리 생성
       file:
         path: "/etc/systemd/system/{{ item }}.service.d"
@@ -468,6 +589,26 @@
         NODE_OPTIONS="--max-old-space-size=2048" \
         /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
         add opensearch.password --force --stdin
+      no_log: true
+      tags: config
+
+    - name: Dashboard keystore OIDC client secret 업데이트 # [2026-06-10 박경수] Keycloak wazuh client secret
+      shell: |
+        echo '{{ wazuh_openid_client_secret_effective }}' | \
+        sudo -u wazuh-dashboard \
+        NODE_OPTIONS="--max-old-space-size=2048" \
+        /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
+        add opensearch_security.openid.client_secret --force --stdin
+      no_log: true
+      tags: config
+
+    - name: Dashboard keystore cookie password 업데이트 # [2026-06-10 박경수] OIDC 세션 저장용 고정 secret
+      shell: |
+        echo '{{ wazuh_dashboard_cookie_password_effective }}' | \
+        sudo -u wazuh-dashboard \
+        NODE_OPTIONS="--max-old-space-size=2048" \
+        /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
+        add opensearch_security.cookie.password --force --stdin
       no_log: true
       tags: config
 
