@@ -15,8 +15,6 @@ resource "google_iam_workload_identity_pool" "aws_lambda" {
   workload_identity_pool_id = "aws-lambda-pool"
   display_name              = "AWS Lambda Pool"
   description               = "AWS Lambda가 GCP 리소스에 접근하기 위한 WIF 풀"
-
-  labels = local.common_labels
 }
 
 resource "google_iam_workload_identity_pool_provider" "aws_lambda" {
@@ -32,10 +30,10 @@ resource "google_iam_workload_identity_pool_provider" "aws_lambda" {
   }
 
   # aws-cost-lambda-role을 assume한 세션만 허용
-  attribute_condition = "attribute.aws_role == \"${var.aws_lambda_role_name}\" && attribute.aws_account == \"${data.terraform_remote_state.bedrock.outputs.aws_account_id}\""
+  attribute_condition = "attribute.aws_role == \"${var.aws_lambda_role_name}\" && attribute.aws_account == \"${var.aws_account_id}\""
 
   aws {
-    account_id = data.terraform_remote_state.bedrock.outputs.aws_account_id
+    account_id = var.aws_account_id
   }
 }
 

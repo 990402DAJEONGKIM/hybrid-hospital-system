@@ -1,21 +1,24 @@
 """
 Monthly Report Lambda
-Bedrock retrieve_and_generate로 월간 리포트를 작성해 SES로 HTML 이메일 발송
+S3 chunks를 직접 읽어 Claude로 월간 리포트 작성 후 SES로 HTML 이메일 발송
 """
+import json
 import os
 from datetime import date, timedelta
 
 import boto3
 
 BEDROCK_REGION = os.environ["BEDROCK_REGION"]
-KB_ID = os.environ["KB_ID"]
+CHUNKS_BUCKET = os.environ["CHUNKS_BUCKET"]
 ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
 SES_REGION = os.environ["SES_REGION"]
+CHUNKS_PREFIX = "cost-chunks"
 
-BEDROCK = boto3.client("bedrock-agent-runtime", region_name=BEDROCK_REGION)
+S3 = boto3.client("s3")
+BEDROCK = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
 SES = boto3.client("ses", region_name=SES_REGION)
 
-MODEL_ARN = f"arn:aws:bedrock:{BEDROCK_REGION}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 def _get_target_month() -> tuple[str, str]:
@@ -25,9 +28,26 @@ def _get_target_month() -> tuple[str, str]:
     return str(last_month.year), f"{last_month.month:02d}"
 
 
-def _generate_report(year: str, month: str) -> str:
+def _load_chunks() -> str:
+    """S3 cost-chunks 전체를 읽어 하나의 컨텍스트 문자열 반환"""
+    paginator = S3.get_paginator("list_objects_v2")
+    texts = []
+    for page in paginator.paginate(Bucket=CHUNKS_BUCKET, Prefix=CHUNKS_PREFIX + "/"):
+        for obj in sorted(page.get("Contents", []), key=lambda x: x["Key"]):
+            key = obj["Key"]
+            if not key.endswith(".txt"):
+                continue
+            body = S3.get_object(Bucket=CHUNKS_BUCKET, Key=key)["Body"].read().decode("utf-8")
+            texts.append(body)
+    return "\n\n---\n\n".join(texts)
+
+
+def _generate_report(year: str, month: str, cost_context: str) -> str:
     prompt = f"""당신은 IT 인프라 비용 분석 전문가입니다.
 아래 데이터를 바탕으로 경영진이 이해할 수 있는 {year}년 {int(month)}월 비용 리포트를 작성하세요.
+
+[비용 데이터]
+{cost_context}
 
 포함할 항목:
 1. 이번 달 인프라별 비용 요약 (AWS/GCP/온프레미스)
@@ -39,20 +59,16 @@ def _generate_report(year: str, month: str) -> str:
 
 회계 용어를 사용하고 경영진 보고서 형식으로 작성하세요."""
 
-    resp = BEDROCK.retrieve_and_generate(
-        input={"text": prompt},
-        retrieveAndGenerateConfiguration={
-            "type": "KNOWLEDGE_BASE",
-            "knowledgeBaseConfiguration": {
-                "knowledgeBaseId": KB_ID,
-                "modelArn": MODEL_ARN,
-                "retrievalConfiguration": {
-                    "vectorSearchConfiguration": {"numberOfResults": 10}
-                },
-            },
-        },
+    resp = BEDROCK.invoke_model(
+        modelId=MODEL_ID,
+        body=json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 2048,
+            "messages": [{"role": "user", "content": prompt}],
+        }),
     )
-    return resp["output"]["text"]
+    result = json.loads(resp["body"].read())
+    return result["content"][0]["text"]
 
 
 def _build_html(year: str, month: str, report_text: str) -> str:
@@ -68,7 +84,6 @@ def _build_html(year: str, month: str, report_text: str) -> str:
   .header p {{ margin: 4px 0 0; font-size: 13px; opacity: 0.8; }}
   .body {{ padding: 32px; color: #333; line-height: 1.7; white-space: pre-wrap; }}
   .footer {{ background: #f0f0f0; padding: 16px 32px; font-size: 11px; color: #888; text-align: center; }}
-  .alert {{ background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin: 16px 0; }}
 </style>
 </head>
 <body>
@@ -79,7 +94,7 @@ def _build_html(year: str, month: str, report_text: str) -> str:
   </div>
   <div class="body">{report_text}</div>
   <div class="footer">
-    본 리포트는 AWS Bedrock + 멀티클라우드 비용 RAG 시스템에 의해 자동 생성되었습니다.
+    본 리포트는 AWS Bedrock + S3 멀티클라우드 비용 분석 시스템에 의해 자동 생성되었습니다.
   </div>
 </div>
 </body>
@@ -89,7 +104,8 @@ def _build_html(year: str, month: str, report_text: str) -> str:
 def lambda_handler(event, context):
     year, month = _get_target_month()
 
-    report_text = _generate_report(year, month)
+    cost_context = _load_chunks()
+    report_text = _generate_report(year, month, cost_context)
     html_body = _build_html(year, month, report_text)
 
     SES.send_email(

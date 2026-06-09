@@ -316,4 +316,5 @@ resource "aws_security_group_rule" "monitoring_443_from_wazuh" {
   security_group_id        = aws_security_group.aws-monitoring-sg.id
 }
 
+
 # #260609 박경수 end
