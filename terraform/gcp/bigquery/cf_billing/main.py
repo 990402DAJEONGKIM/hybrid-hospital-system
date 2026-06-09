@@ -25,9 +25,9 @@ def get_billing(request):
             service.description AS service,
             SUM(cost)           AS total_cost,
             currency,
-            DATE_TRUNC(usage_start_time, MONTH) AS month
+            DATE_TRUNC(DATE(usage_start_time), MONTH) AS month
         FROM `{DATASET}.gcp_billing_export`
-        WHERE DATE_TRUNC(usage_start_time, MONTH) = DATE '{year}-{month}-01'
+        WHERE DATE_TRUNC(DATE(usage_start_time), MONTH) = DATE '{year}-{month}-01'
         GROUP BY service, currency, month
         ORDER BY total_cost DESC
     """

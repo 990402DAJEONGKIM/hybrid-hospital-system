@@ -119,3 +119,12 @@ resource "google_cloudfunctions2_function_iam_member" "invoker" {
   role           = "roles/cloudfunctions.invoker"
   member         = "allUsers"
 }
+
+# Gen2 Cloud Function은 Cloud Run 위에서 동작하므로 run.invoker도 필요
+resource "google_cloud_run_v2_service_iam_member" "invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloudfunctions2_function.billing.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
