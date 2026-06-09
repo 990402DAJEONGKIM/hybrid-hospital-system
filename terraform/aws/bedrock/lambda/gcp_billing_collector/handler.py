@@ -1,25 +1,20 @@
 """
 GCP Billing Collector Lambda
-BigQuery에서 이전 달 서비스별 비용을 조회해 S3에 CSV로 저장
-botocore로 AWS STS 서명 요청 → GCP WIF 토큰 교환 → BigQuery 접근
+GCP Cloud Function을 HTTP로 호출해 BigQuery 빌링 데이터를 받아 S3에 CSV로 저장
 """
 import csv
 import io
 import json
 import os
-import urllib.error
-import urllib.parse
 import urllib.request
 from datetime import date, timedelta
 
 import boto3
-import botocore.auth
-import botocore.awsrequest
 
 SSM = boto3.client("ssm")
-S3 = boto3.client("s3")
+S3  = boto3.client("s3")
 
-BUCKET = os.environ["RAW_BUCKET"]
+BUCKET     = os.environ["RAW_BUCKET"]
 RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost-raw")
 
 
@@ -34,102 +29,15 @@ def _get_target_month() -> tuple[str, str]:
     return str(last_month.year), f"{last_month.month:02d}"
 
 
-def _get_gcp_access_token(audience: str, sa_impersonation_url: str) -> str:
-    # 1. Lambda IAM Role 자격증명 가져오기
-    frozen_creds = boto3.Session().get_credentials().get_frozen_credentials()
-
-    # 2. AWS STS GetCallerIdentity POST 서명 요청 (global endpoint, us-east-1 서명)
-    sts_url = "https://sts.amazonaws.com"
-    sts_body = b"Action=GetCallerIdentity&Version=2011-06-15"
-    aws_request = botocore.awsrequest.AWSRequest(
-        method="POST",
-        url=sts_url,
-        data=sts_body,
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded",
-            "x-goog-cloud-target-resource": audience,
-        },
-    )
-    botocore.auth.SigV4Auth(frozen_creds, "sts", "us-east-1").add_auth(aws_request)
-
-    # 3. GCP STS에 전달할 subject_token 구성
-    subject_token = urllib.parse.quote(json.dumps({
-        "url": sts_url,
-        "method": "POST",
-        "headers": [{"key": k, "value": v} for k, v in dict(aws_request.headers).items()],
-        "body": sts_body.decode("utf-8"),
-    }))
-
-    # 4. GCP STS로 federated token 교환
-    gcp_sts_body = urllib.parse.urlencode({
-        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-        "audience": audience,
-        "subject_token_type": "urn:ietf:params:aws:token-type:aws4_request",
-        "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
-        "subject_token": subject_token,
-        "scope": "https://www.googleapis.com/auth/cloud-platform",
-    }).encode("utf-8")
-
+def _fetch_billing(cf_url: str, api_key: str, year: str, month: str) -> list[dict]:
+    url = f"{cf_url}?year={year}&month={month}"
     req = urllib.request.Request(
-        "https://sts.googleapis.com/v1/token",
-        data=gcp_sts_body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST"
+        url,
+        headers={"X-Api-Key": api_key},
+        method="GET"
     )
-    try:
-        with urllib.request.urlopen(req) as resp:
-            federated_token = json.loads(resp.read())["access_token"]
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8")
-        print(f"GCP STS 오류 {e.code}: {error_body}")
-        raise
-
-    # 5. billing-reader-sa impersonation으로 최종 access token 획득
-    req = urllib.request.Request(
-        sa_impersonation_url,
-        data=json.dumps({
-            "scope": ["https://www.googleapis.com/auth/cloud-platform"],
-            "lifetime": "3600s"
-        }).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {federated_token}",
-            "Content-Type": "application/json"
-        },
-        method="POST"
-    )
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read())["accessToken"]
-
-
-def _query_bigquery(project_id: str, dataset: str, year: str, month: str, access_token: str) -> list[dict]:
-    from google.oauth2.credentials import Credentials
-    from google.cloud import bigquery
-
-    client = bigquery.Client(
-        project=project_id,
-        credentials=Credentials(token=access_token)
-    )
-    query = f"""
-        SELECT
-            service.description AS service,
-            SUM(cost) AS total_cost,
-            currency,
-            DATE_TRUNC(usage_start_time, MONTH) AS month
-        FROM `{dataset}.gcp_billing_export`
-        WHERE DATE_TRUNC(usage_start_time, MONTH) = DATE '{year}-{month}-01'
-        GROUP BY service, currency, month
-        ORDER BY total_cost DESC
-    """
-    rows = list(client.query(query).result())
-    return [
-        {
-            "service": r["service"],
-            "total_cost": float(r["total_cost"]),
-            "currency": r["currency"],
-            "month": str(r["month"]),
-        }
-        for r in rows
-    ]
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())
 
 
 def _rows_to_csv(rows: list[dict]) -> str:
@@ -145,16 +53,10 @@ def _rows_to_csv(rows: list[dict]) -> str:
 def lambda_handler(event, context):
     year, month = _get_target_month()
 
-    wif_config = json.loads(_get_param(os.environ["SSM_WIF_CONFIG"]))
-    project_id = _get_param(os.environ["SSM_GCP_PROJECT"])
-    dataset = _get_param(os.environ["SSM_GCP_DATASET"])
+    cf_url  = _get_param(os.environ["SSM_GCP_CF_URL"])
+    api_key = _get_param(os.environ["SSM_GCP_CF_KEY"])
 
-    access_token = _get_gcp_access_token(
-        audience=wif_config["audience"],
-        sa_impersonation_url=wif_config["service_account_impersonation_url"]
-    )
-
-    rows = _query_bigquery(project_id, dataset, year, month, access_token)
+    rows = _fetch_billing(cf_url, api_key, year, month)
 
     s3_key = f"{RAW_PREFIX}/gcp/{year}/{month}/gcp_cost.csv"
     S3.put_object(
