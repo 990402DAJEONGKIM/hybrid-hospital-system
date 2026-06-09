@@ -7,17 +7,6 @@ data "aws_region" "current" {}
 
 
 # ---------------------------------------------------------
-# SES 모듈
-# ---------------------------------------------------------
-module "ses" {
-  source = "./ses"
-
-  admin_email = var.admin_email
-  alert_email = var.alert_email
-  common_tags = local.common_tags
-}
-
-# ---------------------------------------------------------
 # IAM — Lambda 공통 실행 역할
 # ---------------------------------------------------------
 resource "aws_iam_role" "lambda_exec" {
@@ -85,8 +74,8 @@ resource "aws_iam_role_policy" "lambda_exec" {
 # ---------------------------------------------------------
 data "archive_file" "gcp_billing_collector" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda/gcp_billing_collector"
-  output_path = "${path.module}/../lambda/gcp_billing_collector.zip"
+  source_dir  = "${path.module}/lambda/gcp_billing_collector"
+  output_path = "${path.module}/lambda/gcp_billing_collector.zip"
 }
 
 resource "aws_cloudwatch_log_group" "gcp_billing_collector" {
@@ -123,8 +112,8 @@ resource "aws_lambda_function" "gcp_billing_collector" {
 # ---------------------------------------------------------
 data "archive_file" "onprem_cost_calculator" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda/onprem_cost_calculator"
-  output_path = "${path.module}/../lambda/onprem_cost_calculator.zip"
+  source_dir  = "${path.module}/lambda/onprem_cost_calculator"
+  output_path = "${path.module}/lambda/onprem_cost_calculator.zip"
 }
 
 resource "aws_cloudwatch_log_group" "onprem_cost_calculator" {
@@ -162,8 +151,8 @@ resource "aws_lambda_function" "onprem_cost_calculator" {
 # ---------------------------------------------------------
 data "archive_file" "cost_to_kb" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda/cost_to_kb"
-  output_path = "${path.module}/../lambda/cost_to_kb.zip"
+  source_dir  = "${path.module}/lambda/cost_to_kb"
+  output_path = "${path.module}/lambda/cost_to_kb.zip"
 }
 
 resource "aws_cloudwatch_log_group" "cost_to_kb" {
@@ -200,8 +189,8 @@ resource "aws_lambda_function" "cost_to_kb" {
 # ---------------------------------------------------------
 data "archive_file" "monthly_report" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda/monthly_report"
-  output_path = "${path.module}/../lambda/monthly_report.zip"
+  source_dir  = "${path.module}/lambda/monthly_report"
+  output_path = "${path.module}/lambda/monthly_report.zip"
 }
 
 resource "aws_cloudwatch_log_group" "monthly_report" {
@@ -238,8 +227,8 @@ resource "aws_lambda_function" "monthly_report" {
 # ---------------------------------------------------------
 data "archive_file" "cost_chat" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda/cost_chat"
-  output_path = "${path.module}/../lambda/cost_chat.zip"
+  source_dir  = "${path.module}/lambda/cost_chat"
+  output_path = "${path.module}/lambda/cost_chat.zip"
 }
 
 resource "aws_cloudwatch_log_group" "cost_chat" {
@@ -274,8 +263,8 @@ resource "aws_lambda_function" "cost_chat" {
 # ---------------------------------------------------------
 data "archive_file" "anomaly_detector" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda/anomaly_detector"
-  output_path = "${path.module}/../lambda/anomaly_detector.zip"
+  source_dir  = "${path.module}/lambda/anomaly_detector"
+  output_path = "${path.module}/lambda/anomaly_detector.zip"
 }
 
 resource "aws_cloudwatch_log_group" "anomaly_detector" {
