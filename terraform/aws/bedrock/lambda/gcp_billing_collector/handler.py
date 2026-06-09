@@ -1,19 +1,20 @@
 """
 GCP Billing Collector Lambda
-BigQuery에서 이전 달 서비스별 비용을 조회해 S3에 CSV로 저장
+GCP Cloud Function을 HTTP로 호출해 BigQuery 빌링 데이터를 받아 S3에 CSV로 저장
 """
 import csv
 import io
 import json
 import os
+import urllib.request
 from datetime import date, timedelta
 
 import boto3
 
 SSM = boto3.client("ssm")
-S3 = boto3.client("s3")
+S3  = boto3.client("s3")
 
-BUCKET = os.environ["BUCKET"]
+BUCKET     = os.environ["RAW_BUCKET"]
 RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost-raw")
 
 
@@ -28,34 +29,15 @@ def _get_target_month() -> tuple[str, str]:
     return str(last_month.year), f"{last_month.month:02d}"
 
 
-def _query_bigquery(project_id: str, dataset: str, year: str, month: str, key_json: dict) -> list[dict]:
-    from google.cloud import bigquery
-    from google.oauth2 import service_account
-
-    credentials = service_account.Credentials.from_service_account_info(key_json)
-    client = bigquery.Client(project=project_id, credentials=credentials)
-
-    query = f"""
-        SELECT
-            service.description AS service,
-            SUM(cost) AS total_cost,
-            currency,
-            DATE_TRUNC(usage_start_time, MONTH) AS month
-        FROM `{dataset}.gcp_billing_export`
-        WHERE DATE_TRUNC(usage_start_time, MONTH) = DATE '{year}-{month}-01'
-        GROUP BY service, currency, month
-        ORDER BY total_cost DESC
-    """
-    rows = list(client.query(query).result())
-    return [
-        {
-            "service": r["service"],
-            "total_cost": float(r["total_cost"]),
-            "currency": r["currency"],
-            "month": str(r["month"]),
-        }
-        for r in rows
-    ]
+def _fetch_billing(cf_url: str, api_key: str, year: str, month: str) -> list[dict]:
+    url = f"{cf_url}?year={year}&month={month}"
+    req = urllib.request.Request(
+        url,
+        headers={"X-Api-Key": api_key},
+        method="GET"
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())
 
 
 def _rows_to_csv(rows: list[dict]) -> str:
@@ -71,11 +53,10 @@ def _rows_to_csv(rows: list[dict]) -> str:
 def lambda_handler(event, context):
     year, month = _get_target_month()
 
-    key_json = json.loads(_get_param(os.environ["SSM_GCP_KEY"]))
-    project_id = _get_param(os.environ["SSM_GCP_PROJECT"])
-    dataset = _get_param(os.environ["SSM_GCP_DATASET"])
+    cf_url  = _get_param(os.environ["SSM_GCP_CF_URL"])
+    api_key = _get_param(os.environ["SSM_GCP_CF_KEY"])
 
-    rows = _query_bigquery(project_id, dataset, year, month, key_json)
+    rows = _fetch_billing(cf_url, api_key, year, month)
 
     s3_key = f"{RAW_PREFIX}/gcp/{year}/{month}/gcp_cost.csv"
     S3.put_object(

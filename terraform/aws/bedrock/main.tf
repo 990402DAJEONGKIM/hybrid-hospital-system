@@ -54,6 +54,12 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/cost/*"
       },
       {
+        Sid      = "KMS"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = data.aws_kms_key.s3.arn
+      },
+      {
         Sid      = "Bedrock"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
@@ -93,13 +99,11 @@ resource "aws_lambda_function" "gcp_billing_collector" {
   memory_size      = 256
   filename         = data.archive_file.gcp_billing_collector.output_path
   source_code_hash = data.archive_file.gcp_billing_collector.output_base64sha256
-
   environment {
     variables = {
-      RAW_BUCKET      = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      SSM_GCP_KEY     = "/mzclinic/cost/gcp/service-account-key"
-      SSM_GCP_PROJECT = "/mzclinic/cost/gcp/project-id"
-      SSM_GCP_DATASET = "/mzclinic/cost/gcp/billing-dataset"
+      RAW_BUCKET    = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      SSM_GCP_CF_URL = "/mzclinic/cost/gcp/cf-url"
+      SSM_GCP_CF_KEY = "/mzclinic/cost/gcp/cf-api-key"
     }
   }
 
@@ -134,11 +138,8 @@ resource "aws_lambda_function" "onprem_cost_calculator" {
 
   environment {
     variables = {
-      RAW_BUCKET       = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      SSM_VCENTER_HOST = "/mzclinic/cost/vcenter/host"
-      SSM_VCENTER_USER = "/mzclinic/cost/vcenter/username"
-      SSM_VCENTER_PASS = "/mzclinic/cost/vcenter/password"
-      SSM_COST_PARAMS  = "/mzclinic/cost/onprem/cost-params"
+      RAW_BUCKET      = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      SSM_COST_PARAMS = "/mzclinic/cost/onprem/cost-params"
     }
   }
 

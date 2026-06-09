@@ -25,6 +25,11 @@ output "billing_reader_sa_email" {
 
 # Lambda의 gcp_billing_collector에서 사용할 WIF credential config JSON
 # SSM /mzclinic/cost/gcp/wif-config 에 저장
+output "cf_url" {
+  value       = google_cloudfunctions2_function.billing.service_config[0].uri
+  description = "GCP Billing Reader Cloud Function URL"
+}
+
 output "wif_credential_config" {
   value = jsonencode({
     type                              = "external_account"
