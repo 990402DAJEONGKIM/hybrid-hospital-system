@@ -1,0 +1,1 @@
+# vCenter REST API는 표준 라이브러리(urllib)로 호출 — 외부 의존성 없음
