@@ -59,11 +59,160 @@ docker run -d \
   -e KC_DB_PASSWORD="${KC_DB_PASS}" \
   -e KC_HOSTNAME="${MONITORING_DOMAIN}" \
   -e KC_HOSTNAME_STRICT=false \
+  -e KC_HOSTNAME_STRICT_HTTPS=false \
   -e KC_HTTP_ENABLED=true \
   -e KC_PROXY=edge \
   -e KEYCLOAK_ADMIN=admin \
   -e KEYCLOAK_ADMIN_PASSWORD="${KC_ADMIN_PASS}" \
   quay.io/keycloak/keycloak:24.0 start
+
+
+# ── Keycloak OIDC 구성 대기/보정 ─────────────────────────
+# [2026-06-10 박경수] Wazuh 통합 포털 SSO 재배포 보존용
+for i in $(seq 1 60); do
+  if curl -sf "http://127.0.0.1:8080/realms/master/.well-known/openid-configuration" >/dev/null; then
+    break
+  fi
+  sleep 5
+  if [ "$i" -eq 60 ]; then
+    echo "❌ Keycloak readiness timeout" >&2
+    docker logs keycloak --tail 80 >&2 || true
+    exit 1
+  fi
+done
+
+KC_TOKEN=$(curl -s -X POST "http://127.0.0.1:8080/realms/master/protocol/openid-connect/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "client_id=admin-cli" \
+  --data-urlencode "grant_type=password" \
+  --data-urlencode "username=admin" \
+  --data-urlencode "password=${KC_ADMIN_PASS}" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+WAZUH_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id "aws-wazuh-openid-client-secret" \
+  --region $REGION \
+  --query "SecretString" \
+  --output text | python3 -c '
+import sys,json
+raw=sys.stdin.read().strip()
+try:
+    obj=json.loads(raw)
+    print(obj.get("client_secret") or obj.get("secret") or obj.get("password") or raw)
+except Exception:
+    print(raw)
+')
+
+if ! curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
+  "http://127.0.0.1:8080/admin/realms/mzclinic" >/dev/null; then
+  curl -sf -X POST "http://127.0.0.1:8080/admin/realms" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"realm":"mzclinic","enabled":true,"registrationAllowed":false,"loginWithEmailAllowed":true}' >/dev/null
+fi
+
+if [ "$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${KC_TOKEN}" \
+  "http://127.0.0.1:8080/admin/realms/mzclinic/roles/admin")" = "404" ]; then
+  curl -sf -X POST "http://127.0.0.1:8080/admin/realms/mzclinic/roles" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"admin","description":"Wazuh administrator role mapped to OpenSearch all_access"}' >/dev/null
+fi
+
+WAZUH_CLIENT_UUID=$(curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
+  "http://127.0.0.1:8080/admin/realms/mzclinic/clients?clientId=wazuh" \
+  | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")')
+
+if [ -z "${WAZUH_CLIENT_UUID}" ]; then
+  WAZUH_CLIENT_SECRET="${WAZUH_CLIENT_SECRET}" python3 - <<'PYJSON' > /tmp/wazuh-client.json
+import json, os
+print(json.dumps({
+  "clientId": "wazuh",
+  "name": "Wazuh Dashboard",
+  "enabled": True,
+  "clientAuthenticatorType": "client-secret",
+  "secret": os.environ["WAZUH_CLIENT_SECRET"],
+  "redirectUris": ["https://wazuh.mzclinic.cloud/*"],
+  "webOrigins": ["https://wazuh.mzclinic.cloud"],
+  "standardFlowEnabled": True,
+  "directAccessGrantsEnabled": True,
+  "implicitFlowEnabled": False,
+  "serviceAccountsEnabled": False,
+  "publicClient": False,
+  "protocol": "openid-connect",
+  "fullScopeAllowed": True
+}))
+PYJSON
+  curl -sf -X POST "http://127.0.0.1:8080/admin/realms/mzclinic/clients" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data-binary @/tmp/wazuh-client.json >/dev/null
+  rm -f /tmp/wazuh-client.json
+  WAZUH_CLIENT_UUID=$(curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
+    "http://127.0.0.1:8080/admin/realms/mzclinic/clients?clientId=wazuh" \
+    | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"])')
+fi
+
+# 기존 client가 있어도 redirect/webOrigin/secret을 Secrets Manager 기준으로 동기화한다.
+curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
+  "http://127.0.0.1:8080/admin/realms/mzclinic/clients/${WAZUH_CLIENT_UUID}" \
+  -o /tmp/wazuh-client-current.json
+WAZUH_CLIENT_SECRET="${WAZUH_CLIENT_SECRET}" python3 - <<'PYJSON' /tmp/wazuh-client-current.json > /tmp/wazuh-client-updated.json
+import json, os, sys
+path = sys.argv[1]
+with open(path) as f:
+    c = json.load(f)
+c.update({
+  "clientId": "wazuh",
+  "enabled": True,
+  "clientAuthenticatorType": "client-secret",
+  "secret": os.environ["WAZUH_CLIENT_SECRET"],
+  "redirectUris": ["https://wazuh.mzclinic.cloud/*"],
+  "webOrigins": ["https://wazuh.mzclinic.cloud"],
+  "standardFlowEnabled": True,
+  "directAccessGrantsEnabled": True,
+  "implicitFlowEnabled": False,
+  "serviceAccountsEnabled": False,
+  "publicClient": False,
+  "protocol": "openid-connect",
+  "fullScopeAllowed": True
+})
+print(json.dumps(c))
+PYJSON
+curl -sf -X PUT "http://127.0.0.1:8080/admin/realms/mzclinic/clients/${WAZUH_CLIENT_UUID}" \
+  -H "Authorization: Bearer ${KC_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data-binary @/tmp/wazuh-client-updated.json >/dev/null
+rm -f /tmp/wazuh-client-current.json /tmp/wazuh-client-updated.json
+
+MAPPER_EXISTS=$(curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
+  "http://127.0.0.1:8080/admin/realms/mzclinic/clients/${WAZUH_CLIENT_UUID}/protocol-mappers/models" \
+  | python3 -c 'import sys,json; d=json.load(sys.stdin); print(any(m.get("name")=="realm_roles_flat" for m in d))')
+
+if [ "${MAPPER_EXISTS}" != "True" ]; then
+  cat > /tmp/wazuh-realm-roles-mapper.json <<'JSON'
+{
+  "name": "realm_roles_flat",
+  "protocol": "openid-connect",
+  "protocolMapper": "oidc-usermodel-realm-role-mapper",
+  "consentRequired": false,
+  "config": {
+    "multivalued": "true",
+    "userinfo.token.claim": "true",
+    "id.token.claim": "true",
+    "access.token.claim": "true",
+    "claim.name": "roles",
+    "jsonType.label": "String",
+    "usermodel.realmRoleMapping.rolePrefix": ""
+  }
+}
+JSON
+  curl -sf -X POST "http://127.0.0.1:8080/admin/realms/mzclinic/clients/${WAZUH_CLIENT_UUID}/protocol-mappers/models" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data-binary @/tmp/wazuh-realm-roles-mapper.json >/dev/null
+  rm -f /tmp/wazuh-realm-roles-mapper.json
+fi
 
 # ── nginx 설정 (ALB가 SSL termination, nginx는 HTTP:80만) ─
 cat > /etc/nginx/sites-available/monitoring << 'NGINX'

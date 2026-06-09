@@ -308,3 +308,37 @@ resource "aws_secretsmanager_secret_rotation" "jwt_secret" {
 
   depends_on = [aws_lambda_permission.jwt_rotator]
 }
+# ─────────────────────────────────────────────────────────
+# Wazuh / Keycloak OIDC — wazuh client secret
+# 값은 Terraform state에 남기지 않도록 콘솔/CLI로 SecretString을 주입한다.
+# [2026-06-10 박경수] Wazuh Dashboard Keycloak SSO용
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "wazuh_openid_client_secret" {
+  name        = "aws-wazuh-openid-client-secret"
+  description = "Keycloak mzclinic realm의 wazuh OIDC client secret — Wazuh Dashboard SSO"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-wazuh-openid-client-secret" })
+}
+
+# ─────────────────────────────────────────────────────────
+# Wazuh Dashboard cookie password
+# 값은 고정 난수여야 하며, 매 배포마다 바뀌면 OIDC 세션이 무효화된다.
+# SecretString 예: openssl rand -hex 32
+# [2026-06-10 박경수] Wazuh Dashboard OIDC cookie/session 보호용
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "wazuh_dashboard_cookie_password" {
+  name        = "aws-wazuh-dashboard-cookie-password"
+  description = "Wazuh Dashboard opensearch_security.cookie.password — OIDC 세션 저장용 고정 secret"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-wazuh-dashboard-cookie-password" })
+}

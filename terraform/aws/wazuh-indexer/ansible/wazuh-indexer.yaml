@@ -69,6 +69,7 @@
           - gnupg
           - python3
           - awscli
+          - openssl
         state: present
 
     # ──────────────────────────────────────────
@@ -325,6 +326,106 @@
       until: kibana_pwd_change.rc == 0
       retries: 5
       delay: 10
+
+    # ──────────────────────────────────────────
+    # Keycloak OIDC JWT role mapping for Wazuh Dashboard SSO
+    # ──────────────────────────────────────────
+    - name: Keycloak JWKS 조회 # [2026-06-10 박경수] Wazuh OIDC JWT signing_key 자동 반영
+      uri:
+        url: "{{ keycloak_base_url | default('https://monitoring.mzclinic.cloud') }}/realms/{{ keycloak_realm | default('mzclinic') }}/protocol/openid-connect/certs"
+        method: GET
+        return_content: yes
+        validate_certs: yes
+      register: keycloak_jwks
+      changed_when: false
+      tags: oidc
+
+    - name: Keycloak 서명용 인증서 PEM 생성 # [2026-06-10 박경수]
+      copy:
+        dest: /tmp/keycloak-sig.crt
+        mode: '0600'
+        content: |
+          -----BEGIN CERTIFICATE-----
+          {{ (keycloak_jwks.json.keys | selectattr('use', 'equalto', 'sig') | list | first).x5c[0] }}
+          -----END CERTIFICATE-----
+      no_log: true
+      tags: oidc
+
+    - name: Keycloak 공개키 추출 # [2026-06-10 박경수] jwt_auth_domain signing_key 값 생성
+      shell: |
+        openssl x509 -pubkey -noout -in /tmp/keycloak-sig.crt \n          | sed '/BEGIN PUBLIC KEY/d;/END PUBLIC KEY/d' \n          | tr -d '\n'
+      register: keycloak_signing_key
+      changed_when: false
+      no_log: true
+      tags: oidc
+
+    - name: OpenSearch Security config 백업 # [2026-06-10 박경수]
+      copy:
+        src: /etc/wazuh-indexer/opensearch-security/config.yml
+        dest: /etc/wazuh-indexer/opensearch-security/config.yml.bak.before-keycloak-oidc
+        remote_src: yes
+        force: no
+        mode: '0640'
+      tags: oidc
+
+    - name: JWT 인증 도메인 Keycloak 공개키/flat roles 기준으로 보정 # [2026-06-10 박경수]
+      replace:
+        path: /etc/wazuh-indexer/opensearch-security/config.yml
+        regexp: '(?s)^      jwt_auth_domain:\n.*?^      clientcert_auth_domain:'
+        replace: |
+          # [2026-06-10 박경수] Keycloak OIDC JWT 인증 설정. Wazuh Indexer JWT authenticator가 jwks_uri 및 중첩 roles_key를 안정적으로 처리하지 못해 signing_key + flat roles claim 사용.
+          jwt_auth_domain:
+            description: "Authenticate via Keycloak OIDC JWT"
+            http_enabled: true
+            transport_enabled: true
+            order: 0
+            http_authenticator:
+              type: jwt
+              challenge: false
+              config:
+                signing_key: "{{ keycloak_signing_key.stdout }}"
+                jwt_header: "Authorization"
+                jwt_clock_skew_tolerance_seconds: 30
+                roles_key: "roles"
+                subject_key: "preferred_username"
+            authentication_backend:
+              type: noop
+          clientcert_auth_domain:
+      no_log: true
+      register: oidc_config_replace
+      tags: oidc
+
+    - name: all_access role mapping에 Keycloak admin backend role 매핑 # [2026-06-10 박경수]
+      replace:
+        path: /etc/wazuh-indexer/opensearch-security/roles_mapping.yml
+        regexp: '(?ms)^all_access:\n.*?(?=^[A-Za-z0-9_]+:)'
+        replace: |
+          all_access:
+            reserved: true
+            hidden: false
+            backend_roles:
+            - "admin"
+            hosts: []
+            users: []
+            and_backend_roles: []
+            description: "Maps Keycloak admin backend role to all_access"
+      register: all_access_mapping_replace
+      tags: oidc
+
+    - name: OpenSearch Security 설정 재적용 # [2026-06-10 박경수]
+      command: >
+        /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh
+        -cd /etc/wazuh-indexer/opensearch-security/
+        -icl -nhnv
+        -cacert /etc/wazuh-indexer/certs/root-ca.pem
+        -cert /etc/wazuh-indexer/certs/admin.pem
+        -key /etc/wazuh-indexer/certs/admin-key.pem
+        -h {{ ansible_default_ipv4.address }}
+      environment:
+        JAVA_HOME: /usr/share/wazuh-indexer/jdk
+      register: securityadmin_apply
+      changed_when: "'Done with success' in securityadmin_apply.stdout"
+      tags: oidc
 
     # ──────────────────────────────────────────
     # Grafana Alloy 설치
