@@ -3,18 +3,21 @@
 - name: Wazuh Manager + Dashboard 설치
   hosts: wazuh
   become: yes
-  vars:
-    # Slack webhook을 vault.yml 대신 Secrets Manager에서 읽음 (Git 평문 제거 — ISMS-P)
-    # 공식문서: https://docs.ansible.com/ansible/latest/collections/amazon/aws/aws_secret_lookup.html
-    slack_webhook_url: "{{ lookup('amazon.aws.aws_secret', 'aws-wazuh-slack-alarm-webhook', region=aws_region) }}"
-  
+  vars_files:
+    - vault.yml 
 
   handlers:
     - name: systemd reload
       command: systemctl daemon-reload
       changed_when: false
 
+
   tasks:
+
+    - name: Slack webhook URL SM에서 읽기
+      set_fact:
+        slack_webhook_url: "{{ lookup('amazon.aws.aws_secret', 'aws-wazuh-slack-alarm-webhook', region='ap-south-2') }}"
+      tags: always
 
     # ──────────────────────────────────────────
     # 시스템 기본 설정
@@ -956,6 +959,7 @@
       debug:
         var: memory_status.stdout_lines
       tags: service
+      
     # ──────────────────────────────────────────
     # 와주 대시보드 iframe 임베드 가능 설정 변경
     # ──────────────────────────────────────────
