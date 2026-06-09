@@ -53,3 +53,14 @@ output "grafana_url" {
   value       = "https://grafana.${var.base_domain}"
   sensitive   = true
 }
+# #260609 박경수 — 통합 포털 output
+output "monitoring_portal_url" {
+  description = "통합 모니터링 포털 URL"
+  value       = "https://${var.monitoring_domain}"
+}
+
+output "keycloak_admin_url" {
+  description = "Keycloak 관리 콘솔 URL"
+  value       = "https://${var.monitoring_domain}/auth/admin"
+}
+# #260609 박경수 end

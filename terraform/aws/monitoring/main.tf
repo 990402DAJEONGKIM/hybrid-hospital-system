@@ -52,8 +52,13 @@ resource "aws_instance" "aws-monitoring-01" {
   iam_instance_profile   = aws_iam_instance_profile.aws-monitoring-profile.name
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
-    aws_region       = data.aws_region.current.region
-    base_domain      = var.base_domain
+    aws_region        = data.aws_region.current.region
+    base_domain       = var.base_domain
+    # #260609 박경수 — Keycloak 설치용 변수 추가
+    aurora_endpoint   = var.aurora_endpoint
+    monitoring_domain = var.monitoring_domain
+    wazuh_private_ip  = var.wazuh_private_ip
+    # #260609 박경수 end
   }))
 
   root_block_device {
@@ -181,3 +186,95 @@ resource "aws_dlm_lifecycle_policy" "aws-monitoring-snapshot" {
 
   tags = { Name = "aws-monitoring-dlm-policy" }
 }
+# ─────────────────────────────────────────────────────────
+# #260609 박경수 — Keycloak + 통합 포털
+# ─────────────────────────────────────────────────────────
+
+# 기존 aws-hospital-alb data source
+data "aws_lb" "hospital" {
+  name = "aws-hospital-alb"
+}
+
+data "aws_lb_listener" "https" {
+  load_balancer_arn = data.aws_lb.hospital.arn
+  port              = 443
+}
+
+# Keycloak 포트 (8080) — ALB SG에서만 허용 (ISMS-P 2.6.1)
+resource "aws_security_group_rule" "keycloak_from_alb" {
+  description              = "Keycloak from ALB only"
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  source_security_group_id = data.aws_lb.hospital.security_groups[0]
+  security_group_id        = aws_security_group.aws-monitoring-sg.id
+}
+
+# Aurora (5432) — monitoring EC2 → Keycloak DB 접근
+resource "aws_security_group_rule" "aurora_from_monitoring" {
+  description              = "Aurora access from monitoring EC2 for Keycloak DB"
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.aws-monitoring-sg.id
+  security_group_id        = var.aurora_sg_id
+}
+
+# Keycloak ALB 타겟그룹
+resource "aws_lb_target_group" "keycloak" {
+  name        = "aws-keycloak-tg"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = data.aws_vpc.main.id
+  target_type = "instance"
+
+  health_check {
+    path                = "/auth/health/ready"
+    protocol            = "HTTP"
+    port                = "8080"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200"
+  }
+
+  tags = { Name = "aws-keycloak-tg" }
+}
+
+resource "aws_lb_target_group_attachment" "keycloak" {
+  target_group_arn = aws_lb_target_group.keycloak.arn
+  target_id        = aws_instance.aws-monitoring-01.id
+  port             = 8080
+}
+
+# ALB 리스너 규칙 — monitoring.mzclinic.cloud → Keycloak + 통합 포털
+# priority 10 (기존 5, 20, 30보다 앞)
+resource "aws_lb_listener_rule" "monitoring" {
+  listener_arn = data.aws_lb_listener.https.arn
+  priority     = 10
+
+  condition {
+    host_header {
+      values = [var.monitoring_domain]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.keycloak.arn
+  }
+}
+
+# Cloudflare DNS — monitoring.mzclinic.cloud → hospital ALB (CNAME)
+resource "cloudflare_record" "monitoring" {
+  zone_id = var.cloudflare_zone_id
+  name    = "monitoring"
+  value   = data.aws_lb.hospital.dns_name
+  type    = "CNAME"
+  ttl     = 1
+  proxied = true
+}
+# #260609 박경수 end

@@ -326,3 +326,134 @@ systemctl start alloy
 
 systemctl enable grafana-server
 systemctl start grafana-server
+# ─────────────────────────────────────────────────────────
+# #260609 박경수 — Docker + Keycloak + nginx 통합 포털 설치
+# ─────────────────────────────────────────────────────────
+
+# ── Docker 설치 ──────────────────────────────────────────
+if ! command -v docker &>/dev/null; then
+  apt-get install -y docker.io docker-compose-plugin
+  systemctl enable --now docker
+fi
+
+# ── nginx 설치 ───────────────────────────────────────────
+apt-get install -y nginx
+
+# ── Secrets Manager에서 Keycloak 값 가져오기 ────────────
+KC_DB_PASS=$(aws secretsmanager get-secret-value \
+  --secret-id "/mzclinic/keycloak/db-password" \
+  --region ${aws_region} \
+  --query "SecretString" \
+  --output text | python3 -c "import sys,json; print(json.load(sys.stdin)['password'])")
+
+KC_ADMIN_PASS=$(aws ssm get-parameter \
+  --name "/mzclinic/keycloak/admin_password" \
+  --with-decryption \
+  --query "Parameter.Value" \
+  --region ${aws_region} \
+  --output text)
+
+AURORA_HOST="${aurora_endpoint}"
+MONITORING_DOMAIN="${monitoring_domain}"
+WAZUH_IP="${wazuh_private_ip}"
+
+# ── Keycloak docker-compose ──────────────────────────────
+mkdir -p /opt/keycloak
+cat > /opt/keycloak/docker-compose.yml <<COMPOSE
+version: "3.8"
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: keycloak
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://$${AURORA_HOST}:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: $${KC_DB_PASS}
+      KC_HOSTNAME: $${MONITORING_DOMAIN}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_HOST: "127.0.0.1"
+      KC_PROXY: edge
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: $${KC_ADMIN_PASS}
+    ports:
+      - "127.0.0.1:8080:8080"
+    command: start
+COMPOSE
+
+cd /opt/keycloak && docker compose up -d
+
+# ── nginx — ALB가 SSL termination 처리, nginx는 HTTP:80만 수신 ──
+cat > /etc/nginx/sites-available/monitoring <<NGINX
+server {
+    listen 80;
+    server_name $${MONITORING_DOMAIN};
+
+    # 통합 포털 HTML
+    location / {
+        root /var/www/monitoring;
+        index index.html;
+    }
+
+    # Keycloak — ALB /auth/* → 8080으로 프록시
+    location /auth/ {
+        proxy_pass          http://127.0.0.1:8080;
+        proxy_set_header    Host \$host;
+        proxy_set_header    X-Real-IP \$remote_addr;
+        proxy_set_header    X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto https;
+    }
+}
+NGINX
+
+ln -sf /etc/nginx/sites-available/monitoring /etc/nginx/sites-enabled/monitoring
+rm -f /etc/nginx/sites-enabled/default
+
+# ── 통합 포털 HTML ───────────────────────────────────────
+mkdir -p /var/www/monitoring
+cat > /var/www/monitoring/index.html <<'HTML'
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>mzclinic 통합 모니터링</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+    header { background: #16213e; padding: 12px 24px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #0f3460; }
+    header h1 { font-size: 18px; color: #e94560; }
+    header span { font-size: 13px; color: #aaa; }
+    .dashboard { display: flex; flex: 1; gap: 4px; padding: 4px; }
+    .panel { flex: 1; display: flex; flex-direction: column; background: #16213e; border-radius: 4px; overflow: hidden; }
+    .panel-header { padding: 8px 16px; font-size: 13px; font-weight: bold; background: #0f3460; display: flex; align-items: center; gap: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .grafana-dot { background: #ff6b35; }
+    .wazuh-dot { background: #00b4d8; }
+    iframe { flex: 1; border: none; width: 100%; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>mzclinic.cloud</h1>
+    <span>통합 모니터링 대시보드</span>
+  </header>
+  <div class="dashboard">
+    <div class="panel">
+      <div class="panel-header"><div class="dot grafana-dot"></div>Grafana</div>
+      <iframe src="https://grafana.mzclinic.cloud" allow="same-origin"></iframe>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="dot wazuh-dot"></div>Wazuh</div>
+      <iframe src="https://wazuh.mzclinic.cloud" allow="same-origin"></iframe>
+    </div>
+  </div>
+</body>
+</html>
+HTML
+
+nginx -t && systemctl enable nginx && systemctl restart nginx
+
+echo "✅ #260609 박경수 — Keycloak + nginx 통합 포털 설치 완료"
+# #260609 박경수 end
