@@ -35,25 +35,29 @@ def _get_target_month() -> tuple[str, str]:
 
 
 def _get_gcp_access_token(audience: str, sa_impersonation_url: str) -> str:
-    region = os.environ.get("AWS_REGION", "ap-south-2")
-
     # 1. Lambda IAM Role 자격증명 가져오기
     frozen_creds = boto3.Session().get_credentials().get_frozen_credentials()
 
-    # 2. AWS STS GetCallerIdentity 서명 요청 생성 (x-goog-cloud-target-resource 헤더 포함)
-    sts_url = f"https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15"
+    # 2. AWS STS GetCallerIdentity POST 서명 요청 (global endpoint, us-east-1 서명)
+    sts_url = "https://sts.amazonaws.com"
+    sts_body = b"Action=GetCallerIdentity&Version=2011-06-15"
     aws_request = botocore.awsrequest.AWSRequest(
-        method="GET",
+        method="POST",
         url=sts_url,
-        headers={"x-goog-cloud-target-resource": audience},
+        data=sts_body,
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "x-goog-cloud-target-resource": audience,
+        },
     )
-    botocore.auth.SigV4Auth(frozen_creds, "sts", region).add_auth(aws_request)
+    botocore.auth.SigV4Auth(frozen_creds, "sts", "us-east-1").add_auth(aws_request)
 
     # 3. GCP STS에 전달할 subject_token 구성
     subject_token = urllib.parse.quote(json.dumps({
         "url": sts_url,
-        "method": "GET",
+        "method": "POST",
         "headers": [{"key": k, "value": v} for k, v in dict(aws_request.headers).items()],
+        "body": sts_body.decode("utf-8"),
     }))
 
     # 4. GCP STS로 federated token 교환
