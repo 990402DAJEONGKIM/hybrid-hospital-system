@@ -35,7 +35,7 @@ MONITORING_DOMAIN=$(aws ssm get-parameter \
 # ── Docker 설치 ──────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
   apt-get update -y
-  apt-get install -y docker.io docker-compose-plugin
+  apt-get install -y docker.io docker-compose
   systemctl enable --now docker
 fi
 
@@ -68,7 +68,7 @@ services:
     command: start
 COMPOSE
 
-cd /opt/keycloak && docker compose up -d
+cd /opt/keycloak && docker-compose up -d
 
 # ── nginx 설정 (ALB가 SSL termination, nginx는 HTTP:80만) ─
 cat > /etc/nginx/sites-available/monitoring <<NGINX
