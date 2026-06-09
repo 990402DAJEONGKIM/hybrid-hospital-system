@@ -1,19 +1,17 @@
 """
 OnPrem Cost Calculator Lambda
-vCenter API에서 리소스 사용량을 수집해 월간 비용을 계산하고 S3에 JSON으로 저장
+SSM cost-params에서 서버 스펙과 비용 파라미터를 읽어 월간 비용을 계산하고 S3에 JSON으로 저장
 """
 import json
 import os
-import ssl
 from datetime import date, timedelta
 
 import boto3
-import urllib.request
 
 SSM = boto3.client("ssm")
 S3 = boto3.client("s3")
 
-BUCKET = os.environ["BUCKET"]
+BUCKET = os.environ["RAW_BUCKET"]
 RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost-raw")
 
 
@@ -28,53 +26,14 @@ def _get_target_month() -> tuple[str, str]:
     return str(last_month.year), f"{last_month.month:02d}"
 
 
-def _vcenter_session_token(host: str, user: str, password: str) -> str:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-
-    import base64
-    creds = base64.b64encode(f"{user}:{password}".encode()).decode()
-    req = urllib.request.Request(
-        f"https://{host}/rest/com/vmware/cis/session",
-        method="POST",
-        headers={"Authorization": f"Basic {creds}", "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, context=ctx) as resp:
-        return json.loads(resp.read())["value"]
-
-
-def _get_vcenter_metrics(host: str, token: str) -> dict:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-
-    headers = {"vmware-api-session-id": token}
-
-    def _get(path):
-        req = urllib.request.Request(f"https://{host}/rest{path}", headers=headers)
-        with urllib.request.urlopen(req, context=ctx) as resp:
-            return json.loads(resp.read())["value"]
-
-    vms = _get("/vcenter/vm")
-    total_cpu_mhz = sum(v.get("cpu_count", 1) * 2000 for v in vms)
-    total_mem_mb = sum(v.get("memory_size_MiB", 4096) for v in vms)
-
-    return {
-        "cpu_usage_mhz": total_cpu_mhz,
-        "mem_usage_mb": total_mem_mb,
-        "vm_count": len(vms),
-    }
-
-
 def _calc_cost(params: dict) -> dict:
-    electricity_rate = float(params.get("electricity_rate_kwh", 130))
-    purchase_price = float(params.get("server_purchase_price", 12_000_000))
+    electricity_rate = float(params.get("electricity_rate_kwh", 170))
+    purchase_price = float(params.get("server_purchase_price", 4_000_000))
     lifespan_years = float(params.get("server_lifespan_years", 5))
-    network_fee = float(params.get("network_monthly_fee", 300_000))
-    labor = float(params.get("labor_monthly", 500_000))
-    server_tdp_watt = float(params.get("server_tdp_watt", 300))
-    vmware_license_annual = float(params.get("vmware_license_annual", 3_000_000))
+    network_fee = float(params.get("network_monthly_fee", 200_000))
+    labor = float(params.get("labor_monthly", 300_000))
+    server_tdp_watt = float(params.get("server_tdp_watt", 125))
+    vmware_license_annual = float(params.get("vmware_license_annual", 0))
 
     depreciation = purchase_price / (lifespan_years * 12)
     electricity = (server_tdp_watt / 1000) * 24 * 30 * electricity_rate
@@ -96,23 +55,20 @@ def _calc_cost(params: dict) -> dict:
 def lambda_handler(event, context):
     year, month = _get_target_month()
 
-    vcenter_host = _get_param(os.environ["SSM_VCENTER_HOST"])
-    vcenter_user = _get_param(os.environ["SSM_VCENTER_USER"])
-    vcenter_pass = _get_param(os.environ["SSM_VCENTER_PASS"])
     cost_params = json.loads(_get_param(os.environ["SSM_COST_PARAMS"]))
 
-    try:
-        token = _vcenter_session_token(vcenter_host, vcenter_user, vcenter_pass)
-        metrics = _get_vcenter_metrics(vcenter_host, token)
-    except Exception as e:
-        print(f"vCenter 연결 실패, 기본값 사용: {e}")
-        metrics = {"cpu_usage_mhz": 0, "mem_usage_mb": 0, "vm_count": 0}
+    server_metrics = {
+        "cpu_count": int(cost_params.get("cpu_count", 16)),
+        "cpu_max_mhz": int(cost_params.get("cpu_max_mhz", 5000)),
+        "mem_gb": int(cost_params.get("mem_gb", 15)),
+        "vm_count": int(cost_params.get("vm_count", 0)),
+    }
 
     cost = _calc_cost(cost_params)
     result = {
         "year": year,
         "month": month,
-        "vcenter_metrics": metrics,
+        "server_metrics": server_metrics,
         "items": {
             "depreciation": cost["depreciation"],
             "electricity": cost["electricity"],
