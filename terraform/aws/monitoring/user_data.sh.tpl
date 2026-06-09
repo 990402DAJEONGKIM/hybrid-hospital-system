@@ -327,6 +327,10 @@ systemctl start prometheus
 systemctl enable alloy
 systemctl start alloy
 
+# #260609 박경수 — Grafana 13 iframe 허용 (환경변수 방식)
+echo "GF_SECURITY_ALLOW_EMBEDDING=true" >> /etc/default/grafana-server
+echo "GF_SECURITY_CONTENT_SECURITY_POLICY=false" >> /etc/default/grafana-server
+
 systemctl enable grafana-server
 systemctl start grafana-server
 
