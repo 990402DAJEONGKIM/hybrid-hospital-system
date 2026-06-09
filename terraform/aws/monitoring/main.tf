@@ -200,12 +200,12 @@ data "aws_lb_listener" "https" {
   port              = 443
 }
 
-# Keycloak 포트 (8080) — ALB SG에서만 허용 (ISMS-P 2.6.1)
+# nginx 80 포트 — ALB SG에서만 허용 (ISMS-P 2.6.1)
 resource "aws_security_group_rule" "keycloak_from_alb" {
-  description              = "Keycloak from ALB only"
+  description              = "nginx from ALB only"
   type                     = "ingress"
-  from_port                = 8080
-  to_port                  = 8080
+  from_port                = 80
+  to_port                  = 80
   protocol                 = "tcp"
   source_security_group_id = tolist(data.aws_lb.hospital.security_groups)[0]
   security_group_id        = aws_security_group.aws-monitoring-sg.id
@@ -225,20 +225,20 @@ resource "aws_security_group_rule" "aurora_from_monitoring" {
 # Keycloak ALB 타겟그룹
 resource "aws_lb_target_group" "keycloak" {
   name        = "aws-keycloak-tg"
-  port        = 8080
+  port        = 80
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.main.id
   target_type = "instance"
 
   health_check {
-    path                = "/auth/health/ready"
+    path                = "/"
     protocol            = "HTTP"
-    port                = "8080"
+    port                = "80"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     timeout             = 5
     interval            = 30
-    matcher             = "200"
+    matcher             = "200,301,302"
   }
 
   tags = { Name = "aws-keycloak-tg" }
@@ -247,7 +247,7 @@ resource "aws_lb_target_group" "keycloak" {
 resource "aws_lb_target_group_attachment" "keycloak" {
   target_group_arn = aws_lb_target_group.keycloak.arn
   target_id        = aws_instance.aws-monitoring-01.id
-  port             = 8080
+  port             = 80
 }
 
 # ALB 리스너 규칙 — monitoring.mzclinic.cloud → Keycloak + 통합 포털
