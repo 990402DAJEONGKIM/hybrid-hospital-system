@@ -18,7 +18,7 @@ S3 = boto3.client("s3")
 BEDROCK = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
 SES = boto3.client("ses", region_name=SES_REGION)
 
-MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 def _get_target_month() -> tuple[str, str]:
