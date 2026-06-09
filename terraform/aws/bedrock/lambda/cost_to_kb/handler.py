@@ -1,7 +1,6 @@
 """
-Cost to Knowledge Base Lambda
-S3의 AWS/GCP/온프레미스 비용 데이터를 자연어 청크로 변환해
-S3(chunks 버킷)에 저장하고 Bedrock KB Sync를 트리거
+Cost Chunks Lambda
+S3의 AWS/GCP/온프레미스 비용 데이터를 자연어 청크로 변환해 S3에 저장
 """
 import csv
 import io
@@ -14,16 +13,12 @@ import boto3
 
 S3 = boto3.client("s3")
 SSM = boto3.client("ssm")
-BUCKET = os.environ["BUCKET"]
-RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost-raw")
-CHUNKS_PREFIX = os.environ.get("CHUNKS_PREFIX", "cost-chunks")
-KB_ID = os.environ["KB_ID"]
-KB_DS_ID = os.environ["KB_DS_ID"]
-BEDROCK_REGION = os.environ["BEDROCK_REGION"]
+RAW_BUCKET = os.environ["RAW_BUCKET"]
+CHUNKS_BUCKET = os.environ["CHUNKS_BUCKET"]
+RAW_PREFIX = "cost-raw"
+CHUNKS_PREFIX = "cost-chunks"
 ANNUAL_BUDGET_KRW = int(os.environ.get("ANNUAL_BUDGET_KRW", "30000000"))
 SSM_EXIM_API_KEY = os.environ.get("SSM_EXIM_API_KEY", "")
-
-BEDROCK_AGENT = boto3.client("bedrock-agent", region_name=BEDROCK_REGION)
 
 
 def _get_usd_krw_rate(year: str, month: str) -> float:
@@ -79,7 +74,7 @@ def _get_target_months() -> tuple[tuple[str, str], tuple[str, str]]:
 def _load_aws_cost(year: str, month: str, usd_to_krw: float) -> dict:
     key = f"{RAW_PREFIX}/aws/{year}/{month}/aws_cost.csv"
     try:
-        body = S3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8")
+        body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read().decode("utf-8")
         reader = csv.DictReader(io.StringIO(body))
         rows = list(reader)
         total_usd = sum(float(r.get("UnblendedCost", 0)) for r in rows)
@@ -97,7 +92,7 @@ def _load_aws_cost(year: str, month: str, usd_to_krw: float) -> dict:
 def _load_gcp_cost(year: str, month: str, usd_to_krw: float) -> dict:
     key = f"{RAW_PREFIX}/gcp/{year}/{month}/gcp_cost.csv"
     try:
-        body = S3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8")
+        body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read().decode("utf-8")
         reader = csv.DictReader(io.StringIO(body))
         rows = list(reader)
         total_usd = sum(float(r.get("total_cost", 0)) for r in rows)
@@ -115,7 +110,7 @@ def _load_gcp_cost(year: str, month: str, usd_to_krw: float) -> dict:
 def _load_onprem_cost(year: str, month: str) -> dict:
     key = f"{RAW_PREFIX}/onprem/{year}/{month}/onprem_cost.json"
     try:
-        body = S3.get_object(Bucket=BUCKET, Key=key)["Body"].read()
+        body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read()
         return json.loads(body)
     except Exception as e:
         print(f"OnPrem cost 로드 실패 ({key}): {e}")
@@ -245,20 +240,11 @@ def lambda_handler(event, context):
     for s3_key, text in chunks:
         full_key = f"{CHUNKS_PREFIX}/{s3_key}"
         S3.put_object(
-            Bucket=BUCKET,
+            Bucket=CHUNKS_BUCKET,
             Key=full_key,
             Body=text.encode("utf-8"),
             ContentType="text/plain",
         )
-        print(f"Chunk saved: s3://{BUCKET}/{full_key}")
+        print(f"Chunk saved: s3://{CHUNKS_BUCKET}/{full_key}")
 
-    # Bedrock KB Sync 트리거
-    resp = BEDROCK_AGENT.start_ingestion_job(
-        knowledgeBaseId=KB_ID,
-        dataSourceId=KB_DS_ID,
-        description=f"{year}-{month} 비용 데이터 인제스션",
-    )
-    job_id = resp["ingestionJob"]["ingestionJobId"]
-    print(f"KB ingestion started: {job_id}")
-
-    return {"status": "ok", "chunk_count": len(chunks), "ingestion_job_id": job_id}
+    return {"status": "ok", "chunk_count": len(chunks)}

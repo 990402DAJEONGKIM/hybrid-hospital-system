@@ -15,8 +15,6 @@ resource "google_iam_workload_identity_pool" "aws_lambda" {
   workload_identity_pool_id = "aws-lambda-pool"
   display_name              = "AWS Lambda Pool"
   description               = "AWS Lambda가 GCP 리소스에 접근하기 위한 WIF 풀"
-
-  labels = local.common_labels
 }
 
 resource "google_iam_workload_identity_pool_provider" "aws_lambda" {
