@@ -102,10 +102,10 @@ resource "aws_lambda_function" "gcp_billing_collector" {
 
   environment {
     variables = {
-      RAW_BUCKET      = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      SSM_GCP_KEY     = "/mzclinic/cost/gcp/service-account-key"
-      SSM_GCP_PROJECT = "/mzclinic/cost/gcp/project-id"
-      SSM_GCP_DATASET = "/mzclinic/cost/gcp/billing-dataset"
+      RAW_BUCKET       = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      SSM_WIF_CONFIG   = "/mzclinic/cost/gcp/wif-config"
+      SSM_GCP_PROJECT  = "/mzclinic/cost/gcp/project-id"
+      SSM_GCP_DATASET  = "/mzclinic/cost/gcp/billing-dataset"
     }
   }
 
