@@ -157,6 +157,9 @@ root_url = https://grafana.${base_domain}
 admin_user = admin
 admin_password = $GRAFANA_ADMIN_PASSWORD
 disable_gravatar = true
+# 260609 박경수 추가
+allow_embedding = true   
+
 
 [auth.anonymous]
 enabled = false

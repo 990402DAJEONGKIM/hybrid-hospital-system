@@ -956,3 +956,12 @@
       debug:
         var: memory_status.stdout_lines
       tags: service
+    # ──────────────────────────────────────────
+    # 와주 대시보드 iframe 임베드 가능 설정 변경
+    # ──────────────────────────────────────────
+    - name: Dashboard X-Frame-Options 허용 (통합 포털 iframe 임베드) # #260609 박경수
+      lineinfile:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+        regexp: '^server.customResponseHeaders:'
+        line: 'server.customResponseHeaders: {"X-Frame-Options": "ALLOWALL"}'
+      tags: config
