@@ -51,7 +51,7 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Sid    = "SSMParameters"
         Effect = "Allow"
         Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
-        Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/multicloud-cost/*"
+        Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/cost/*"
       },
       {
         Sid      = "Bedrock"
@@ -97,9 +97,9 @@ resource "aws_lambda_function" "gcp_billing_collector" {
   environment {
     variables = {
       RAW_BUCKET      = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      SSM_GCP_KEY     = "/multicloud-cost/gcp/service-account-key"
-      SSM_GCP_PROJECT = "/multicloud-cost/gcp/project-id"
-      SSM_GCP_DATASET = "/multicloud-cost/gcp/billing-dataset"
+      SSM_GCP_KEY     = "/mzclinic/cost/gcp/service-account-key"
+      SSM_GCP_PROJECT = "/mzclinic/cost/gcp/project-id"
+      SSM_GCP_DATASET = "/mzclinic/cost/gcp/billing-dataset"
     }
   }
 
@@ -135,10 +135,10 @@ resource "aws_lambda_function" "onprem_cost_calculator" {
   environment {
     variables = {
       RAW_BUCKET       = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      SSM_VCENTER_HOST = "/multicloud-cost/vcenter/host"
-      SSM_VCENTER_USER = "/multicloud-cost/vcenter/username"
-      SSM_VCENTER_PASS = "/multicloud-cost/vcenter/password"
-      SSM_COST_PARAMS  = "/multicloud-cost/onprem/cost-params"
+      SSM_VCENTER_HOST = "/mzclinic/cost/vcenter/host"
+      SSM_VCENTER_USER = "/mzclinic/cost/vcenter/username"
+      SSM_VCENTER_PASS = "/mzclinic/cost/vcenter/password"
+      SSM_COST_PARAMS  = "/mzclinic/cost/onprem/cost-params"
     }
   }
 
@@ -176,7 +176,7 @@ resource "aws_lambda_function" "cost_to_kb" {
       RAW_BUCKET        = data.terraform_remote_state.s3.outputs.storage_bucket_name
       CHUNKS_BUCKET     = data.terraform_remote_state.s3.outputs.storage_bucket_name
       ANNUAL_BUDGET_KRW = tostring(var.annual_budget_krw)
-      SSM_EXIM_API_KEY  = "/multicloud-cost/exim/api-key"
+      SSM_EXIM_API_KEY  = "/mzclinic/cost/exim/api-key"
     }
   }
 
