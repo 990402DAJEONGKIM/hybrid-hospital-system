@@ -226,7 +226,7 @@ resource "aws_security_group_rule" "aurora_from_monitoring" {
 
 # Keycloak ALB 타겟그룹
 resource "aws_lb_target_group" "keycloak" {
-  name        = "aws-keycloak-tg"
+  name        = "aws-keycloak-nginx-tg"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.main.id
