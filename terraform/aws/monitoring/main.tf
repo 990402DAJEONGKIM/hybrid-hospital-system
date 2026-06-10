@@ -44,6 +44,13 @@ resource "aws_security_group" "aws-monitoring-sg" {
   }
 
   tags = { Name = "aws-monitoring-sg" }
+
+  # [2026-06-10 박경수] ingress rule은 별도 aws_security_group_rule 리소스에서 관리한다.
+  # inline ingress와 standalone rule 혼용으로 인한 revoke drift를 방지한다.
+  lifecycle {
+    ignore_changes = [ingress]
+  }
+
 }
 
 
