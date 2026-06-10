@@ -344,8 +344,9 @@ resource "aws_lambda_function" "anomaly_detector" {
 
   environment {
     variables = {
-      RAW_BUCKET  = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      BUCKET      = data.terraform_remote_state.s3.outputs.storage_bucket_name
       ALERT_EMAIL = var.alert_email
+      FROM_EMAIL  = "no-reply@mzclinic.cloud"
       SES_REGION  = var.aws_region
     }
   }
@@ -788,9 +789,9 @@ resource "aws_scheduler_schedule" "monthly_report" {
   group_name  = "default"
 
   flexible_time_window { mode = "OFF" }
-  # 매월 28~31일 09:00 KST (= 00:00 UTC) 실행
-  # Lambda 내부에서 오늘이 해당 월 마지막 평일인지 확인 후 발송 여부 결정
-  schedule_expression          = "cron(0 0 28-31 * ? *)"
+  # 매주 월요일 09:00 KST (= 00:00 UTC) 실행
+  # Lambda 내부에서 오늘이 당월 3주차 월요일(15~21일)인지 확인 후 발송 여부 결정
+  schedule_expression          = "cron(0 0 ? * MON *)"
   schedule_expression_timezone = "UTC"
 
   target {
