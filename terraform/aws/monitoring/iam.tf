@@ -52,7 +52,14 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
         Action = ["secretsmanager:GetSecretValue"]
         Resource = [
           "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-grafana-admin-password*",
-          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-wazuh-slack-alarm-webhook*"
+          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-wazuh-slack-alarm-webhook*",
+
+
+          # [2026-06-10 박경수] Grafana / Monitoring Portal Keycloak SSO secret 런타임 조회
+          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-grafana-openid-client-secret*",
+          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-monitoring-portal-openid-client-secret*",
+          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-monitoring-portal-cookie-secret*"
+          
         ]
       },
       {

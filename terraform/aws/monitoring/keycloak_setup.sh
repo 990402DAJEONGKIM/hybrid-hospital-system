@@ -103,6 +103,29 @@ except Exception:
     print(raw)
 ')
 
+
+# [2026-06-10 박경수] Grafana / Monitoring Portal SSO secret 런타임 조회
+GRAFANA_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id "aws-grafana-openid-client-secret" \
+  --region $REGION \
+  --query "SecretString" \
+  --output text)
+
+PORTAL_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id "aws-monitoring-portal-openid-client-secret" \
+  --region $REGION \
+  --query "SecretString" \
+  --output text)
+
+PORTAL_COOKIE_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id "aws-monitoring-portal-cookie-secret" \
+  --region $REGION \
+  --query "SecretString" \
+  --output text)
+
+
+
+
 if ! curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
   "http://127.0.0.1:8080/admin/realms/mzclinic" >/dev/null; then
   curl -sf -X POST "http://127.0.0.1:8080/admin/realms" \
@@ -214,35 +237,193 @@ JSON
   rm -f /tmp/wazuh-realm-roles-mapper.json
 fi
 
+# [2026-06-10 박경수] Keycloak client 생성/동기화 공통 함수
+upsert_oidc_client() {
+  local CLIENT_ID="$1"
+  local CLIENT_NAME="$2"
+  local CLIENT_SECRET="$3"
+  local REDIRECT_URIS_JSON="$4"
+  local WEB_ORIGINS_JSON="$5"
+
+  local CLIENT_UUID
+  CLIENT_UUID=$(curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
+    "http://127.0.0.1:8080/admin/realms/mzclinic/clients?clientId=${CLIENT_ID}" \
+    | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")')
+
+  if [ -z "${CLIENT_UUID}" ]; then
+    CLIENT_ID="${CLIENT_ID}" \
+    CLIENT_NAME="${CLIENT_NAME}" \
+    CLIENT_SECRET="${CLIENT_SECRET}" \
+    REDIRECT_URIS_JSON="${REDIRECT_URIS_JSON}" \
+    WEB_ORIGINS_JSON="${WEB_ORIGINS_JSON}" \
+    python3 - <<'PYJSON' > /tmp/keycloak-client.json
+import json, os
+print(json.dumps({
+  "clientId": os.environ["CLIENT_ID"],
+  "name": os.environ["CLIENT_NAME"],
+  "enabled": True,
+  "clientAuthenticatorType": "client-secret",
+  "secret": os.environ["CLIENT_SECRET"],
+  "redirectUris": json.loads(os.environ["REDIRECT_URIS_JSON"]),
+  "webOrigins": json.loads(os.environ["WEB_ORIGINS_JSON"]),
+  "standardFlowEnabled": True,
+  "directAccessGrantsEnabled": False,
+  "implicitFlowEnabled": False,
+  "serviceAccountsEnabled": False,
+  "publicClient": False,
+  "protocol": "openid-connect",
+  "fullScopeAllowed": True
+}))
+PYJSON
+
+    curl -sf -X POST "http://127.0.0.1:8080/admin/realms/mzclinic/clients" \
+      -H "Authorization: Bearer ${KC_TOKEN}" \
+      -H "Content-Type: application/json" \
+      --data-binary @/tmp/keycloak-client.json >/dev/null
+    rm -f /tmp/keycloak-client.json
+
+    CLIENT_UUID=$(curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
+      "http://127.0.0.1:8080/admin/realms/mzclinic/clients?clientId=${CLIENT_ID}" \
+      | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"])')
+  fi
+
+  curl -sf -H "Authorization: Bearer ${KC_TOKEN}" \
+    "http://127.0.0.1:8080/admin/realms/mzclinic/clients/${CLIENT_UUID}" \
+    -o /tmp/keycloak-client-current.json
+
+  CLIENT_ID="${CLIENT_ID}" \
+  CLIENT_NAME="${CLIENT_NAME}" \
+  CLIENT_SECRET="${CLIENT_SECRET}" \
+  REDIRECT_URIS_JSON="${REDIRECT_URIS_JSON}" \
+  WEB_ORIGINS_JSON="${WEB_ORIGINS_JSON}" \
+  python3 - <<'PYJSON' /tmp/keycloak-client-current.json > /tmp/keycloak-client-updated.json
+import json, os, sys
+with open(sys.argv[1]) as f:
+    c = json.load(f)
+c.update({
+  "clientId": os.environ["CLIENT_ID"],
+  "name": os.environ["CLIENT_NAME"],
+  "enabled": True,
+  "clientAuthenticatorType": "client-secret",
+  "secret": os.environ["CLIENT_SECRET"],
+  "redirectUris": json.loads(os.environ["REDIRECT_URIS_JSON"]),
+  "webOrigins": json.loads(os.environ["WEB_ORIGINS_JSON"]),
+  "standardFlowEnabled": True,
+  "directAccessGrantsEnabled": False,
+  "implicitFlowEnabled": False,
+  "serviceAccountsEnabled": False,
+  "publicClient": False,
+  "protocol": "openid-connect",
+  "fullScopeAllowed": True
+})
+print(json.dumps(c))
+PYJSON
+
+  curl -sf -X PUT "http://127.0.0.1:8080/admin/realms/mzclinic/clients/${CLIENT_UUID}" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data-binary @/tmp/keycloak-client-updated.json >/dev/null
+
+  rm -f /tmp/keycloak-client-current.json /tmp/keycloak-client-updated.json
+}
+
+# [2026-06-10 박경수] Grafana Keycloak client 생성/동기화
+upsert_oidc_client \
+  "grafana" \
+  "Grafana" \
+  "${GRAFANA_CLIENT_SECRET}" \
+  '["https://grafana.mzclinic.cloud/login/generic_oauth"]' \
+  '["https://grafana.mzclinic.cloud"]'
+
+# [2026-06-10 박경수] Monitoring Portal Keycloak client 생성/동기화
+upsert_oidc_client \
+  "monitoring-portal" \
+  "Monitoring Portal" \
+  "${PORTAL_CLIENT_SECRET}" \
+  "[\"https://${MONITORING_DOMAIN}/oauth2/callback\"]" \
+  "[\"https://${MONITORING_DOMAIN}\"]"
+
+# [2026-06-10 박경수] Monitoring Portal 자체 Keycloak 인증용 oauth2-proxy
+docker rm -f monitoring-portal-oauth2-proxy 2>/dev/null || true
+
+docker run -d \
+  --name monitoring-portal-oauth2-proxy \
+  --restart unless-stopped \
+  -p 4180:4180 \
+  -e OAUTH2_PROXY_PROVIDER=oidc \
+  -e OAUTH2_PROXY_PROVIDER_DISPLAY_NAME=Keycloak \
+  -e OAUTH2_PROXY_OIDC_ISSUER_URL="https://${MONITORING_DOMAIN}/realms/mzclinic" \
+  -e OAUTH2_PROXY_CLIENT_ID="monitoring-portal" \
+  -e OAUTH2_PROXY_CLIENT_SECRET="${PORTAL_CLIENT_SECRET}" \
+  -e OAUTH2_PROXY_COOKIE_SECRET="${PORTAL_COOKIE_SECRET}" \
+  -e OAUTH2_PROXY_COOKIE_SECURE=true \
+  -e OAUTH2_PROXY_COOKIE_SAMESITE=lax \
+  -e OAUTH2_PROXY_COOKIE_DOMAINS="${MONITORING_DOMAIN}" \
+  -e OAUTH2_PROXY_REDIRECT_URL="https://${MONITORING_DOMAIN}/oauth2/callback" \
+  -e OAUTH2_PROXY_EMAIL_DOMAINS="*" \
+  -e OAUTH2_PROXY_HTTP_ADDRESS="0.0.0.0:4180" \
+  -e OAUTH2_PROXY_REVERSE_PROXY=true \
+  -e OAUTH2_PROXY_SET_XAUTHREQUEST=true \
+  -e OAUTH2_PROXY_PASS_ACCESS_TOKEN=true \
+  -e OAUTH2_PROXY_PASS_USER_HEADERS=true \
+  -e OAUTH2_PROXY_UPSTREAMS="file:///dev/null" \
+  quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+
 # ── nginx 설정 (ALB가 SSL termination, nginx는 HTTP:80만) ─
+# [2026-06-10 박경수] Monitoring Portal 자체 Keycloak 인증 보호
 cat > /etc/nginx/sites-available/monitoring << 'NGINX'
 server {
     listen 80;
     server_name MONITORING_DOMAIN_PLACEHOLDER;
 
-    # 통합 포털 HTML (정적 파일 우선, 없으면 Keycloak으로)
+    # Keycloak OIDC endpoint는 포털 인증 없이 공개
+    location /realms/ {
+        proxy_pass          http://127.0.0.1:8080;
+        proxy_set_header    Host $host;
+        proxy_set_header    X-Real-IP $remote_addr;
+        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto https;
+    }
+
+    location /resources/ {
+        proxy_pass          http://127.0.0.1:8080;
+        proxy_set_header    Host $host;
+        proxy_set_header    X-Real-IP $remote_addr;
+        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto https;
+    }
+
+    location /admin/ {
+        proxy_pass          http://127.0.0.1:8080;
+        proxy_set_header    Host $host;
+        proxy_set_header    X-Real-IP $remote_addr;
+        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto https;
+    }
+
+    # oauth2-proxy callback/sign_in/auth endpoint
+    location /oauth2/ {
+        proxy_pass          http://127.0.0.1:4180;
+        proxy_set_header    Host $host;
+        proxy_set_header    X-Real-IP $remote_addr;
+        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto https;
+        proxy_set_header    X-Auth-Request-Redirect $request_uri;
+    }
+
+    # Monitoring Portal 본문 보호
     location / {
+        auth_request /oauth2/auth;
+        error_page 401 = /oauth2/sign_in;
+
+        auth_request_set $user   $upstream_http_x_auth_request_user;
+        auth_request_set $email  $upstream_http_x_auth_request_email;
+        proxy_set_header X-User  $user;
+        proxy_set_header X-Email $email;
+
         root /var/www/monitoring;
         index index.html;
-        try_files $uri $uri/ @keycloak;
-    }
-
-    location @keycloak {
-        proxy_pass          http://127.0.0.1:8080;
-        proxy_set_header    Host $host;
-        proxy_set_header    X-Real-IP $remote_addr;
-        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header    X-Forwarded-Proto https;
-    }
-
-    # /auth/ 경로 → Keycloak (rewrite)
-    location /auth/ {
-        rewrite ^/auth/(.*)$ /$1 break;
-        proxy_pass          http://127.0.0.1:8080;
-        proxy_set_header    Host $host;
-        proxy_set_header    X-Real-IP $remote_addr;
-        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header    X-Forwarded-Proto https;
+        try_files $uri $uri/ /index.html;
     }
 }
 NGINX
