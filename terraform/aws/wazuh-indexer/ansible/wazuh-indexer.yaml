@@ -143,7 +143,7 @@
         - name: wazuh-install-files.tar S3 업로드 (Manager EC2들이 사용)
           shell: >
             aws s3 cp /tmp/wazuh-install-files.tar
-            s3://wazuh-ansible-ssm/wazuh-install-files.tar
+            s3://aws-k2p-storage-01/wazuh/wazuh-install-files.tar
             --region {{ ansible_env.AWS_DEFAULT_REGION | default('ap-south-2') }}
           environment:
             AWS_DEFAULT_REGION: "ap-south-2"
@@ -196,7 +196,7 @@
 
     - name: wazuh-install-files.tar S3 다운로드 (없을 경우)
       shell: >
-        aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar
+        aws s3 cp s3://aws-k2p-storage-01/wazuh/wazuh-install-files.tar
         /tmp/wazuh-install-files.tar --region ap-south-2
       args:
         creates: /tmp/wazuh-install-files.tar
