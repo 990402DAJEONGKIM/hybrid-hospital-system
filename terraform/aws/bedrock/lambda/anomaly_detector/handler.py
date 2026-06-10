@@ -13,9 +13,10 @@ import boto3
 S3 = boto3.client("s3")
 SES = boto3.client("ses", region_name=os.environ["SES_REGION"])
 
-BUCKET = os.environ["BUCKET"]
-RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost/cost-raw")
+BUCKET      = os.environ["BUCKET"]
+RAW_PREFIX  = os.environ.get("RAW_PREFIX", "cost/cost-raw")
 ALERT_EMAIL = os.environ["ALERT_EMAIL"]
+FROM_EMAIL  = os.environ.get("FROM_EMAIL", ALERT_EMAIL)
 ANOMALY_THRESHOLD = 0.30
 
 
@@ -139,10 +140,10 @@ def lambda_handler(event, context):
     )
 
     SES.send_email(
-        Source=ALERT_EMAIL,
+        Source=FROM_EMAIL,
         Destination={"ToAddresses": [ALERT_EMAIL]},
         Message={
-            "Subject": {"Data": f"[긴급] IT 인프라 비용 이상 감지 ({cur[0]}-{cur[1]})", "Charset": "UTF-8"},
+            "Subject": {"Data": f"[MZ클리닉 IT운영팀] 비용 이상 감지 알림 ({cur[0]}-{cur[1]})", "Charset": "UTF-8"},
             "Body": {
                 "Html": {"Data": html, "Charset": "UTF-8"},
                 "Text": {"Data": text, "Charset": "UTF-8"},

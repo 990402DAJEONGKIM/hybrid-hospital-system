@@ -38,12 +38,9 @@ def _get_target_month() -> tuple[str, str]:
     return str(last_month.year), f"{last_month.month:02d}"
 
 
-def _is_last_business_day() -> bool:
+def _is_third_monday() -> bool:
     today = date.today()
-    next_month_first = (today.replace(day=28) + timedelta(days=4)).replace(day=1)
-    last_day = next_month_first - timedelta(days=1)
-    offset = max(0, last_day.weekday() - 4)
-    return today == last_day - timedelta(days=offset)
+    return today.weekday() == 0 and 15 <= today.day <= 21
 
 
 # ── S3 chunks 로딩 ─────────────────────────────────────────────────────────
@@ -437,10 +434,10 @@ def _send_email(year: str, month: str, html_body: str, pdf_bytes: bytes):
 # ── Lambda 핸들러 ──────────────────────────────────────────────────────────
 
 def lambda_handler(event, context):
-    if not event.get("force") and not _is_last_business_day():
+    if not event.get("force") and not _is_third_monday():
         today = date.today()
-        print(f"오늘({today})은 마지막 평일이 아닙니다. 발송 건너뜀.")
-        return {"status": "skipped", "reason": "not_last_business_day", "today": str(today)}
+        print(f"오늘({today})은 당월 3주차 월요일이 아닙니다. 발송 건너뜀.")
+        return {"status": "skipped", "reason": "not_third_monday", "today": str(today)}
 
     year, month = _get_target_month()
 
