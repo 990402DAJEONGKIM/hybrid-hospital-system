@@ -3,7 +3,7 @@
 # GCP HAProxy - AWS RDS TCP 포워딩
 #
 # 구조:
-#   Cloud SQL → 10.10.1.x:5433 (이 VM)
+#   Cloud SQL → 10.10.1.37:5433 (MIG proxy, Static IP 고정)
 #              → 10.0.21.124:5432 (AWS RDS)
 #
 # ISMS-P 준수:
@@ -11,6 +11,8 @@
 #   - Cloud SQL → proxy 5433만 허용
 #   - proxy → RDS 5432만 허용
 #   - 비밀번호 디스크 저장 금지 (실행 시 Secret Manager에서 동적 조회)
+#   - MIG auto-healing으로 가용성 확보 (ISMS-P 2.12.1)
+#   - 커스텀 이미지 기반 복구 (ISMS-P 2.9.3)
 ##############################################################
 
 data "google_compute_network" "main" {
@@ -24,6 +26,18 @@ data "google_compute_subnetwork" "main" {
 
 data "google_service_account" "proxy" {
   account_id = "tc-st1-account"
+}
+
+# ── 예약된 Static Internal IP 참조 ───────────────────────────
+data "google_compute_address" "proxy_internal" {
+  name   = "gcp-rds-proxy-internal-ip"
+  region = var.region
+}
+
+# ── 최신 커스텀 이미지 참조 (family 기반) ─────────────────────
+data "google_compute_image" "proxy_image" {
+  family  = "gcp-rds-proxy"
+  project = var.project_id
 }
 
 
@@ -46,9 +60,6 @@ data "terraform_remote_state" "monitoring" {
 }
 
 # ── Cloud SQL 감사 로그 → Cloud Logging 활성화 ───────────────
-# Cloud SQL 접근 로그(접속/쿼리)를 Cloud Logging으로 내보내기
-# audit collector가 이 로그를 polling하여 cloudsql_audit_logs에 저장
-
 resource "google_project_iam_audit_config" "cloud_sql_audit" {
   project = var.project_id
   service = "cloudsql.googleapis.com"
@@ -67,8 +78,6 @@ resource "google_project_iam_audit_config" "cloud_sql_audit" {
 }
 
 # ── 서비스 계정 IAM 권한 ─────────────────────────────────────
-# audit collector가 Cloud Logging을 읽기 위한 권한
-
 resource "google_project_iam_member" "proxy_logging_viewer" {
   project = var.project_id
   role    = "roles/logging.viewer"
@@ -76,9 +85,6 @@ resource "google_project_iam_member" "proxy_logging_viewer" {
 }
 
 # ── audit collector 스크립트 → GCS 업로드 ────────────────────
-# startup script에서 gsutil cp로 다운로드하여 설치
-# 버킷은 TC-gcp-dr에서 이미 생성된 gcp-project-496802-dr-app-artifacts 사용
-
 resource "google_storage_bucket_object" "audit_collector" {
   name   = "cloudsql_audit_collector.py"
   bucket = "${var.project_id}-dr-app-artifacts"
@@ -119,29 +125,47 @@ resource "google_compute_firewall" "allow_iap_ssh_proxy" {
   description = "Allow IAP SSH to proxy - ISMS-P compliant"
 }
 
+# ── 헬스체크 — HAProxy TCP 5433 ───────────────────────────────
+# ISMS-P 2.12.1: 자동 장애감지 및 복구
 
+resource "google_compute_health_check" "proxy_tcp" {
+  name    = "gcp-proxy-haproxy-health"
+  project = var.project_id
 
-# ── 프록시 인스턴스 ───────────────────────────────────────────
+  timeout_sec         = 5
+  check_interval_sec  = 10
+  healthy_threshold   = 2
+  unhealthy_threshold = 3 # 30초 무응답 시 unhealthy → auto-healing 트리거
 
-resource "google_compute_instance" "proxy" {
-  count        = var.proxy_count
-  name         = "gcp-rds-proxy-01"
+  tcp_health_check {
+    port = 5433
+  }
+}
+
+# ── 인스턴스 템플릿 (커스텀 이미지 기반) ─────────────────────
+# 이미지에 HAProxy, Wazuh, Alloy, audit-collector 등 모두 설치됨
+# startup-script는 서비스 재시작만 수행
+
+resource "google_compute_instance_template" "proxy" {
+  name_prefix  = "gcp-rds-proxy-tpl-"
   machine_type = "e2-micro"
-  zone         = var.zone
+  region       = var.region
+  project      = var.project_id
 
   tags = ["rds-proxy"]
 
-  boot_disk {
-    initialize_params {
-      image = "debian-cloud/debian-12"
-      size  = 10
-      type  = "pd-standard"
-    }
+  disk {
+    source_image = data.google_compute_image.proxy_image.self_link
+    auto_delete  = true
+    boot         = true
+    disk_size_gb = 10
+    disk_type    = "pd-standard"
   }
 
   network_interface {
     network    = data.google_compute_network.main.id
     subnetwork = data.google_compute_subnetwork.main.id
+    network_ip = data.google_compute_address.proxy_internal.address
     # 공인 IP 없음
   }
 
@@ -150,224 +174,33 @@ resource "google_compute_instance" "proxy" {
     scopes = ["cloud-platform"]
   }
 
+  # 커스텀 이미지에 모든 서비스가 설치되어 있으므로
+  # 재시작 시 서비스 기동만 보장
   metadata_startup_script = <<-SCRIPT
     #!/bin/bash
-    apt-get update -y
-    apt-get install -y haproxy wget python3-pip
+    set -e
 
-    # PostgreSQL 17 클라이언트 설치
-    sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-    wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | tee /etc/apt/trusted.gpg.d/pgdg.asc
-    apt-get update -y
-    apt-get install -y postgresql-client-17
+    # HAProxy
+    systemctl is-active haproxy || systemctl start haproxy
 
-    # ── HAProxy 설정 ─────────────────────────────────────────
-    cat > /etc/haproxy/haproxy.cfg << 'HAPROXY'
-global
-    log /dev/log local0
-    maxconn 256
-
-defaults
-    log global
-    mode tcp
-    timeout connect 5s
-    timeout client  10m
-    timeout server  10m
-
-frontend rds_proxy
-    bind *:5433
-    default_backend rds_backend
-
-backend rds_backend
-    server rds ${var.rds_ip}:${var.rds_port} check
-HAPROXY
-
-    systemctl restart haproxy
-    systemctl enable haproxy
-
-    # ── Cloud SQL Audit Collector 설치 ───────────────────────
-    # ISMS-P 2.9.1: 비밀번호를 디스크에 저장하지 않고
-    # 실행 시마다 Secret Manager에서 동적으로 조회
-    pip3 install --quiet --break-system-packages google-cloud-logging psycopg2-binary
-
-    mkdir -p /opt/audit-collector
-
-    # Cloud SQL IP만 환경변수 파일에 저장 (비밀번호 제외)
-    CLOUD_SQL_IP=$(gcloud sql instances describe ${var.cloud_sql_instance} \
-        --project=${var.project_id} \
-        --format="value(ipAddresses[0].ipAddress)" 2>/dev/null || echo "")
-
-    cat > /opt/audit-collector/.env << ENV
-CLOUD_SQL_IP=$CLOUD_SQL_IP
-CLOUD_SQL_APP_USER=hospital_app
-GCP_PROJECT=${var.project_id}
-ENV
-    chmod 600 /opt/audit-collector/.env
-
-    # GCS에서 collector 스크립트 다운로드
-    gsutil cp gs://${var.project_id}-dr-app-artifacts/cloudsql_audit_collector.py \
-        /opt/audit-collector/cloudsql_audit_collector.py
-    chmod +x /opt/audit-collector/cloudsql_audit_collector.py
-
-    # wrapper: 실행 시마다 Secret Manager에서 비밀번호 동적 조회 (디스크 저장 금지)
-    cat > /opt/audit-collector/run.sh << 'RUNEOF'
-#!/bin/bash
-set -a
-source /opt/audit-collector/.env
-set +a
-
-# 비밀번호는 실행 시마다 Secret Manager에서 동적 조회 (ISMS-P 2.9.1)
-CLOUD_SQL_APP_PASS=$(gcloud secrets versions access latest \
-    --secret=gcp-cloud-sql-app-password \
-    --project="$GCP_PROJECT" 2>/dev/null)
-
-if [ -z "$CLOUD_SQL_APP_PASS" ]; then
-    echo "[ERROR] Secret Manager에서 비밀번호 조회 실패" >&2
-    exit 1
-fi
-
-export CLOUD_SQL_APP_PASS
-exec /usr/bin/python3 /opt/audit-collector/cloudsql_audit_collector.py
-RUNEOF
-    chmod 700 /opt/audit-collector/run.sh
-
-    # 로그 파일
-    touch /var/log/audit-collector.log
-    chmod 666 /var/log/audit-collector.log
-
-    # cron 등록 (1분 주기)
-    (crontab -l 2>/dev/null | grep -v audit-collector; \
-     echo "* * * * * /opt/audit-collector/run.sh >> /var/log/audit-collector-info.log 2>&1") \
-    | crontab -
-
-    # ── DR Failover 모니터 설치 ──────────────────────────────
-    DR_BUCKET="${var.project_id}-dr-app-artifacts"
-    DR_SCRIPT_URI="gs://$DR_BUCKET/dr-monitor-install.sh"
-
-    if gsutil -q stat "$DR_SCRIPT_URI" 2>/dev/null; then
-      gsutil cp "$DR_SCRIPT_URI" /tmp/dr-monitor-install.sh
-      chmod +x /tmp/dr-monitor-install.sh
-      bash /tmp/dr-monitor-install.sh
-    else
-      echo "DR monitor script not found in GCS, skipping." | logger -t dr-monitor-setup
+    # audit-collector cron (혹시 누락 시 재등록)
+    if ! crontab -l 2>/dev/null | grep -q audit-collector; then
+      (crontab -l 2>/dev/null; \
+       echo "* * * * * /opt/audit-collector/run.sh >> /var/log/audit-collector-info.log 2>&1") \
+      | crontab -
     fi
 
-    # ── Wazuh Agent 설치 ─────────────────────────────────────
-    # ISMS-P 2.9.1: 보안 이벤트 로그 수집
-    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH \
-      | gpg --no-default-keyring \
-            --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg \
-            --import
-    chmod 644 /usr/share/keyrings/wazuh.gpg
+    # DR Failover 모니터
+    SCRIPT_PATH="/opt/gcp-dr-failover.sh"
+    if [ -f "$SCRIPT_PATH" ] && ! pgrep -f "$SCRIPT_PATH" > /dev/null; then
+      nohup bash "$SCRIPT_PATH" >> /var/log/dr-failover.log 2>&1 &
+    fi
 
-    echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] \
-https://packages.wazuh.com/4.x/apt/ stable main" \
-      | tee /etc/apt/sources.list.d/wazuh.list
+    # Wazuh Agent
+    systemctl is-active wazuh-agent || systemctl start wazuh-agent
 
-    apt-get update -y
-    apt-get install -y wazuh-agent=4.14.5-*
-
-    cat > /var/ossec/etc/ossec.conf << 'WAZUH_EOF'
-<ossec_config>
-  <client>
-    <server>
-      <address>${var.wazuh_manager_ip}</address>
-      <port>1514</port>
-      <protocol>tcp</protocol>
-      <max_retries>100</max_retries>
-      <retry_interval>15</retry_interval>
-    </server>
-    <notify_time>10</notify_time>
-    <time-reconnect>60</time-reconnect>
-    <auto_restart>yes</auto_restart>
-    <enrollment>
-      <enabled>yes</enabled>
-      <manager_address>${var.wazuh_manager_ip}</manager_address>
-      <port>1515</port>
-      <agent_name>gcp-rds-proxy-01</agent_name>
-      <groups>gcp-proxy</groups>
-    </enrollment>
-  </client>
-</ossec_config>
-WAZUH_EOF
-
-    systemctl daemon-reload
-    systemctl enable wazuh-agent
-    systemctl start wazuh-agent
-
-    sed -i "s/^deb/#deb/" /etc/apt/sources.list.d/wazuh.list
-    apt-get update -y
-
-    # ── Grafana Alloy 설치 — Prometheus 메트릭 push 방식 ─────
-
-    mkdir -p /etc/apt/keyrings
-    wget -O /etc/apt/keyrings/grafana.asc https://apt.grafana.com/gpg-full.key
-    chmod 644 /etc/apt/keyrings/grafana.asc
-    echo "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main" \
-      | tee /etc/apt/sources.list.d/grafana.list
-    apt-get update -y
-    apt-get install -y alloy
-
-    PRIVATE_IP=$(curl -s -H "Metadata-Flavor: Google" \
-      http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)
-
-    cat > /etc/alloy/config.alloy << ALLOYEOF
-prometheus.exporter.unix "local" {
-  include_exporter_metrics = true
-}
-discovery.relabel "local" {
-  targets = prometheus.exporter.unix.local.targets
-  rule {
-    target_label = "instance"
-    replacement  = "gcp-proxy"
-  }
-}
-prometheus.scrape "local" {
-  targets         = discovery.relabel.local.output
-  forward_to      = [prometheus.remote_write.prometheus.receiver]
-  scrape_interval = "15s"
-}
-
-prometheus.exporter.gcp "cloudsql" {
-  project_ids      = ["${var.project_id}"]
-  metrics_prefixes = [
-    "cloudsql.googleapis.com/database/cpu/utilization",
-    "cloudsql.googleapis.com/database/memory/utilization",
-    "cloudsql.googleapis.com/database/disk/utilization",
-    "cloudsql.googleapis.com/database/disk/bytes_used",
-    "cloudsql.googleapis.com/database/network/connections",
-    "cloudsql.googleapis.com/database/postgresql/num_backends",
-    "cloudsql.googleapis.com/database/postgresql/transaction_count",
-  ]
-}
-prometheus.scrape "cloudsql" {
-  targets         = prometheus.exporter.gcp.cloudsql.targets
-  forward_to      = [prometheus.remote_write.prometheus.receiver]
-  scrape_interval = "60s"
-}
-
-prometheus.remote_write "prometheus" {
-  endpoint {
-    url = "http://${data.terraform_remote_state.monitoring.outputs.monitoring_private_ip}:9090/api/v1/write"
-  }
-  wal {
-    truncate_frequency = "2h"
-    min_keepalive_time = "5m"
-    max_keepalive_time = "8h"
-  }
-}
-ALLOYEOF
-
-    systemctl daemon-reload
-    systemctl enable alloy
-    systemctl start alloy
-
-
-
-
-
-
-
+    # Grafana Alloy
+    systemctl is-active alloy || systemctl start alloy
   SCRIPT
 
   metadata = {
@@ -387,6 +220,38 @@ ALLOYEOF
     role        = "rds-proxy"
   }
 
-  # audit_collector 스크립트가 GCS에 올라간 뒤 VM이 생성되도록
+  lifecycle {
+    create_before_destroy = true
+  }
+
   depends_on = [google_storage_bucket_object.audit_collector]
+}
+
+# ── MIG — size=1, auto-healing 활성화 ────────────────────────
+# ISMS-P 2.12.1: 자동 복구 (이미지 기반 2~3분 내 재구동)
+
+resource "google_compute_instance_group_manager" "proxy" {
+  name               = "gcp-rds-proxy-mig"
+  base_instance_name = "gcp-rds-proxy"
+  zone               = var.zone
+  project            = var.project_id
+
+  version {
+    instance_template = google_compute_instance_template.proxy.id
+  }
+
+  target_size = var.proxy_count
+
+  auto_healing_policies {
+    health_check      = google_compute_health_check.proxy_tcp.id
+    initial_delay_sec = 120 # 부팅 + 서비스 기동 여유시간
+  }
+
+  # 이미지 교체 시 무중단 롤링 업데이트
+  update_policy {
+    type                  = "PROACTIVE"
+    minimal_action        = "REPLACE"
+    max_surge_fixed       = 0
+    max_unavailable_fixed = 1
+  }
 }
