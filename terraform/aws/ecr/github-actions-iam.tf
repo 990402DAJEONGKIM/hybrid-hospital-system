@@ -97,6 +97,34 @@ resource "aws_iam_role_policy" "github_actions_ecs" {
 
 
 # ─────────────────────────────────────────────────────────
+# Lambda 배포 권한 — Cost 분석 Lambda CI/CD용
+# ─────────────────────────────────────────────────────────
+resource "aws_iam_role_policy" "github_actions_lambda" {
+  name = "aws-github-actions-lambda"
+  role = aws_iam_role.github_actions.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:UpdateFunctionCode",
+          "lambda:GetFunction",
+          "lambda:PublishLayerVersion",
+          "lambda:UpdateFunctionConfiguration",
+        ]
+        Resource = [
+          "arn:aws:lambda:${var.aws_region}:${var.aws_account_id}:function:aws-lambda-cost-*",
+          "arn:aws:lambda:${var.aws_region}:${var.aws_account_id}:layer:aws-lambda-layer-reportlab:*",
+        ]
+      }
+    ]
+  })
+}
+
+
+# ─────────────────────────────────────────────────────────
 # KMS 키 참조 — S3 버킷 암호화 키 (ISMS-P 2.7.1)
 # ─────────────────────────────────────────────────────────
 data "aws_kms_key" "s3" {
