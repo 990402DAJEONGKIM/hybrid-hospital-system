@@ -15,7 +15,7 @@ SSM = boto3.client("ssm")
 S3  = boto3.client("s3")
 
 BUCKET     = os.environ["RAW_BUCKET"]
-RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost-raw")
+RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost/cost-raw")
 
 
 def _get_param(name: str) -> str:

@@ -1,0 +1,5 @@
+service,total_cost,currency,month
+Networking,28200.0,KRW,2026-01-01
+Compute Engine,11400.0,KRW,2026-01-01
+Cloud SQL,8500.0,KRW,2026-01-01
+Cloud Storage,2200.0,KRW,2026-01-01

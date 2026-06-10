@@ -1,0 +1,1 @@
+{"year": "2026", "month": "04", "server_metrics": {"cpu_count": 16, "cpu_max_mhz": 5000, "mem_gb": 15, "vm_count": 0}, "items": {"depreciation": 66667, "electricity": 13900, "network": 200000, "labor": 300000, "vmware_license": 0}, "total_krw": 580567, "capex": 66667, "opex": 513900}
