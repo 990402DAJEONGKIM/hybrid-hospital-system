@@ -342,3 +342,54 @@ resource "aws_secretsmanager_secret" "wazuh_dashboard_cookie_password" {
 
   tags = merge(local.common_tags, { Name = "aws-wazuh-dashboard-cookie-password" })
 }
+# ─────────────────────────────────────────────────────────
+# Grafana / Keycloak OIDC — grafana client secret
+# 값은 Terraform state에 남기지 않도록 콘솔/CLI로 SecretString을 주입한다.
+# [2026-06-10 박경수] Grafana Keycloak SSO용
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "grafana_openid_client_secret" {
+  name        = "aws-grafana-openid-client-secret"
+  description = "Keycloak mzclinic realm의 grafana OIDC client secret — Grafana SSO"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-grafana-openid-client-secret" })
+}
+
+# ─────────────────────────────────────────────────────────
+# Monitoring Portal / Keycloak OIDC — monitoring-portal client secret
+# 값은 Terraform state에 남기지 않도록 콘솔/CLI로 SecretString을 주입한다.
+# [2026-06-10 박경수] Monitoring Portal Keycloak SSO용
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "monitoring_portal_openid_client_secret" {
+  name        = "aws-monitoring-portal-openid-client-secret"
+  description = "Keycloak mzclinic realm의 monitoring-portal OIDC client secret — Portal SSO"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-monitoring-portal-openid-client-secret" })
+}
+
+# ─────────────────────────────────────────────────────────
+# Monitoring Portal oauth2-proxy cookie secret
+# 값은 고정 난수여야 하며, 매 배포마다 바뀌면 포털 세션이 무효화된다.
+# SecretString 예: openssl rand -base64 32
+# [2026-06-10 박경수] Monitoring Portal oauth2-proxy cookie/session 보호용
+# ─────────────────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "monitoring_portal_cookie_secret" {
+  name        = "aws-monitoring-portal-cookie-secret"
+  description = "Monitoring Portal oauth2-proxy cookie secret — Portal SSO session 보호용 고정 secret"
+  kms_key_id  = data.aws_kms_key.secretsmanager.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-monitoring-portal-cookie-secret" })
+}
