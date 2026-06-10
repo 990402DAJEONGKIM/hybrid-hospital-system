@@ -394,10 +394,20 @@
 
     - name: Keycloak 공개키 추출 # [2026-06-10 박경수] jwt_auth_domain signing_key 값 생성
       shell: |
-        openssl x509 -pubkey -noout -in /tmp/keycloak-sig.crt \n          | sed '/BEGIN PUBLIC KEY/d;/END PUBLIC KEY/d' \n          | tr -d '\n'
+        openssl x509 -pubkey -noout -in /tmp/keycloak-sig.crt \
+          | sed '/BEGIN PUBLIC KEY/d;/END PUBLIC KEY/d' \
+          | tr -d '\n'
+
       register: keycloak_signing_key
       changed_when: false
       no_log: true
+      tags: oidc
+
+
+    - name: Keycloak signing_key 추출 결과 검증
+      ansible.builtin.fail:
+        msg: "Keycloak signing_key is empty. Wazuh Indexer JWT authentication cannot work."
+      when: keycloak_signing_key.stdout | trim | length == 0
       tags: oidc
 
     - name: OpenSearch Security config 백업 # [2026-06-10 박경수]
@@ -421,6 +431,12 @@
         replace: "      jwt_auth_domain:\n        description: \"Authenticate via Keycloak OIDC JWT\"\n        http_enabled: true\n        transport_enabled: true\n        order: 0\n        http_authenticator:\n          type: jwt\n          challenge: false\n          config:\n            signing_key: \"{{ keycloak_signing_key.stdout }}\"\n            jwt_header: \"Authorization\"\n            jwt_clock_skew_tolerance_seconds: 30\n            roles_key: \"roles\"\n            subject_key: \"preferred_username\"\n        authentication_backend:\n          type: noop\n      clientcert_auth_domain:"
       no_log: true
       register: oidc_config_replace
+      tags: oidc
+
+    - name: Wazuh Indexer JWT signing_key config 반영 확인
+      ansible.builtin.shell: |
+        grep -q 'signing_key: "' /etc/wazuh-indexer/opensearch-security/config.yml
+      changed_when: false
       tags: oidc
 
     - name: all_access role mapping에 Keycloak admin backend role 매핑 # [2026-06-10 박경수]
@@ -453,6 +469,7 @@
         JAVA_HOME: /usr/share/wazuh-indexer/jdk
       register: securityadmin_apply
       changed_when: "'Done with success' in securityadmin_apply.stdout"
+      failed_when: securityadmin_apply.rc != 0 or ('Done with success' not in securityadmin_apply.stdout)
       tags: oidc
 
     # ──────────────────────────────────────────
