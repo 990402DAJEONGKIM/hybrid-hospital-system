@@ -6,6 +6,9 @@
 <title>멀티클라우드 비용 분석</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Pretendard:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/cost-config.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -170,46 +173,6 @@
     50% { opacity: 0.4; }
   }
 
-  /* ── CONFIG BAR ── */
-  .config-bar {
-    position: relative;
-    z-index: 10;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    padding: 12px 28px;
-    background: var(--bg2);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .config-bar label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    white-space: nowrap;
-  }
-
-  .config-bar input {
-    flex: 1;
-    max-width: 440px;
-    background: var(--bg3);
-    border: 1px solid var(--border2);
-    border-radius: var(--radius-sm);
-    padding: 7px 12px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text);
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-
-  .config-bar input::placeholder { color: var(--text3); }
-  .config-bar input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(0,212,170,0.1);
-  }
 
   /* ── CHAT WINDOW ── */
   #chat-window {
@@ -505,16 +468,116 @@
   .badge-aws   { color: #ff9900; border-color: rgba(255,153,0,0.3); background: rgba(255,153,0,0.06); }
   .badge-gcp   { color: #4285f4; border-color: rgba(66,133,244,0.3); background: rgba(66,133,244,0.06); }
   .badge-onprem{ color: #00d4aa; border-color: rgba(0,212,170,0.3); background: rgba(0,212,170,0.06); }
+
+  /* ── MARKDOWN ── */
+  .bubble h1, .bubble h2, .bubble h3 {
+    font-family: var(--sans);
+    color: var(--text);
+    margin: 14px 0 6px;
+    line-height: 1.4;
+  }
+  .bubble h1 { font-size: 15px; }
+  .bubble h2 { font-size: 14px; color: var(--accent); }
+  .bubble h3 { font-size: 13px; color: var(--text2); }
+  .bubble p  { margin: 6px 0; }
+  .bubble ul, .bubble ol { padding-left: 18px; margin: 6px 0; }
+  .bubble li { margin: 3px 0; }
+  .bubble strong { color: var(--text); }
+  .bubble em { color: var(--text2); }
+  .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+  .bubble table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 13px;
+  }
+  .bubble th {
+    background: var(--bg4);
+    color: var(--accent);
+    padding: 6px 12px;
+    text-align: left;
+    border: 1px solid var(--border2);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .bubble td {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .bubble tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .bubble code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg4);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--accent2);
+  }
+  .bubble blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    color: var(--text2);
+    margin: 8px 0;
+  }
+
+  /* ── TAB PAGES ── */
+  .tab-page { display: none; flex: 1; overflow-y: auto; padding: 28px; position: relative; z-index: 1; }
+  .tab-page.active { display: block; }
+
+  /* ── DASHBOARD ── */
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .dash-card {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 24px;
+  }
+  .dash-card-label { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  .dash-card-value { font-size: 22px; font-weight: 600; color: var(--text); }
+  .dash-card-sub { font-family: var(--mono); font-size: 11px; color: var(--text2); margin-top: 4px; }
+  .dash-card.warn .dash-card-value { color: #ff9900; }
+  .dash-card.danger .dash-card-value { color: #ff5f5f; }
+
+  .progress-bar-wrap { margin-top: 10px; background: var(--bg4); border-radius: 4px; height: 6px; }
+  .progress-bar { height: 6px; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.6s; }
+  .progress-bar.warn { background: linear-gradient(90deg, #ff9900, #ffcc00); }
+  .progress-bar.danger { background: linear-gradient(90deg, #ff5f5f, #ff9900); }
+
+  .section-title { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.05em; margin-bottom: 12px; }
+
+  .breakdown-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .breakdown-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .breakdown-title { font-family: var(--mono); font-size: 11px; margin-bottom: 10px; }
+  .breakdown-title.aws { color: #ff9900; }
+  .breakdown-title.gcp { color: #4285f4; }
+  .breakdown-title.onprem { color: var(--accent); }
+  .breakdown-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); color: var(--text2); }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-row span:last-child { font-family: var(--mono); color: var(--text); }
+
+  .chart-wrap { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
+
+  /* ── REPORT ── */
+  .report-content { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; line-height: 1.8; }
+  .report-btn { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #0a0e14; border: none; border-radius: var(--radius-sm); padding: 10px 20px; font-family: var(--mono); font-size: 12px; font-weight: 600; cursor: pointer; margin-bottom: 20px; }
+  .report-btn:hover { opacity: 0.9; }
+
+  /* ── DOWNLOAD BTN ── */
+  .download-btn {
+    font-family: var(--mono); font-size: 11px; color: var(--text2);
+    background: var(--bg4); border: 1px solid var(--border2); border-radius: 6px;
+    padding: 5px 12px; cursor: pointer; transition: all 0.15s; margin-left: auto;
+  }
+  .download-btn:hover { color: var(--accent); border-color: rgba(0,212,170,0.4); }
 </style>
 </head>
 <body>
 
 <div class="brand-nav-bar">
   <nav class="brand-nav">
-    <div class="nav-item active">재무 분석</div>
-    <div class="nav-item">예산 현황</div>
-    <div class="nav-item">비용 추이</div>
-    <div class="nav-item">보고서</div>
+    <div class="nav-item active" onclick="switchTab('chat')">재무 분석</div>
+    <div class="nav-item" onclick="switchTab('budget')">예산 현황</div>
+    <div class="nav-item" onclick="switchTab('trends')">비용 추이</div>
+    <div class="nav-item" onclick="switchTab('report')">보고서</div>
   </nav>
 </div>
 
@@ -525,6 +588,7 @@
     <div class="header-subtitle">AWS · GCP · On-premises</div>
   </div>
   <div class="header-right">
+    <button class="download-btn" onclick="downloadChat()">대화 저장 ↓</button>
     <div class="status-dot">
       <div class="dot-pulse" id="status-dot"></div>
       <span id="status-text">대기 중</span>
@@ -532,48 +596,76 @@
   </div>
 </header>
 
-<div class="config-bar">
-  <label>endpoint</label>
-  <input id="api-url" type="text" placeholder="https://xxxxxx.execute-api.ap-south-2.amazonaws.com/prod/chat">
-  <label>key</label>
-  <input id="api-key" type="password" placeholder="x-api-key" style="max-width:180px">
-</div>
-
-<div id="chat-window">
-  <div class="message bot">
-    <div class="avatar">AI</div>
-    <div>
-      <div class="bubble welcome-card" style="padding:20px 24px; max-width:520px">
-        <div class="welcome-title">// 멀티클라우드 비용 분석 준비 완료</div>
-        <div class="welcome-body">
-          AWS, GCP, 온프레미스 인프라 비용에 대해<br>
-          무엇이든 질문하세요. 데이터 기반으로 답변합니다.
+<!-- 재무 분석 탭 -->
+<div id="tab-chat" class="tab-page active" style="display:flex; flex-direction:column; padding:0;">
+  <div id="chat-window">
+    <div class="message bot">
+      <div class="avatar">AI</div>
+      <div>
+        <div class="bubble welcome-card" style="padding:20px 24px; max-width:520px">
+          <div class="welcome-title">// 멀티클라우드 비용 분석 준비 완료</div>
+          <div class="welcome-body">
+            AWS, GCP, 온프레미스 인프라 비용에 대해<br>
+            무엇이든 질문하세요. 데이터 기반으로 답변합니다.
+          </div>
+          <div class="cloud-badges">
+            <span class="cloud-badge badge-aws">AWS CUR</span>
+            <span class="cloud-badge badge-gcp">GCP BigQuery</span>
+            <span class="cloud-badge badge-onprem">VMware vCenter</span>
+          </div>
         </div>
-        <div class="cloud-badges">
-          <span class="cloud-badge badge-aws">AWS CUR</span>
-          <span class="cloud-badge badge-gcp">GCP BigQuery</span>
-          <span class="cloud-badge badge-onprem">VMware vCenter</span>
-        </div>
+        <div class="msg-meta">지금</div>
       </div>
-      <div class="msg-meta">지금</div>
     </div>
   </div>
-</div>
-
-<div class="suggestions">
-  <button class="suggestion-btn" onclick="fillQuestion('이번 달 전체 인프라 비용은 얼마야?')">이번 달 전체 비용</button>
-  <button class="suggestion-btn" onclick="fillQuestion('GCP 비용이 왜 이렇게 올랐어?')">GCP 비용 급등 원인</button>
-  <button class="suggestion-btn" onclick="fillQuestion('온프레미스 CAPEX vs OPEX 비율은?')">CAPEX / OPEX</button>
-  <button class="suggestion-btn" onclick="fillQuestion('연간 예산 집행률과 잔여 예산은?')">예산 집행률</button>
-  <button class="suggestion-btn" onclick="fillQuestion('비용 절감 방법을 추천해줘')">절감 추천</button>
-</div>
-
-<div class="input-area">
-  <div class="input-wrapper">
-    <textarea id="question" placeholder="비용 관련 질문을 입력하세요..." rows="1"></textarea>
-    <button id="send-btn" onclick="sendQuestion()" title="전송">↑</button>
+  <div class="suggestions">
+    <button class="suggestion-btn" onclick="fillQuestion('이번 달 전체 인프라 비용은 얼마야?')">이번 달 전체 비용</button>
+    <button class="suggestion-btn" onclick="fillQuestion('GCP 비용이 왜 이렇게 올랐어?')">GCP 비용 급등 원인</button>
+    <button class="suggestion-btn" onclick="fillQuestion('온프레미스 CAPEX vs OPEX 비율은?')">CAPEX / OPEX</button>
+    <button class="suggestion-btn" onclick="fillQuestion('연간 예산 집행률과 잔여 예산은?')">예산 집행률</button>
+    <button class="suggestion-btn" onclick="fillQuestion('비용 절감 방법을 추천해줘')">절감 추천</button>
   </div>
-  <div class="input-hint">Enter 전송 &nbsp;·&nbsp; Shift+Enter 줄바꿈</div>
+  <div class="input-area">
+    <div class="input-wrapper">
+      <textarea id="question" placeholder="비용 관련 질문을 입력하세요..." rows="1"></textarea>
+      <button id="send-btn" onclick="sendQuestion()" title="전송">↑</button>
+    </div>
+    <div class="input-hint">Enter 전송 &nbsp;·&nbsp; Shift+Enter 줄바꿈</div>
+  </div>
+</div>
+
+<!-- 예산 현황 탭 -->
+<div id="tab-budget" class="tab-page">
+  <div class="section-title">// 예산 현황</div>
+  <div class="dash-grid" id="budget-cards">
+    <div class="dash-card"><div class="dash-card-label">데이터 로딩 중</div><div class="dash-card-value">—</div></div>
+  </div>
+  <div class="section-title">// 클라우드별 비용 분석</div>
+  <div class="breakdown-grid" id="breakdown-grid">
+    <div class="breakdown-card"><div class="breakdown-title aws">AWS</div><div class="dash-card-sub">로딩 중...</div></div>
+    <div class="breakdown-card"><div class="breakdown-title gcp">GCP</div><div class="dash-card-sub">로딩 중...</div></div>
+    <div class="breakdown-card"><div class="breakdown-title onprem">On-premises</div><div class="dash-card-sub">로딩 중...</div></div>
+  </div>
+</div>
+
+<!-- 비용 추이 탭 -->
+<div id="tab-trends" class="tab-page">
+  <div class="section-title">// 월별 비용 추이</div>
+  <div class="chart-wrap"><canvas id="trends-chart" height="100"></canvas></div>
+  <div class="section-title">// 클라우드별 비율 (이번 달)</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+    <div class="chart-wrap"><canvas id="pie-chart" height="160"></canvas></div>
+    <div class="chart-wrap" id="trends-table"></div>
+  </div>
+</div>
+
+<!-- 보고서 탭 -->
+<div id="tab-report" class="tab-page">
+  <div class="section-title">// 월간 비용 보고서</div>
+  <button class="report-btn" onclick="generateReport()">보고서 생성 (이메일 발송)</button>
+  <div id="report-content" class="report-content">
+    <div style="color:var(--text3); font-family:var(--mono); font-size:13px;">보고서 생성 버튼을 클릭하면 월간 비용 보고서가 생성되어 이메일로 발송됩니다.</div>
+  </div>
 </div>
 
 <script>
@@ -612,7 +704,11 @@
     const wrap   = document.createElement('div');
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
-    bubble.textContent = text;
+    if (role === 'bot') {
+      bubble.innerHTML = marked.parse(text);
+    } else {
+      bubble.textContent = text;
+    }
 
     if (sources && sources.length > 0) {
       const srcDiv = document.createElement('div');
@@ -682,8 +778,8 @@
   }
 
   async function sendQuestion() {
-    const apiUrl  = document.getElementById('api-url').value.trim();
-    const apiKey  = document.getElementById('api-key').value.trim();
+    const apiUrl  = window.COST_API_URL;
+    const apiKey  = window.COST_API_KEY;
     const question = questionEl.value.trim();
 
     if (!apiUrl)  { alert('API 엔드포인트를 입력하세요.'); return; }
@@ -725,6 +821,218 @@
     } finally {
       sendBtn.disabled = false;
       questionEl.focus();
+    }
+  }
+
+  // ── 대화 저장 ──────────────────────────────────────────
+  function downloadChat() {
+    const messages = document.querySelectorAll('#chat-window .message');
+    let text = `멀티클라우드 비용 분석 대화 내보내기\n생성일시: ${new Date().toLocaleString('ko-KR')}\n${'='.repeat(60)}\n\n`;
+    messages.forEach(msg => {
+      const role   = msg.classList.contains('user') ? '사용자' : 'AI';
+      const bubble = msg.querySelector('.bubble');
+      if (!bubble) return;
+      const content = bubble.innerText.trim();
+      text += `[${role}]\n${content}\n\n`;
+    });
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `비용분석_${new Date().toISOString().slice(0,10)}.txt`;
+    a.click();
+  }
+
+  // ── 탭 전환 ────────────────────────────────────────────
+  let dashboardLoaded = false;
+  let trendsChart = null;
+  let pieChart = null;
+
+  function switchTab(tab) {
+    document.querySelectorAll('.nav-item').forEach((el, i) => {
+      const tabs = ['chat', 'budget', 'trends', 'report'];
+      el.classList.toggle('active', tabs[i] === tab);
+    });
+    document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+
+    if ((tab === 'budget' || tab === 'trends') && !dashboardLoaded) {
+      loadDashboard();
+    }
+  }
+
+  // ── 대시보드 데이터 로딩 ──────────────────────────────
+  function krw(n) {
+    return Number(n).toLocaleString('ko-KR') + '원';
+  }
+
+  async function loadDashboard() {
+    const apiUrl = window.COST_DASHBOARD_URL || window.COST_API_URL?.replace('/chat', '/dashboard');
+    const apiKey = window.COST_API_KEY;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['x-api-key'] = apiKey;
+      const resp = await fetch(apiUrl, { method: 'GET', headers });
+      const data = await resp.json();
+      const body = typeof data.body === 'string' ? JSON.parse(data.body) : data;
+      dashboardLoaded = true;
+      renderBudget(body);
+      renderTrends(body);
+    } catch (e) {
+      console.error('대시보드 로딩 실패:', e);
+    }
+  }
+
+  function renderBudget(data) {
+    const b = data.budget;
+    const util = b.monthly_utilization_pct;
+    const annualUtil = b.annual_utilization_pct;
+    const barClass = util > 150 ? 'danger' : util > 100 ? 'warn' : '';
+    const cardClass = util > 150 ? 'danger' : util > 100 ? 'warn' : '';
+
+    document.getElementById('budget-cards').innerHTML = `
+      <div class="dash-card ${cardClass}">
+        <div class="dash-card-label">이번 달 총 비용</div>
+        <div class="dash-card-value">${krw(b.current_month_total)}</div>
+        <div class="dash-card-sub">월 예산 ${krw(b.monthly_krw)}</div>
+        <div class="progress-bar-wrap"><div class="progress-bar ${barClass}" style="width:${Math.min(util,100)}%"></div></div>
+        <div class="dash-card-sub" style="margin-top:6px">집행률 ${util}%</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-label">연간 예산</div>
+        <div class="dash-card-value">${krw(b.annual_krw)}</div>
+        <div class="dash-card-sub">연간 누적 ${krw(b.year_to_date)}</div>
+        <div class="progress-bar-wrap"><div class="progress-bar ${annualUtil > 100 ? 'danger' : ''}" style="width:${Math.min(annualUtil,100)}%"></div></div>
+        <div class="dash-card-sub" style="margin-top:6px">집행률 ${annualUtil}%</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-label">잔여 예산</div>
+        <div class="dash-card-value ${b.remaining_annual < 0 ? 'danger' : ''}" style="color:${b.remaining_annual < 0 ? '#ff5f5f' : 'var(--accent)'}">
+          ${krw(b.remaining_annual)}
+        </div>
+        <div class="dash-card-sub">${b.month_num}개월차 기준</div>
+      </div>
+    `;
+
+    const cur = data.current;
+    if (!cur) return;
+
+    const makeRows = (services) =>
+      Object.entries(services)
+        .filter(([,v]) => v > 0)
+        .sort(([,a],[,b]) => b - a)
+        .map(([k,v]) => `<div class="breakdown-row"><span>${k}</span><span>${krw(v)}</span></div>`)
+        .join('');
+
+    document.getElementById('breakdown-grid').innerHTML = `
+      <div class="breakdown-card">
+        <div class="breakdown-title aws">AWS — ${krw(cur.aws)}</div>
+        ${makeRows(cur.aws_services)}
+      </div>
+      <div class="breakdown-card">
+        <div class="breakdown-title gcp">GCP — ${krw(cur.gcp)}</div>
+        ${makeRows(cur.gcp_services)}
+      </div>
+      <div class="breakdown-card">
+        <div class="breakdown-title onprem">On-premises — ${krw(cur.onprem)}</div>
+        ${makeRows(cur.onprem_services)}
+      </div>
+    `;
+  }
+
+  function renderTrends(data) {
+    const trends = data.trends;
+    if (!trends || trends.length === 0) return;
+
+    const labels = trends.map(t => t.month);
+    const awsData   = trends.map(t => t.aws);
+    const gcpData   = trends.map(t => t.gcp);
+    const onpremData = trends.map(t => t.onprem);
+
+    if (trendsChart) trendsChart.destroy();
+    trendsChart = new Chart(document.getElementById('trends-chart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'AWS',          data: awsData,    backgroundColor: 'rgba(255,153,0,0.7)',   borderRadius: 4 },
+          { label: 'GCP',          data: gcpData,    backgroundColor: 'rgba(66,133,244,0.7)',  borderRadius: 4 },
+          { label: 'On-premises',  data: onpremData, backgroundColor: 'rgba(0,212,170,0.7)',   borderRadius: 4 },
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#8899aa', font: { family: 'DM Mono', size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${krw(ctx.raw)}` } }
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: '#8899aa' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { stacked: true, ticks: { color: '#8899aa', callback: v => (v/10000).toFixed(0) + '만' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+      }
+    });
+
+    // 파이 차트 (이번 달)
+    const cur = data.current;
+    if (pieChart) pieChart.destroy();
+    pieChart = new Chart(document.getElementById('pie-chart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['AWS', 'GCP', 'On-premises'],
+        datasets: [{ data: [cur.aws, cur.gcp, cur.onprem], backgroundColor: ['rgba(255,153,0,0.8)', 'rgba(66,133,244,0.8)', 'rgba(0,212,170,0.8)'], borderWidth: 0 }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#8899aa', font: { family: 'DM Mono', size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${krw(ctx.raw)} (${(ctx.raw/cur.total*100).toFixed(1)}%)` } }
+        }
+      }
+    });
+
+    // 추이 테이블
+    document.getElementById('trends-table').innerHTML = `
+      <div class="section-title">// 월별 합계</div>
+      <table style="width:100%; font-size:12px; border-collapse:collapse;">
+        <thead><tr>
+          ${['월','AWS','GCP','온프레미스','합계'].map(h => `<th style="text-align:left; padding:6px 8px; color:var(--accent); font-family:var(--mono); font-size:11px; border-bottom:1px solid var(--border2);">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${trends.map(t => `<tr>
+            <td style="padding:5px 8px; border-bottom:1px solid var(--border); color:var(--text2); font-family:var(--mono);">${t.month}</td>
+            <td style="padding:5px 8px; border-bottom:1px solid var(--border); color:#ff9900;">${krw(t.aws)}</td>
+            <td style="padding:5px 8px; border-bottom:1px solid var(--border); color:#4285f4;">${krw(t.gcp)}</td>
+            <td style="padding:5px 8px; border-bottom:1px solid var(--border); color:var(--accent);">${krw(t.onprem)}</td>
+            <td style="padding:5px 8px; border-bottom:1px solid var(--border); color:var(--text);">${krw(t.total)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // ── 보고서 생성 ────────────────────────────────────────
+  async function generateReport() {
+    const apiUrl = window.COST_REPORT_URL || window.COST_API_URL?.replace('/chat', '/report') || '';
+    const apiKey = window.COST_API_KEY;
+    const btn = document.querySelector('.report-btn');
+    const content = document.getElementById('report-content');
+
+    btn.disabled = true;
+    btn.textContent = '생성 중...';
+    content.innerHTML = '<div style="color:var(--text3); font-family:var(--mono);">보고서를 생성하고 있습니다...</div>';
+
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['x-api-key'] = apiKey;
+      const resp = await fetch(apiUrl, { method: 'POST', headers, body: '{}' });
+      const data = await resp.json();
+      const body = typeof data.body === 'string' ? JSON.parse(data.body) : data;
+      content.innerHTML = `<div style="color:var(--accent); font-family:var(--mono); font-size:12px; margin-bottom:12px;">✓ 보고서가 이메일로 발송되었습니다.</div>` + marked.parse(body.report || body.message || JSON.stringify(body));
+    } catch (e) {
+      content.innerHTML = `<div style="color:#ff5f5f; font-family:var(--mono);">오류: ${e.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '보고서 생성 (이메일 발송)';
     }
   }
 </script>
