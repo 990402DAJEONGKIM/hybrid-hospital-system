@@ -185,6 +185,10 @@ token_url = http://127.0.0.1:8080/realms/mzclinic/protocol/openid-connect/token
 api_url = http://127.0.0.1:8080/realms/mzclinic/protocol/openid-connect/userinfo
 use_refresh_token = true
 
+[users]
+# [2026-06-10 박경수] Wazuh white UI와 통일감을 위해 Grafana 기본 테마를 light로 고정
+default_theme = light
+
 [analytics]
 reporting_enabled = false
 check_for_updates = false
