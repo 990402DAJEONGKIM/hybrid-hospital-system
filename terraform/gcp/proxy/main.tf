@@ -255,3 +255,19 @@ resource "google_compute_instance_group_manager" "proxy" {
     max_unavailable_fixed = 1
   }
 }
+
+
+resource "google_compute_firewall" "allow_healthcheck_proxy" {
+  name    = "gcp-fw-allow-healthcheck-proxy"
+  network = data.google_compute_network.main.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["5433"]
+  }
+
+  source_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
+  target_tags   = ["rds-proxy"]
+
+  description = "Allow GCP health check probes to HAProxy (MIG auto-healing)"
+}
