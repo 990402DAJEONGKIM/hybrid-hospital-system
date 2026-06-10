@@ -90,7 +90,8 @@ resource "aws_iam_role_policy" "aws-wazuh-s3-policy" {
         Action = [
           "logs:GetLogEvents",
           "logs:DescribeLogStreams",
-          
+          "logs:DescribeLogGroups",
+          "logs:FilterLogEvents"
         ]
         Resource = [
           "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/cluster/aws-aurora-01/postgresql",
@@ -109,6 +110,8 @@ resource "aws_iam_role_policy" "aws-wazuh-s3-policy" {
           "arn:aws:logs:${var.aws_region}:*:log-group:aws-waf-logs-staff-alb:*",
           "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/proxy/aws-rds-proxy-01",
           "arn:aws:logs:${var.aws_region}:*:log-group:/aws/rds/proxy/aws-rds-proxy-01:*",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/lambda/*",
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/lambda/*:*" #Lambda 로그그룹 추가 - 260610 김강환
         ]
       },
       # aws-wazuh-s3 인라인 정책에 추가
