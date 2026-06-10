@@ -261,13 +261,13 @@
     # ──────────────────────────────────────────
     - name: 데이터 디스크(/dev/sdf) 존재 확인
       stat:
-        path: /dev/sdf
+        path: /dev/nvme1n1
       register: data_disk
 
     - name: 데이터 디스크 파일시스템 생성 (비어있을 때만, 최초 1회)
       filesystem:
         fstype: ext4
-        dev: /dev/sdf
+        dev: /dev/nvme1n1
       when: data_disk.stat.exists
 
     - name: 마운트 포인트 생성
@@ -281,7 +281,7 @@
       # x-systemd.device-timeout: 디스크 없을 때 무한대기 방지
       mount:
         path: /mnt/wazuh-indexer-data
-        src: /dev/sdf
+        src: /dev/nvme1n1
         fstype: ext4
         opts: defaults,nofail,x-systemd.device-timeout=10
         state: mounted
@@ -670,6 +670,32 @@
         job: "/usr/local/bin/wazuh-snapshot.sh >> /var/log/wazuh-snapshot.log 2>&1"
         user: root
       tags: snapshot
+
+
+    # ──────────────────────────────────────────
+    # 인덱서 헬스 메트릭 (자동복구 트리거용)
+    # 추가 260610 김강환
+    # ──────────────────────────────────────────
+    - name: 인덱서 헬스 메트릭 푸시 스크립트
+      copy:
+        dest: /usr/local/bin/wazuh-indexer-health.sh
+        mode: '0700'
+        content: |
+          #!/bin/bash
+          # wazuh-indexer active면 1, 아니면 0
+          ACTIVE=$(systemctl is-active wazuh-indexer >/dev/null 2>&1 && echo 1 || echo 0)
+          aws cloudwatch put-metric-data --namespace Custom/Wazuh \
+            --metric-name wazuh_indexer_up --value $ACTIVE \
+            --dimensions Role=wazuh-indexer --region ap-south-2
+      tags: recovery
+
+    - name: 헬스 메트릭 크론 등록 (1분마다)
+      cron:
+        name: "wazuh-indexer-health"
+        minute: "*"
+        job: "/usr/local/bin/wazuh-indexer-health.sh >/dev/null 2>&1"
+        user: root
+      tags: recovery
 
     # ──────────────────────────────────────────
     # 결과 확인
