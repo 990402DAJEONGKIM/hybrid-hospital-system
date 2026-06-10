@@ -33,7 +33,11 @@ MONITORING_DOMAIN=$(aws ssm get-parameter \
   --output text)
 
 # Aurora IP 조회 (Docker bridge 네트워크에서 DNS 해석용)
-AURORA_IP=$(dig +short $AURORA_HOST | head -1)
+AURORA_IP=$(dig +short "${AURORA_HOST}" A | grep -E "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" | head -1 || true)
+ADD_HOST_ARGS=()
+if [ -n "${AURORA_IP}" ]; then
+  ADD_HOST_ARGS+=(--add-host="${AURORA_HOST}:${AURORA_IP}")
+fi
 
 # ── Docker 설치 ──────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
@@ -52,7 +56,7 @@ docker run -d \
   --name keycloak \
   --restart unless-stopped \
   -p 8080:8080 \
-  --add-host="${AURORA_HOST}:${AURORA_IP}" \
+  "${ADD_HOST_ARGS[@]}" \
   -e KC_DB=postgres \
   -e KC_DB_URL="jdbc:postgresql://${AURORA_HOST}:5432/keycloak" \
   -e KC_DB_USERNAME=keycloak \
@@ -103,6 +107,12 @@ except Exception:
     print(raw)
 ')
 
+if [ -z "${WAZUH_CLIENT_SECRET}" ]; then
+  echo "❌ [2026-06-10 박경수] WAZUH_CLIENT_SECRET is empty. Refusing to overwrite Keycloak wazuh client secret." >&2
+  exit 1
+fi
+
+
 
 # [2026-06-10 박경수] Grafana / Monitoring Portal SSO secret 런타임 조회
 GRAFANA_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
@@ -122,6 +132,12 @@ PORTAL_COOKIE_SECRET=$(aws secretsmanager get-secret-value \
   --region $REGION \
   --query "SecretString" \
   --output text)
+
+if [ "${#PORTAL_COOKIE_SECRET}" -ne 16 ] && [ "${#PORTAL_COOKIE_SECRET}" -ne 24 ] && [ "${#PORTAL_COOKIE_SECRET}" -ne 32 ]; then
+  echo "❌ [2026-06-10 박경수] PORTAL_COOKIE_SECRET must be 16, 24, or 32 bytes. Use: openssl rand -hex 16" >&2
+  exit 1
+fi
+
 
 
 
