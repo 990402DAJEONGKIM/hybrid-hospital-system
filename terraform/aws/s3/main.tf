@@ -248,6 +248,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
+  # Lambda 로그 365일 보존 후 삭제, 90일 후 Glacier 전환
+  # ISMS-P 2.9.1: 감사 로그 1년 보존 의무 - 260610 김강환
+  rule {
+    id     = "lambda-lifecycle"
+    status = "Enabled"
+    filter { prefix = "lambda/" }
+    transition {
+      days          = var.wazuh_log_glacier_days   # 90일 후 Glacier IR 전환
+      storage_class = "GLACIER_IR"
+    }
+    expiration { days = var.wazuh_log_retention_days }          # 365일 후 삭제
+    noncurrent_version_expiration { noncurrent_days = 7 }       # 이전 버전 7일 후 삭제
+  }
+
 
 }
 
@@ -432,6 +446,23 @@ resource "aws_s3_bucket_policy" "storage" {
           }
         }
       },
+      {
+        # Firehose → S3 lambda/ prefix 쓰기 허용
+        # Lambda 로그 장기보관용 (ISMS-P 2.9.1) - 260610 김강환
+        Sid    = "AllowFirehoseLambda"
+        Effect = "Allow"
+        Principal = { Service = "firehose.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/lambda/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+
+
+
       # ECS EC2 Vector → S3 쓰기 권한 - 260608 김강환
       {
         Sid    = "AllowECSEC2Vector"
