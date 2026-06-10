@@ -140,6 +140,13 @@ GRAFANA_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
   --query SecretString \
   --output text)
 
+  # [2026-06-10 박경수] Grafana Keycloak SSO client secret 런타임 조회
+GRAFANA_OIDC_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id "aws-grafana-openid-client-secret" \
+  --region ${aws_region} \
+  --query SecretString \
+  --output text)
+
 # ── Secrets Manager에서 Slack webhook 가져오기 (TC 변수 평문 제거) ─────────
 SLACK_WEBHOOK_URL=$(aws secretsmanager get-secret-value \
   --secret-id "aws-wazuh-slack-alarm-webhook" \
@@ -163,6 +170,20 @@ content_security_policy = false
 
 [auth.anonymous]
 enabled = false
+
+[auth.generic_oauth]
+# [2026-06-10 박경수] Keycloak generic_oauth 설정
+enabled = true
+name = Keycloak
+allow_sign_up = true
+auto_login = true
+client_id = grafana
+client_secret = $GRAFANA_OIDC_CLIENT_SECRET
+scopes = openid profile email
+auth_url = https://monitoring.${base_domain}/realms/mzclinic/protocol/openid-connect/auth
+token_url = http://127.0.0.1:8080/realms/mzclinic/protocol/openid-connect/token
+api_url = http://127.0.0.1:8080/realms/mzclinic/protocol/openid-connect/userinfo
+use_refresh_token = true
 
 [analytics]
 reporting_enabled = false
