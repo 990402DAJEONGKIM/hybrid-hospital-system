@@ -335,7 +335,7 @@ def _generate_pdf(year: str, month: str, report_text: str) -> bytes:
     ]
     meta_table = Table(meta, colWidths=[3*cm, 12*cm])
     meta_table.setStyle(TableStyle([
-        ("FONTNAME",    (0,0),(-1,-1), "Helvetica"),
+        ("FONTNAME",    (0,0),(-1,-1), "NanumGothic"),
         ("FONTSIZE",    (0,0),(-1,-1), 9),
         ("TEXTCOLOR",   (0,0),(0,-1),  colors.HexColor("#888888")),
         ("TEXTCOLOR",   (1,0),(1,-1),  colors.HexColor("#333333")),
@@ -376,15 +376,15 @@ def _generate_pdf(year: str, month: str, report_text: str) -> bytes:
                 pdf_table.setStyle(TableStyle([
                     ("BACKGROUND",    (0,0),(-1,0),  colors.HexColor("#1a3a5c")),
                     ("TEXTCOLOR",     (0,0),(-1,0),  colors.white),
-                    ("FONTNAME",      (0,0),(-1,0),  "Helvetica-Bold"),
-                    ("FONTNAME",      (0,1),(-1,-1), "Helvetica"),
+                    ("FONTNAME",      (0,0),(-1,0),  "NanumGothic-Bold"),
+                    ("FONTNAME",      (0,1),(-1,-1), "NanumGothic"),
                     ("FONTSIZE",      (0,0),(-1,-1), 9),
                     ("ROWBACKGROUNDS",(0,1),(-1,-1), [colors.white, colors.HexColor("#f7f9fc")]),
                     ("GRID",          (0,0),(-1,-1), 0.3, colors.HexColor("#dde2ea")),
                     ("TOPPADDING",    (0,0),(-1,-1), 5),
                     ("BOTTOMPADDING", (0,0),(-1,-1), 5),
                     ("LEFTPADDING",   (0,0),(-1,-1), 6),
-                    ("FONTNAME",      (0,-1),(-1,-1), "Helvetica-Bold"),
+                    ("FONTNAME",      (0,-1),(-1,-1), "NanumGothic-Bold"),
                     ("BACKGROUND",    (0,-1),(-1,-1), colors.HexColor("#eef2f7")),
                 ]))
                 story.append(pdf_table)
