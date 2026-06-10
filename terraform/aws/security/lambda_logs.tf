@@ -54,7 +54,7 @@ resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-lambda-01" {
   extended_s3_configuration {
     role_arn            = aws_iam_role.aws-firehose-lambda-role.arn
     bucket_arn          = "arn:aws:s3:::aws-k2p-storage-01"
-    prefix              = "lambda/%Y/%m/%d/"
+    prefix              = "lambda/"
     error_output_prefix = "lambda/errors/"
     buffering_size      = 5
     buffering_interval  = 300
