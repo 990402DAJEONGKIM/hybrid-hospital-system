@@ -161,14 +161,14 @@ resource "aws_sns_topic_subscription" "aws-wazuh-recovery-to-lambda" {
 # 추가 260610 김강환
 data "archive_file" "aws-wazuh-lambda-ami-backup" {
   type        = "zip"
-  source_file = "${path.module}/lambda/ami_backup.py"
-  output_path = "${path.module}/lambda/ami_backup.zip"
+  source_file = "${path.module}/lambda/lambda_ami_backup.py"  # ami_backup.py → lambda_ami_backup.py
+  output_path = "${path.module}/lambda/lambda_ami_backup.zip"
 }
 
 resource "aws_lambda_function" "aws-wazuh-lambda-ami-backup" {
   function_name    = "aws-wazuh-lambda-ami-backup"
   role             = aws_iam_role.aws-wazuh-lambda-ami-backup-role.arn
-  handler          = "ami_backup.handler"
+  handler          = "lambda_ami_backup.lambda_handler"
   runtime          = "python3.12"
   timeout          = 60   # CreateImage는 비동기라 1분이면 충분
   filename         = data.archive_file.aws-wazuh-lambda-ami-backup.output_path
