@@ -8,8 +8,6 @@ data "archive_file" "aws-wazuh-lambda-slack-notify" {
 }
 
 
-
-
 # SNS → Lambda 권한 (wazuh-01)
 resource "aws_lambda_permission" "aws-wazuh-lambda-sns-01" {
   statement_id  = "AllowSNSWazuh01"
@@ -43,7 +41,7 @@ resource "aws_lambda_function" "aws-wazuh-lambda-slack-notify" {
 
   environment {
     variables = {
-      SLACK_WEBHOOK_SECRET = "aws-wazuh-slack-alarm-webhook"
+      SLACK_WEBHOOK_PARAM = "/wazuh/slack-alarm-webhook"
     }
   }
 

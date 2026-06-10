@@ -1,5 +1,4 @@
 #data.tf
-data "aws_caller_identity" "current" {}
 
 data "aws_vpc" "aws-vpc-01" {
   tags = { Name = "aws-vpc-01" }
@@ -24,6 +23,9 @@ data "terraform_remote_state" "kms" {
     }
   }
 }
+
+data "aws_caller_identity" "current" {}
+
 output "wazuh_private_ip" {
   value = aws_instance.aws-wazuh-01.private_ip
   sensitive = true
@@ -39,4 +41,6 @@ output "wazuh_instance_arn" {
   value = aws_instance.aws-wazuh-01.arn
   sensitive = true
 }
+
+
 

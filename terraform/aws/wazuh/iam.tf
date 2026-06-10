@@ -141,7 +141,6 @@ resource "aws_iam_role_policy" "aws-wazuh-s3-policy" {
         Action = ["secretsmanager:GetSecretValue"]
         Resource = [
           "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-indexer-credentials-*",
-          "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-slack-alarm-webhook-*",
           # [2026-06-10 박경수] Wazuh Dashboard Keycloak OIDC 및 세션 cookie secret 읽기 권한 추가
           "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-openid-client-secret-*",
           "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-dashboard-cookie-password-*"
@@ -202,28 +201,20 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-slack-notify-secrets" {
     Version = "2012-10-17"
     Statement = [
       {
-        # alarm webhook 시크릿 1개만 읽기 (최소권한)
         Sid      = "ReadAlarmWebhook"
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-slack-alarm-webhook-*"
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/wazuh/slack-alarm-webhook"
       },
       {
-        # 시크릿 복호화용 KMS (sm 키, Secrets Manager 경유만)
-        Sid      = "DecryptViaSM"
+        Sid      = "DecryptSSMParam"
         Effect   = "Allow"
         Action   = ["kms:Decrypt"]
         Resource = data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com"
-          }
-        }
       }
     ]
   })
 }
-
 
 
 

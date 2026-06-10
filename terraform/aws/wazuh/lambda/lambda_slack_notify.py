@@ -10,11 +10,12 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    SECRET_NAME = os.environ["SLACK_WEBHOOK_SECRET"]   # 시크릿 이름
     REGION = os.environ.get("AWS_REGION", "ap-south-2")
-    _sm = boto3.client("secretsmanager", region_name=REGION)
-    # SM에서 webhook URL 조회 (환경변수 평문 노출 제거 — ISMS-P)
-    slack_webhook_url = _sm.get_secret_value(SecretId=SECRET_NAME)["SecretString"]
+    _ssm = boto3.client("ssm", region_name=REGION)
+    slack_webhook_url = _ssm.get_parameter(
+        Name=os.environ["SLACK_WEBHOOK_PARAM"],
+        WithDecryption=True
+    )["Parameter"]["Value"]
 
     for record in event.get("Records", []):
         try:

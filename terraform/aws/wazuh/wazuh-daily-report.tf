@@ -69,23 +69,16 @@ resource "aws_iam_role_policy" "aws-wazuh-report-policy-01" {
         Resource = ["*"]
       },
       {
-        # webhook을 Secrets Manager에서 읽기 (최소권한, 특정 시크릿)
         Sid      = "ReadReportWebhook"
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["arn:aws:secretsmanager:${var.aws-region-01}:*:secret:aws-wazuh-slack-report-webhook-*"]
+        Action   = ["ssm:GetParameter"]
+        Resource = ["arn:aws:ssm:${var.aws-region-01}:*:parameter/wazuh/slack-report-webhook"]
       },
       {
-        # 시크릿 복호화용 KMS (sm 키)
-        Sid      = "DecryptReportWebhookViaSM"
+        Sid      = "DecryptReportWebhookViaSSM"
         Effect   = "Allow"
         Action   = ["kms:Decrypt"]
         Resource = [data.terraform_remote_state.kms.outputs.secretsmanager_kms_key_arn]
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "secretsmanager.${data.aws_region.current.region}.amazonaws.com"
-          }
-        }
       },
       {
         Sid      = "Logs"
@@ -138,7 +131,7 @@ resource "aws_lambda_function" "aws-wazuh-report-fn-01" {
       S3_BUCKET        = var.s3-alerts-bucket-01
       S3_PREFIX        = var.s3-alerts-prefix-01
       BEDROCK_MODEL_ID = var.bedrock-model-id-01
-      SLACK_WEBHOOK_SECRET = "aws-wazuh-slack-report-webhook"
+      SLACK_WEBHOOK_PARAM = "/wazuh/slack-report-webhook"
       MIN_LEVEL        = "7" # level 7+ 만 보고서 대상
       AWS_REGION_RUNTIME = var.aws-region-01
       VULN_KEY         = "wazuh/vuln/latest.json.gz"
