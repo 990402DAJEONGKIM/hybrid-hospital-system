@@ -368,6 +368,8 @@ docker run -d \
   -p 4180:4180 \
   -e OAUTH2_PROXY_PROVIDER=oidc \
   -e OAUTH2_PROXY_PROVIDER_DISPLAY_NAME=Keycloak \
+  -e OAUTH2_PROXY_SKIP_PROVIDER_BUTTON=true \
+  -e OAUTH2_PROXY_FOOTER=- \
   -e OAUTH2_PROXY_OIDC_ISSUER_URL="https://${MONITORING_DOMAIN}/realms/mzclinic" \
   -e OAUTH2_PROXY_CLIENT_ID="monitoring-portal" \
   -e OAUTH2_PROXY_CLIENT_SECRET="${PORTAL_CLIENT_SECRET}" \
@@ -460,36 +462,213 @@ cat > /var/www/monitoring/index.html << 'HTML'
   <title>mzclinic 통합 모니터링</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
-    header { background: #16213e; padding: 12px 24px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #0f3460; }
-    header h1 { font-size: 18px; color: #e94560; }
-    header span { font-size: 13px; color: #aaa; }
-    .dashboard { display: flex; flex: 1; gap: 4px; padding: 4px; }
-    .panel { flex: 1; display: flex; flex-direction: column; background: #16213e; border-radius: 4px; overflow: hidden; }
-    .panel-header { padding: 8px 16px; font-size: 13px; font-weight: bold; background: #0f3460; display: flex; align-items: center; gap: 8px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; }
-    .grafana-dot { background: #ff6b35; }
-    .wazuh-dot { background: #00b4d8; }
-    iframe { flex: 1; border: none; width: 100%; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #eef2f7;
+      color: #172033;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      height: 48px;
+      background: #111827;
+      color: #f9fafb;
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #263244;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .brand-mark {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #38bdf8, #22c55e);
+      box-shadow: 0 0 0 3px rgba(255,255,255,.08);
+    }
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: .2px;
+      white-space: nowrap;
+    }
+    .brand-subtitle {
+      font-size: 12px;
+      color: #9ca3af;
+      white-space: nowrap;
+    }
+    .status {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    .dashboard {
+      --left: 50%;
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: var(--left) 8px 1fr;
+      gap: 0;
+      padding: 10px;
+    }
+    .panel {
+      min-width: 240px;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+      border: 1px solid #d6dee8;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+    }
+    .panel-header {
+      height: 36px;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1f2937;
+      background: #f8fafc;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: space-between;
+    }
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .grafana-dot { background: #f97316; }
+    .wazuh-dot { background: #0ea5e9; }
+    .panel-link {
+      font-size: 11px;
+      color: #64748b;
+      text-decoration: none;
+    }
+    .panel-link:hover { color: #2563eb; }
+    iframe {
+      flex: 1;
+      border: none;
+      width: 100%;
+      min-height: 0;
+      background: #ffffff;
+    }
+    .splitter {
+      cursor: col-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .splitter::before {
+      content: "";
+      width: 3px;
+      height: 56px;
+      border-radius: 999px;
+      background: #cbd5e1;
+      transition: background .15s ease, height .15s ease;
+    }
+    .splitter:hover::before {
+      background: #64748b;
+      height: 84px;
+    }
+    body.dragging {
+      cursor: col-resize;
+      user-select: none;
+    }
+    @media (max-width: 980px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 8px 1fr;
+      }
+      .splitter {
+        cursor: row-resize;
+      }
+      .splitter::before {
+        width: 56px;
+        height: 3px;
+      }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>mzclinic.cloud</h1>
-    <span>통합 모니터링 대시보드</span>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <div class="brand-title">mzclinic.cloud</div>
+        <div class="brand-subtitle">통합 모니터링 대시보드</div>
+      </div>
+    </div>
+    <div class="status">Keycloak SSO</div>
   </header>
-  <div class="dashboard">
-    <div class="panel">
-      <div class="panel-header"><div class="dot grafana-dot"></div>Grafana</div>
-      <iframe src="https://grafana.mzclinic.cloud" allow="same-origin"></iframe>
-    </div>
-    <div class="panel">
-      <div class="panel-header"><div class="dot wazuh-dot"></div>Wazuh</div>
+
+  <main class="dashboard" id="dashboard">
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span class="dot grafana-dot"></span>Grafana</div>
+        <a class="panel-link" href="https://grafana.mzclinic.cloud/d/msp-hospital-01/msp?orgId=1&theme=light&kiosk" target="_blank" rel="noopener">새 창</a>
+      </div>
+      <iframe src="https://grafana.mzclinic.cloud/d/msp-hospital-01/msp?orgId=1&theme=light&kiosk" allow="same-origin"></iframe>
+    </section>
+
+    <div class="splitter" id="splitter" title="드래그해서 화면 비율 조절"></div>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span class="dot wazuh-dot"></span>Wazuh</div>
+        <a class="panel-link" href="https://wazuh.mzclinic.cloud" target="_blank" rel="noopener">새 창</a>
+      </div>
       <iframe src="https://wazuh.mzclinic.cloud" allow="same-origin"></iframe>
-    </div>
-  </div>
+    </section>
+  </main>
+
+  <script>
+    const dashboard = document.getElementById('dashboard');
+    const splitter = document.getElementById('splitter');
+    const saved = localStorage.getItem('mzclinicDashboardLeft');
+    if (saved) dashboard.style.setProperty('--left', saved);
+
+    let dragging = false;
+
+    splitter.addEventListener('mousedown', () => {
+      dragging = true;
+      document.body.classList.add('dragging');
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('dragging');
+      localStorage.setItem('mzclinicDashboardLeft', dashboard.style.getPropertyValue('--left'));
+    });
+
+    window.addEventListener('mousemove', (event) => {
+      if (!dragging) return;
+      const rect = dashboard.getBoundingClientRect();
+      const percent = ((event.clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.min(75, Math.max(25, percent));
+      dashboard.style.setProperty('--left', clamped.toFixed(1) + '%');
+    });
+  </script>
 </body>
 </html>
+
 HTML
 
 nginx -t && systemctl enable nginx && systemctl restart nginx
