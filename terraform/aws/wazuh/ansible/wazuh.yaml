@@ -169,7 +169,7 @@
 
         - name: wazuh-install-files.tar S3 다운로드
           shell: >
-            aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar
+            aws s3 cp s3://aws-k2p-storage-01/wazuh/wazuh-install-files.tar
             /tmp/wazuh-install-files.tar --region ap-south-2
           environment:
             AWS_DEFAULT_REGION: "ap-south-2"
@@ -231,9 +231,10 @@
       ignore_errors: yes
       tags: config
 
+   # aws-k2p-storage-01 S3 버킷에 최신 인증서 파일을 업로드한 후, 설치된 인증서를 교체하는 방식으로 갱신
     - name: 최신 인증서 S3에서 다운로드
       shell: >
-        aws s3 cp s3://wazuh-ansible-ssm/wazuh-install-files.tar
+        aws s3 cp s3://aws-k2p-storage-01/wazuh/wazuh-install-files.tar
         /tmp/wazuh-install-files.tar --region ap-south-2
       environment:
         AWS_DEFAULT_REGION: "ap-south-2"
@@ -832,49 +833,6 @@
       debug:
         var: vector_status.stdout
       tags: vector
-
-    # # ──────────────────────────────────────────
-    # # CloudWatch Agent
-    # # ──────────────────────────────────────────
-    # - name: CloudWatch Agent 설치
-    #   shell: |
-    #     wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
-    #     dpkg -i /tmp/amazon-cloudwatch-agent.deb
-    #   args:
-    #     creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
-    #   tags: cloudwatch
-
-    # - name: CloudWatch Agent 설정 배포
-    #   copy:
-    #     dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-    #     content: |
-    #       {
-    #         "metrics": {
-    #           "metrics_collected": {
-    #             "mem": {
-    #               "measurement": ["mem_used_percent"]
-    #             },
-    #             "disk": {
-    #               "measurement": ["disk_used_percent"],
-    #               "resources": ["/"]
-    #             }
-    #           },
-    #           "append_dimensions": {
-    #             "InstanceId": "${aws:InstanceId}"
-    #           }
-    #         }
-    #       }
-    #   tags: cloudwatch
-
-    # - name: CloudWatch Agent 시작
-    #   shell: |
-    #     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-    #     -a fetch-config -m ec2 \
-    #     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-    #   args:
-    #     creates: /var/run/amazon-cloudwatch-agent.pid
-    #   tags: cloudwatch
-
 
     # ──────────────────────────────────────────
     # wazuh-manager 헬스체크 크론

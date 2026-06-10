@@ -26,7 +26,7 @@
   <!-- SQL Injection 차단                       -->
   <!-- level 10: Slack 알림 (타겟 공격 가능성)  -->
   <!-- ──────────────────────────────────────── -->
-  <rule id="100402" level="10">
+  <rule id="100402" level="8">
     <if_sid>100400</if_sid>
     <field name="terminatingRuleId">AWSManagedRulesSQLiRuleSet</field>
     <description>WAF SQL Injection 차단 — IP: $(httpRequest.clientIp) URI: $(httpRequest.uri)</description>
@@ -37,7 +37,7 @@
   <!-- OWASP 공통 룰셋 차단                     -->
   <!-- level 10: Slack 알림 (타겟 공격 가능성)  -->
   <!-- ──────────────────────────────────────── -->
-  <rule id="100403" level="10">
+  <rule id="100403" level="8">
     <if_sid>100400</if_sid>
     <field name="terminatingRuleId">AWSManagedRulesCommonRuleSet</field>
     <description>WAF OWASP 공격 차단 — IP: $(httpRequest.clientIp) URI: $(httpRequest.uri)</description>
@@ -48,7 +48,7 @@
   <!-- 알려진 악성 입력값 차단                   -->
   <!-- level 10: Slack 알림                     -->
   <!-- ──────────────────────────────────────── -->
-  <rule id="100404" level="10">
+  <rule id="100404" level="8">
     <if_sid>100400</if_sid>
     <field name="terminatingRuleId">AWSManagedRulesKnownBadInputsRuleSet</field>
     <description>WAF 악성 입력값 차단 — IP: $(httpRequest.clientIp) URI: $(httpRequest.uri)</description>
@@ -59,7 +59,7 @@
   <!-- Rate Limit 차단 — 브루트포스 의심         -->
   <!-- level 12: Slack 알림 (즉각 대응 필요)    -->
   <!-- ──────────────────────────────────────── -->
-  <rule id="100405" level="12">
+  <rule id="100405" level="8">
     <if_sid>100400</if_sid>
     <field name="terminatingRuleId">RateLimitAuthEndpoint</field>
     <description>WAF Rate Limit 차단 — 브루트포스 의심 IP: $(httpRequest.clientIp)</description>

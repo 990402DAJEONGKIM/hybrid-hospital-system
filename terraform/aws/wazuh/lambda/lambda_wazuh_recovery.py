@@ -4,7 +4,6 @@ import boto3
 from botocore.exceptions import ClientError
 
 REGION        = os.environ.get('TARGET_REGION', 'ap-south-2')
-AMI_ID        = os.environ['GOLDEN_AMI_ID']
 SUBNET_ID     = os.environ['SUBNET_ID']
 SG_ID         = os.environ['SECURITY_GROUP_ID']
 PROFILE_NAME  = os.environ['INSTANCE_PROFILE']
@@ -111,9 +110,10 @@ def _scenario1_rebuild(target_id):
         print("[SUCCESS] 기존 인스턴스 종료 완료")
 
     # AMI로 새 EC2 생성
-    print(f"[ACTION] AMI {AMI_ID}로 새 EC2 생성 중...")
+    ami_id = _get_latest_ami()
+    print(f"[ACTION] AMI {ami_id}로 새 EC2 생성 중...")
     resp = ec2.run_instances(
-        ImageId=AMI_ID,
+        ImageId=ami_id,
         InstanceType='t3.large',
         SubnetId=SUBNET_ID,
         SecurityGroupIds=[SG_ID],
@@ -214,3 +214,16 @@ def _run_ssm(instance_id, commands):
     if result['Status'] != 'Success':
         print(f"[STDERR 로그 추출]:\n{result.get('StandardErrorContent', '')}")
         raise RuntimeError(f"Wazuh 내부 서비스 정상화 명령 수행 실패: {result['Status']}")
+
+# 최신 Wazuh Golden AMI 자동 조회 - 260609 김강환
+# AMI 이름 패턴: aws-wazuh-* (날짜 포함)
+def _get_latest_ami():
+    resp = ec2.describe_images(
+        Filters=[
+            {'Name': 'name', 'Values': ['aws-wazuh-*']},
+            {'Name': 'owner-id', 'Values': ['476293896981']},
+            {'Name': 'state', 'Values': ['available']}
+        ]
+    )
+    images = sorted(resp['Images'], key=lambda x: x['CreationDate'], reverse=True)
+    return images[0]['ImageId']

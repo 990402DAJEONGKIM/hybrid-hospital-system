@@ -136,16 +136,7 @@
     <group>web_attack,sql_injection</group>
   </rule>
  
-  <!-- ───────────────────────────────────── -->
-  <!-- SSH Brute Force -->
-  <!-- ───────────────────────────────────── -->
- 
-  <rule id="100013" level="10" frequency="5" timeframe="30">
-    <if_matched_sid>5712</if_matched_sid>
-    <description>30초 내 SSH 로그인 실패 5회 이상 - Brute Force 의심</description>
-    <group>authentication_failed,bruteforce</group>
-  </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- 중요 실행 파일 변조 -->
   <!-- if_sid 550 = 파일 수정 -->
@@ -300,12 +291,23 @@
     <group>fim,ssh_attack,persistence</group>
   </rule>
 
-<rule id="100039" level="0">
-    <if_sid>100003</if_sid>
-    <match>ssm-user</match>
-    <description>SSM root 전환 — 노이즈 제거</description>
-    <group>noise</group>
-</rule>
+  <rule id="100039" level="0">
+      <if_sid>100003</if_sid>
+      <match>ssm-user</match>
+      <description>SSM root 전환 — 노이즈 제거</description>
+      <group>noise</group>
+  </rule>
+
+
+  <!-- NTP 동기화 실패 탐지 -->
+  <rule id="100040" level="7">
+    <if_sid>1002</if_sid>
+    <match>No network connectivity</match>
+    <program_name>systemd-timesyncd</program_name>
+    <description>NTP 시간 동기화 실패 — $(hostname)</description>
+    <group>ntp,availability</group>
+  </rule>
+
 
 
 </group>
@@ -342,7 +344,7 @@
   </rule>
   
   <!-- 랜섬웨어: 60초 내 파일 변조 20건 이상 -->
-  <rule id="100508" level="15" frequency="20" timeframe="60">
+  <rule id="100508" level="15" frequency="100" timeframe="60">
     <if_matched_sid>550</if_matched_sid>
     <description>랜섬웨어 의심 — 짧은 시간 내 대량 파일 변조</description>
     <group>ransomware,malware,critical</group>
@@ -352,8 +354,8 @@
   <!-- /tmp, /dev/shm 실행파일 생성 — 드롭퍼 의심 -->
   <rule id="100509" level="14">
     <if_sid>554</if_sid>
-    <field name="syscheck.path" type="pcre2">^/(tmp|dev/shm)/</field>
-    <field name="syscheck.perm_after" type="pcre2">x</field>
+    <field name="file" type="pcre2">^/(tmp|dev/shm)/</field>
+    <field name="perm" type="pcre2">x</field>
     <description>임시 디렉토리 실행파일 생성 — 랜섬웨어/드롭퍼 의심</description>
     <group>ransomware,malware,persistence</group>
     <mitre><id>T1059</id></mitre>

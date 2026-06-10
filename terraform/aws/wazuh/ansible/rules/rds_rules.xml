@@ -198,5 +198,64 @@
   </rule>
 
 
+  <!-- Keycloak 마이그레이션 DDL 무시 -->
+  <rule id="100125" level="0">
+    <if_sid>100101</if_sid>
+    <match>keycloak@keycloak</match>
+    <description>Keycloak 마이그레이션 DDL - 무시</description>
+    <group>noise</group>
+  </rule>
 
+  <!-- Keycloak DROP 무시 -->
+  <rule id="100126" level="0">
+    <if_sid>100107</if_sid>
+    <match>keycloak@keycloak</match>
+    <description>Keycloak 마이그레이션 DROP - 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- Keycloak SELECT 대량 조회 무시 -->
+  <rule id="100127" level="0">
+    <if_sid>100116</if_sid>
+    <match>keycloak@keycloak</match>
+    <description>Keycloak 내부 SELECT 대량 조회 - 무시</description>
+    <group>noise</group>
+  </rule>
+
+
+  <!-- Keycloak 사용자 생성 무시 -->
+  <rule id="100128" level="0">
+    <if_sid>100110</if_sid>
+    <match>keycloak</match>
+    <description>Keycloak DB 사용자 생성 - 무시</description>
+    <group>noise</group>
+  </rule>
+
+
+  <!-- Keycloak ROLE/GRANT 무시 -->
+  <rule id="100129" level="0">
+    <if_sid>100108</if_sid>
+    <match>keycloak</match>
+    <description>Keycloak GRANT/ROLE 변경 - 무시</description>
+    <group>noise</group>
+  </rule>
+
+
+  <!-- 업무시간 외 RDS SELECT - 내부자 위협 의심 - 260609 김강환 -->
+  <rule id="100130" level="10">
+    <if_sid>100103</if_sid>
+    <time>9 am - 12 am</time>
+    <description>업무시간 외 RDS SELECT 탐지 - 내부자 위협 의심</description>
+    <group>after_hours,insider_threat,</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
+  <!-- 주말 RDS SELECT - 내부자 위협 의심 - 260609 김강환 -->
+  <rule id="100131" level="10">
+    <if_sid>100103</if_sid>
+    <weekday>saturday,sunday</weekday>
+    <description>주말 RDS SELECT 탐지 - 내부자 위협 의심</description>
+    <group>after_hours,insider_threat,weekend,</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
 </group>
