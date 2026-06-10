@@ -51,7 +51,7 @@ resource "aws_ebs_volume" "aws-wazuh-indexer-data-01" {
 # skip_destroy: 인스턴스 교체/삭제 시 볼륨까지 같이 지워지지 않게
 # 추가 260610 김강환
 resource "aws_volume_attachment" "aws-wazuh-indexer-data-att-01" {
-  device_name  = "/dev/sdc"  # sdb → sdc
+  device_name  = "/dev/sdf"  # sdb → sdf
   volume_id    = aws_ebs_volume.aws-wazuh-indexer-data-01.id
   instance_id  = aws_instance.aws-wazuh-indexer.id
   skip_destroy = true
