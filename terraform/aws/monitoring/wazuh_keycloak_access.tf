@@ -11,12 +11,14 @@ data "aws_security_group" "aws_wazuh_sg" {
   vpc_id = data.aws_vpc.main.id
 }
 
-resource "aws_security_group_rule" "allow_wazuh_dashboard_to_monitoring_keycloak_http" {
-  type                     = "ingress"
-  security_group_id        = aws_security_group.aws-monitoring-sg.id
-  source_security_group_id = data.aws_security_group.aws_wazuh_sg.id
-  from_port                = 80
-  to_port                  = 80
-  protocol                 = "tcp"
-  description              = "Allow Wazuh Dashboard to access Keycloak HTTP endpoints on monitoring EC2"
+# [2026-06-10 박경수] SecurityGroupRuleId 기반 신형 리소스로 SG rule을 IaC 관리
+resource "aws_vpc_security_group_ingress_rule" "allow_wazuh_dashboard_to_monitoring_keycloak_http" {
+  security_group_id            = aws_security_group.aws-monitoring-sg.id
+  referenced_security_group_id = data.aws_security_group.aws_wazuh_sg.id
+
+  ip_protocol = "tcp"
+  from_port   = 80
+  to_port     = 80
+
+  description = "Allow Wazuh Dashboard to access Keycloak HTTP endpoints on monitoring EC2"
 }
