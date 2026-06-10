@@ -168,7 +168,7 @@ data "archive_file" "aws-wazuh-lambda-ami-backup" {
 resource "aws_lambda_function" "aws-wazuh-lambda-ami-backup" {
   function_name    = "aws-wazuh-lambda-ami-backup"
   role             = aws_iam_role.aws-wazuh-lambda-ami-backup-role.arn
-  handler          = "lambda_ami_backup.lambda_handler"
+  handler          = "lambda_ami_backup.handler"
   runtime          = "python3.12"
   timeout          = 60   # CreateImage는 비동기라 1분이면 충분
   filename         = data.archive_file.aws-wazuh-lambda-ami-backup.output_path
