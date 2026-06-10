@@ -148,10 +148,11 @@ GRAFANA_OIDC_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
   --output text)
 
 # ── Secrets Manager에서 Slack webhook 가져오기 (TC 변수 평문 제거) ─────────
-SLACK_WEBHOOK_URL=$(aws secretsmanager get-secret-value \
-  --secret-id "aws-wazuh-slack-alarm-webhook" \
+SLACK_WEBHOOK_URL=$(aws ssm get-parameter \
+  --name "/wazuh/slack-alarm-webhook" \
+  --with-decryption \
   --region ${aws_region} \
-  --query SecretString \
+  --query Parameter.Value \
   --output text)
 
 # ── Grafana 설정 ─────────────────────────────────────────
