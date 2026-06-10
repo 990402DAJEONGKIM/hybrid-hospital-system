@@ -379,7 +379,7 @@ resource "aws_secretsmanager_secret" "monitoring_portal_openid_client_secret" {
 # ─────────────────────────────────────────────────────────
 # Monitoring Portal oauth2-proxy cookie secret
 # 값은 고정 난수여야 하며, 매 배포마다 바뀌면 포털 세션이 무효화된다.
-# SecretString 예: openssl rand -base64 32
+# SecretString 예: openssl rand -hex 16  # 32글자 = oauth2-proxy cookie_secret 32 bytes
 # [2026-06-10 박경수] Monitoring Portal oauth2-proxy cookie/session 보호용
 # ─────────────────────────────────────────────────────────
 resource "aws_secretsmanager_secret" "monitoring_portal_cookie_secret" {

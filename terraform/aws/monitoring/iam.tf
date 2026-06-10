@@ -58,7 +58,10 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
           # [2026-06-10 박경수] Grafana / Monitoring Portal Keycloak SSO secret 런타임 조회
           "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-grafana-openid-client-secret*",
           "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-monitoring-portal-openid-client-secret*",
-          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-monitoring-portal-cookie-secret*"
+          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-monitoring-portal-cookie-secret*",
+
+          # [2026-06-10 박경수] Keycloak wazuh client secret 재동기화용 런타임 조회 권한
+          "arn:aws:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:aws-wazuh-openid-client-secret*"
           
         ]
       },
