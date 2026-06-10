@@ -24,7 +24,7 @@ resource "aws_lambda_function" "aws-wazuh-indexer-recovery" {
       PRIVATE_IP       = "10.0.13.83"
       INSTANCE_NAME    = "aws-wazuh-indexer"
       DATA_VOLUME_NAME = "aws-wazuh-indexer-data-01"
-      DATA_DEVICE      = "/dev/sdb"
+      DATA_DEVICE      = "/dev/sdc"
       MOUNT_POINT      = "/mnt/wazuh-indexer-data"
       AMI_NAME_PREFIX  = "aws-wazuh-indexer-"
       ACCOUNT_ID       = data.aws_caller_identity.current.account_id
