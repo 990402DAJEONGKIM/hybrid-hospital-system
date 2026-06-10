@@ -191,6 +191,90 @@
       <aws_log_groups>/aws/vendedlogs/vpn/aws-vpn-gcp</aws_log_groups>
       <regions>{{ aws_region }}</regions>
     </service>
+    <!-- Lambda 로그 수집 (CloudWatch Logs) - 260610 김강환 -->
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-dump</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/mzclinic-keycloak-db-rotator</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-wazuh-lambda-agent-cleanup</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-wazuh-report-fn-01</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-jwt-rotator</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-cost-monthly-report</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-wazuh-lambda-indexer-recovery</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-vault-rotator</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-ecs-db-rotator</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-cost-gcp-collector</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-cost-to-kb</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-cost-chat</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-wazuh-lambda-recovery</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-cost-anomaly</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-wazuh-lambda-slack-notify</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-cost-aws-collector</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-rotation</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-cost-onprem-calc</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-cost-dashboard</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-ecs-redeployer</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+
+
+
     <!-- CloudTrail -->
     <bucket type="cloudtrail">
       <name>aws-k2p-storage-01</name>

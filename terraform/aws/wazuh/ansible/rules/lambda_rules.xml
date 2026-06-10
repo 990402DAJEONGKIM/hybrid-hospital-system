@@ -1,0 +1,42 @@
+<!-- =========================================================
+     lambda_rules.xml
+     AWS Lambda 실행 로그 탐지 룰
+     
+     룰 ID 범위: 100800~100819
+     
+     수집 경로: CloudWatch Logs → Wazuh wodle (5분마다)
+     
+     동작:
+       Lambda 실행 실패 → level 12 → Slack
+       Bedrock 호출 실패 → level 7 → 대시보드만
+     
+     ISMS-P 2.9.1 로그 관리
+     ========================================================= -->
+
+<group name="lambda,aws,">
+
+  <!-- Lambda 실행 에러 탐지 → Slack - 260610 김강환 -->
+  <rule id="100800" level="12">
+    <location>Wazuh-AWS</location>
+    <match>errorMessage|Task timed out|오류:</match>
+    <description>Lambda 실행 실패 탐지 — $(aws.log_group)</description>
+    <group>lambda,error,aws,</group>
+  </rule>
+
+  <!-- Lambda 타임아웃 탐지 → Slack - 260610 김강환 -->
+  <rule id="100801" level="12">
+    <location>Wazuh-AWS</location>
+    <match>Task timed out after</match>
+    <description>Lambda 타임아웃 — $(aws.log_group)</description>
+    <group>lambda,timeout,aws,</group>
+  </rule>
+
+  <!-- Bedrock InvokeModel 실패 → 대시보드만 - 260610 김강환 -->
+  <rule id="100810" level="7">
+    <if_sid>100800</if_sid>
+    <match>ValidationException|ThrottlingException|ServiceUnavailableException</match>
+    <description>Bedrock InvokeModel 실패 — 대시보드 기록</description>
+    <group>bedrock,error,aws,</group>
+  </rule>
+
+</group>
