@@ -5,6 +5,11 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+data "aws_route53_zone" "mzclinic" {
+  name         = "mzclinic.cloud."
+  private_zone = false
+}
+
 
 # ---------------------------------------------------------
 # IAM — Lambda 공통 실행 역할
@@ -43,8 +48,7 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"]
         Resource = [
           data.terraform_remote_state.s3.outputs.storage_bucket_arn,
-          "${data.terraform_remote_state.s3.outputs.storage_bucket_arn}/cost-raw/*",
-          "${data.terraform_remote_state.s3.outputs.storage_bucket_arn}/cost-chunks/*",
+          "${data.terraform_remote_state.s3.outputs.storage_bucket_arn}/cost/*",
         ]
       },
       {
@@ -71,8 +75,60 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Action = ["ses:SendEmail", "ses:SendRawEmail"]
         Resource = "*"
       },
+      {
+        Sid    = "CostExplorer"
+        Effect = "Allow"
+        Action = ["ce:GetCostAndUsage"]
+        Resource = "*"
+      },
     ]
   })
+}
+
+# ---------------------------------------------------------
+# Lambda Layer — reportlab (PDF 생성용)
+# ---------------------------------------------------------
+resource "aws_lambda_layer_version" "reportlab" {
+  layer_name          = "aws-cost-reportlab"
+  filename            = "${path.module}/lambda/reportlab_layer.zip"
+  source_code_hash    = filebase64sha256("${path.module}/lambda/reportlab_layer.zip")
+  compatible_runtimes = ["python3.12"]
+  description         = "reportlab 4.2.5 — monthly_report PDF 생성용"
+}
+
+# ---------------------------------------------------------
+# Lambda — AWS Cost Collector
+# ---------------------------------------------------------
+data "archive_file" "aws_cost_collector" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/aws_cost_collector"
+  output_path = "${path.module}/lambda/aws_cost_collector.zip"
+}
+
+resource "aws_cloudwatch_log_group" "aws_cost_collector" {
+  name              = "/aws/lambda/aws-lambda-cost-aws-collector"
+  retention_in_days = 30
+  tags              = merge(local.common_tags, { Name = "aws-cwl-cost-aws-collector" })
+}
+
+resource "aws_lambda_function" "aws_cost_collector" {
+  function_name    = "aws-lambda-cost-aws-collector"
+  role             = aws_iam_role.lambda_exec.arn
+  handler          = "handler.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 120
+  memory_size      = 128
+  filename         = data.archive_file.aws_cost_collector.output_path
+  source_code_hash = data.archive_file.aws_cost_collector.output_base64sha256
+
+  environment {
+    variables = {
+      RAW_BUCKET = data.terraform_remote_state.s3.outputs.storage_bucket_name
+    }
+  }
+
+  tags       = merge(local.common_tags, { Name = "aws-lambda-cost-aws-collector" })
+  depends_on = [aws_cloudwatch_log_group.aws_cost_collector]
 }
 
 # ---------------------------------------------------------
@@ -209,17 +265,19 @@ resource "aws_lambda_function" "monthly_report" {
   memory_size      = 512
   filename         = data.archive_file.monthly_report.output_path
   source_code_hash = data.archive_file.monthly_report.output_base64sha256
+  layers           = [aws_lambda_layer_version.reportlab.arn]
 
   environment {
     variables = {
       CHUNKS_BUCKET  = data.terraform_remote_state.s3.outputs.storage_bucket_name
       BEDROCK_REGION = var.bedrock_region
       ADMIN_EMAIL    = var.admin_email
+      FROM_EMAIL     = "no-reply@mzclinic.cloud"
       SES_REGION     = var.aws_region
     }
   }
 
-  depends_on = [aws_cloudwatch_log_group.monthly_report]
+  depends_on = [aws_cloudwatch_log_group.monthly_report, aws_lambda_layer_version.reportlab]
   tags       = merge(local.common_tags, { Name = "aws-lambda-cost-monthly-report" })
 }
 
@@ -635,6 +693,7 @@ resource "aws_iam_role_policy" "scheduler" {
       Effect = "Allow"
       Action = "lambda:InvokeFunction"
       Resource = [
+        aws_lambda_function.aws_cost_collector.arn,
         aws_lambda_function.gcp_billing_collector.arn,
         aws_lambda_function.onprem_cost_calculator.arn,
         aws_lambda_function.cost_to_kb.arn,
@@ -648,6 +707,21 @@ resource "aws_iam_role_policy" "scheduler" {
 # ---------------------------------------------------------
 # EventBridge Schedules
 # ---------------------------------------------------------
+resource "aws_scheduler_schedule" "aws_cost_collector" {
+  name        = "aws-sch-cost-aws-collector"
+  description = "AWS 서비스별 비용 수집 — 매일 01:00 KST"
+  group_name  = "default"
+
+  flexible_time_window { mode = "OFF" }
+  schedule_expression          = "cron(0 16 * * ? *)"
+  schedule_expression_timezone = "UTC"
+
+  target {
+    arn      = aws_lambda_function.aws_cost_collector.arn
+    role_arn = aws_iam_role.scheduler.arn
+  }
+}
+
 resource "aws_scheduler_schedule" "gcp_billing_collector" {
   name        = "aws-sch-cost-gcp-collector"
   description = "GCP 빌링 데이터 수집 — 매일 01:00 KST"
@@ -710,15 +784,40 @@ resource "aws_scheduler_schedule" "anomaly_detector" {
 
 resource "aws_scheduler_schedule" "monthly_report" {
   name        = "aws-sch-cost-monthly-report"
-  description = "월간 리포트 발송 — 매월 1일 09:00 KST"
+  description = "월간 리포트 발송 — 매월 28~31일 09:00 KST 실행, Lambda가 마지막 평일 여부 판단 후 발송"
   group_name  = "default"
 
   flexible_time_window { mode = "OFF" }
-  schedule_expression          = "cron(0 0 1 * ? *)"
+  # 매월 28~31일 09:00 KST (= 00:00 UTC) 실행
+  # Lambda 내부에서 오늘이 해당 월 마지막 평일인지 확인 후 발송 여부 결정
+  schedule_expression          = "cron(0 0 28-31 * ? *)"
   schedule_expression_timezone = "UTC"
 
   target {
     arn      = aws_lambda_function.monthly_report.arn
     role_arn = aws_iam_role.scheduler.arn
   }
+}
+
+# ---------------------------------------------------------
+# SES — mzclinic.cloud 도메인 인증 + DKIM
+# ---------------------------------------------------------
+resource "aws_sesv2_email_identity" "mzclinic" {
+  email_identity = "mzclinic.cloud"
+
+  dkim_signing_attributes {
+    next_signing_key_length = "RSA_2048_BIT"
+  }
+
+  tags = merge(local.common_tags, { Name = "aws-ses-mzclinic-cloud" })
+}
+
+# DKIM 인증용 CNAME 레코드 3개 — Route 53에 자동 추가
+resource "aws_route53_record" "ses_dkim" {
+  count   = 3
+  zone_id = data.aws_route53_zone.mzclinic.zone_id
+  name    = "${aws_sesv2_email_identity.mzclinic.dkim_signing_attributes[0].tokens[count.index]}._domainkey.mzclinic.cloud"
+  type    = "CNAME"
+  ttl     = 300
+  records = ["${aws_sesv2_email_identity.mzclinic.dkim_signing_attributes[0].tokens[count.index]}.dkim.${data.aws_region.current.name}.amazonses.com"]
 }

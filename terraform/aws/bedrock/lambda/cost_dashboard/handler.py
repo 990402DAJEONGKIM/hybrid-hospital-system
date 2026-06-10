@@ -12,7 +12,7 @@ import boto3
 
 S3 = boto3.client("s3")
 BUCKET = os.environ["RAW_BUCKET"]
-RAW_PREFIX = "cost-raw"
+RAW_PREFIX = "cost/cost-raw"
 ANNUAL_BUDGET_KRW = int(os.environ.get("ANNUAL_BUDGET_KRW", "30000000"))
 
 

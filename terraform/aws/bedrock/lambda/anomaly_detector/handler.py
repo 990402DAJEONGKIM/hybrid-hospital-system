@@ -14,7 +14,7 @@ S3 = boto3.client("s3")
 SES = boto3.client("ses", region_name=os.environ["SES_REGION"])
 
 BUCKET = os.environ["BUCKET"]
-RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost-raw")
+RAW_PREFIX = os.environ.get("RAW_PREFIX", "cost/cost-raw")
 ALERT_EMAIL = os.environ["ALERT_EMAIL"]
 ANOMALY_THRESHOLD = 0.30
 

@@ -15,8 +15,8 @@ S3 = boto3.client("s3")
 SSM = boto3.client("ssm")
 RAW_BUCKET = os.environ["RAW_BUCKET"]
 CHUNKS_BUCKET = os.environ["CHUNKS_BUCKET"]
-RAW_PREFIX = "cost-raw"
-CHUNKS_PREFIX = "cost-chunks"
+RAW_PREFIX = "cost/cost-raw"
+CHUNKS_PREFIX = "cost/cost-chunks"
 ANNUAL_BUDGET_KRW = int(os.environ.get("ANNUAL_BUDGET_KRW", "30000000"))
 SSM_EXIM_API_KEY = os.environ.get("SSM_EXIM_API_KEY", "")
 
@@ -30,7 +30,7 @@ def _get_usd_krw_rate(year: str, month: str) -> float:
         return 1400.0
 
     try:
-        api_key = SSM.get_parameter(Name=SSM_EXIM_API_KEY, WithDecryption=False)["Parameter"]["Value"]
+        api_key = SSM.get_parameter(Name=SSM_EXIM_API_KEY, WithDecryption=True)["Parameter"]["Value"]
     except Exception as e:
         print(f"환율 API 키 조회 실패: {e}")
         return 1400.0
@@ -221,7 +221,14 @@ def _build_chunks(
 
 
 def lambda_handler(event, context):
-    (year, month), (prev_year, prev_month) = _get_target_months()
+    # 이벤트로 year/month 직접 지정 가능 (테스트 및 재처리용)
+    if event.get("year") and event.get("month"):
+        year, month = str(event["year"]), f"{int(event['month']):02d}"
+        # 전월 계산
+        prev_date = date(int(year), int(month), 1) - timedelta(days=1)
+        prev_year, prev_month = str(prev_date.year), f"{prev_date.month:02d}"
+    else:
+        (year, month), (prev_year, prev_month) = _get_target_months()
 
     usd_to_krw = _get_usd_krw_rate(year, month)
     prev_usd_to_krw = _get_usd_krw_rate(prev_year, prev_month)

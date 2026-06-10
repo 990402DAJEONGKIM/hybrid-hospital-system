@@ -10,7 +10,7 @@ import boto3
 
 BEDROCK_REGION = os.environ["BEDROCK_REGION"]
 CHUNKS_BUCKET = os.environ["CHUNKS_BUCKET"]
-CHUNKS_PREFIX = "cost-chunks"
+CHUNKS_PREFIX = "cost/cost-chunks"
 
 S3 = boto3.client("s3")
 BEDROCK = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
