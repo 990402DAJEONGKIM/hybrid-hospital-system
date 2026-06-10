@@ -17,7 +17,7 @@ resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-root-usage" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-root-usage" {
-  alarm_name          = "ct-root-account-usage"
+  alarm_name          = "aws-cw-ct-root-usage"
   alarm_description   = "root 계정 사용 탐지 - 즉시 확인 필요"
   metric_name         = "RootAccountUsageCount"
   namespace           = "CloudTrailAlarms"
@@ -33,7 +33,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-root-usage" {
 # ── IAM 정책 변경 탐지 ──────────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-iam-policy-change" {
   depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "IAMPolicyChange"
+  name           = "aws-cw-ct-iam-policy-change"
   log_group_name = "/aws/cloudtrail/main"
   pattern        = "{ ($.eventName = DeleteGroupPolicy) || ($.eventName = DeleteRolePolicy) || ($.eventName = DeleteUserPolicy) || ($.eventName = PutGroupPolicy) || ($.eventName = PutRolePolicy) || ($.eventName = PutUserPolicy) || ($.eventName = CreatePolicy) || ($.eventName = DeletePolicy) || ($.eventName = AttachRolePolicy) || ($.eventName = DetachRolePolicy) }"
 
@@ -45,7 +45,7 @@ resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-iam-policy-change" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-iam-policy-change" {
-  alarm_name          = "ct-iam-policy-change"
+  alarm_name          = "aws-cw-ct-iam-policy-change"
   alarm_description   = "IAM 정책 변경 탐지"
   metric_name         = "IAMPolicyChangeCount"
   namespace           = "CloudTrailAlarms"
@@ -61,7 +61,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-iam-policy-change" {
 # ── 보안그룹 변경 탐지 ──────────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-sg-change" {
   depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "SecurityGroupChange"
+  name           = "aws-cw-ct-sg-change"
   log_group_name = "/aws/cloudtrail/main"
   pattern        = "{ ($.eventName = AuthorizeSecurityGroupIngress) || ($.eventName = AuthorizeSecurityGroupEgress) || ($.eventName = RevokeSecurityGroupIngress) || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup) || ($.eventName = DeleteSecurityGroup) }"
 
@@ -73,7 +73,7 @@ resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-sg-change" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-sg-change" {
-  alarm_name          = "ct-security-group-change"
+  alarm_name          = "aws-cw-ct-sg-change"
   alarm_description   = "보안그룹 변경 탐지"
   metric_name         = "SecurityGroupChangeCount"
   namespace           = "CloudTrailAlarms"
@@ -89,7 +89,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-sg-change" {
 # ── CloudTrail 비활성화 탐지 ────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-disabled" {
   depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "CloudTrailDisabled"
+  name           = "aws-cw-ct-disabled"
   log_group_name = "/aws/cloudtrail/main"
   pattern        = "{ ($.eventName = StopLogging) || ($.eventName = DeleteTrail) || ($.eventName = UpdateTrail) }"
 
@@ -101,7 +101,7 @@ resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-disabled" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-disabled" {
-  alarm_name          = "ct-cloudtrail-disabled"
+  alarm_name          = "aws-cw-ct-disabled"
   alarm_description   = "CloudTrail 비활성화 시도 탐지 - 즉시 확인 필요"
   metric_name         = "CloudTrailDisabledCount"
   namespace           = "CloudTrailAlarms"
@@ -117,7 +117,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-disabled" {
 # ── 콘솔 로그인 실패 탐지 ────────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-console-login-failed" {
   depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "ConsoleLoginFailed"
+  name           = "aws-cw-ct-console-login-failed"
   log_group_name = "/aws/cloudtrail/main"
   pattern        = "{ ($.eventName = ConsoleLogin) && ($.errorMessage = \"Failed authentication\") }"
 
@@ -129,7 +129,7 @@ resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-console-login-failed" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-console-login-failed" {
-  alarm_name          = "ct-console-login-failed"
+  alarm_name          = "aws-cw-ct-console-login-failed"
   alarm_description   = "콘솔 로그인 실패 탐지 - ISMS-P 2.5.1"
   metric_name         = "ConsoleLoginFailedCount"
   namespace           = "CloudTrailAlarms"
@@ -145,7 +145,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-console-login-failed" {
 # ── MFA 없는 콘솔 로그인 탐지 ───────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-no-mfa-login" {
   depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "NoMFAConsoleLogin"
+  name           = "aws-cw-ct-no-mfa-login"
   log_group_name = "/aws/cloudtrail/main"
   pattern        = "{ ($.eventName = ConsoleLogin) && ($.additionalEventData.MFAUsed != \"Yes\") && ($.userIdentity.type != \"AssumedRole\") }"
 
@@ -157,7 +157,7 @@ resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-no-mfa-login" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-no-mfa-login" {
-  alarm_name          = "ct-no-mfa-console-login"
+  alarm_name          = "aws-cw-ct-no-mfa-console-login"
   alarm_description   = "MFA 없는 콘솔 로그인 탐지 - ISMS-P 2.5.2"
   metric_name         = "NoMFAConsoleLoginCount"
   namespace           = "CloudTrailAlarms"
@@ -173,7 +173,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-no-mfa-login" {
 # ── S3 버킷 정책 변경 탐지 ──────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-s3-policy-change" {
   depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "S3BucketPolicyChange"
+  name           = "aws-cw-ct-s3-policy-change"
   log_group_name = "/aws/cloudtrail/main"
   pattern        = "{ ($.eventName = PutBucketPolicy) || ($.eventName = DeleteBucketPolicy) || ($.eventName = PutBucketAcl) || ($.eventName = PutBucketCors) || ($.eventName = PutBucketLifecycle) || ($.eventName = PutBucketReplication) || ($.eventName = DeleteBucketCors) || ($.eventName = DeleteBucketLifecycle) || ($.eventName = DeleteBucketReplication) }"
 
@@ -185,7 +185,7 @@ resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-s3-policy-change" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-s3-policy-change" {
-  alarm_name          = "ct-s3-bucket-policy-change"
+  alarm_name          = "aws-cw-ct-s3-policy-change"
   alarm_description   = "S3 버킷 정책 변경 탐지 - ISMS-P 2.8.1"
   metric_name         = "S3BucketPolicyChangeCount"
   namespace           = "CloudTrailAlarms"
@@ -201,7 +201,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-s3-policy-change" {
 # ── VPC 변경 탐지 ────────────────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-vpc-change" {
   depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "VPCChange"
+  name           = "aws-cw-ct-vpc-change"
   log_group_name = "/aws/cloudtrail/main"
   pattern        = "{ ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) || ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection) || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection) || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc) || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink) || ($.eventName = EnableVpcClassicLink) }"
 
@@ -213,7 +213,7 @@ resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-vpc-change" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-vpc-change" {
-  alarm_name          = "ct-vpc-change"
+  alarm_name          = "aws-cw-ct-vpc-change"
   alarm_description   = "VPC 변경 탐지 - ISMS-P 2.6.1"
   metric_name         = "VPCChangeCount"
   namespace           = "CloudTrailAlarms"
