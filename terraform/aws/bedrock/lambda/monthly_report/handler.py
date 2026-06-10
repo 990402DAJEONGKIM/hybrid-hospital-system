@@ -282,6 +282,13 @@ def _generate_pdf(year: str, month: str, report_text: str) -> bytes:
         Paragraph, SimpleDocTemplate, Spacer,
         Table, TableStyle, HRFlowable,
     )
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    # 한글 폰트 등록 (Lambda 패키지에 포함된 NanumGothic)
+    font_dir = os.path.dirname(os.path.abspath(__file__))
+    pdfmetrics.registerFont(TTFont("NanumGothic",      os.path.join(font_dir, "NanumGothic.ttf")))
+    pdfmetrics.registerFont(TTFont("NanumGothic-Bold", os.path.join(font_dir, "NanumGothic-Bold.ttf")))
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -292,25 +299,25 @@ def _generate_pdf(year: str, month: str, report_text: str) -> bytes:
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle("title",
-        fontSize=16, fontName="Helvetica-Bold",
+        fontSize=16, fontName="NanumGothic-Bold",
         textColor=colors.HexColor("#1a3a5c"), spaceAfter=6)
     sub_style = ParagraphStyle("sub",
-        fontSize=10, fontName="Helvetica",
+        fontSize=10, fontName="NanumGothic",
         textColor=colors.HexColor("#555555"), spaceAfter=14)
     h2_style = ParagraphStyle("h2",
-        fontSize=13, fontName="Helvetica-Bold",
+        fontSize=13, fontName="NanumGothic-Bold",
         textColor=colors.HexColor("#1a3a5c"),
         spaceBefore=14, spaceAfter=6)
     h3_style = ParagraphStyle("h3",
-        fontSize=11, fontName="Helvetica-Bold",
+        fontSize=11, fontName="NanumGothic-Bold",
         textColor=colors.HexColor("#333333"),
         spaceBefore=10, spaceAfter=4)
     body_style = ParagraphStyle("body",
-        fontSize=10, fontName="Helvetica",
+        fontSize=10, fontName="NanumGothic",
         textColor=colors.HexColor("#333333"),
         leading=16, spaceAfter=4)
     small_style = ParagraphStyle("small",
-        fontSize=8, fontName="Helvetica",
+        fontSize=8, fontName="NanumGothic",
         textColor=colors.HexColor("#888888"), spaceAfter=2)
 
     story = []
@@ -433,7 +440,51 @@ def _send_email(year: str, month: str, html_body: str, pdf_bytes: bytes):
 
 # ── Lambda 핸들러 ──────────────────────────────────────────────────────────
 
+def _api_response(status: int, body: dict) -> dict:
+    return {
+        "statusCode": status,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type,X-Api-Key",
+        },
+        "body": json.dumps(body, ensure_ascii=False),
+    }
+
+
 def lambda_handler(event, context):
+    # ── API Gateway 호출 감지 ──────────────────────────────
+    is_api = bool(event.get("httpMethod") or event.get("requestContext"))
+
+    if is_api:
+        body = {}
+        try:
+            body = json.loads(event.get("body") or "{}")
+        except Exception:
+            pass
+
+        send_email = body.get("send_email", False)
+        year, month = _get_target_month()
+
+        if not send_email:
+            # 미리보기: 텍스트만 반환 (PDF 생략)
+            cost_context = _load_chunks()
+            report_text  = _generate_report(year, month, cost_context)
+            return _api_response(200, {"report": report_text, "year": year, "month": month})
+
+        else:
+            # 이메일 발송: 비동기 Lambda 호출 후 즉시 반환
+            boto3.client("lambda", region_name=os.environ.get("AWS_REGION", "ap-south-2")).invoke(
+                FunctionName=context.function_name,
+                InvocationType="Event",   # 비동기
+                Payload=json.dumps({"force": True}).encode(),
+            )
+            return _api_response(200, {
+                "message": f"{year}년 {int(month)}월 보고서 생성 후 이메일 발송합니다. 수 분 내 수신됩니다.",
+                "status": "processing",
+            })
+
+    # ── EventBridge / 직접 호출 ────────────────────────────
     if not event.get("force") and not _is_third_monday():
         today = date.today()
         print(f"오늘({today})은 당월 3주차 월요일이 아닙니다. 발송 건너뜀.")
@@ -456,6 +507,7 @@ def lambda_handler(event, context):
     )
 
     _send_email(year, month, html_body, pdf_bytes)
+    return {"status": "ok", "year": year, "month": month, "s3_key": s3_key}
 
     print(f"Report saved: s3://{CHUNKS_BUCKET}/{s3_key} ({len(pdf_bytes)//1024}KB)")
     print(f"Report sent: {year}-{month} → {ADMIN_EMAIL}")

@@ -595,7 +595,7 @@ window.COST_REPORT_URL    = "%%COST_REPORT_URL%%";
 <header>
   <div class="logo-icon">☁</div>
   <div>
-    <div class="header-title">multicloud cost analyzer</div>
+    <div class="header-title">김이박 클리닉 IT 인프라 비용 분석</div>
     <div class="header-subtitle">AWS · GCP · On-premises</div>
   </div>
   <div class="header-right">
@@ -618,11 +618,6 @@ window.COST_REPORT_URL    = "%%COST_REPORT_URL%%";
           <div class="welcome-body">
             AWS, GCP, 온프레미스 인프라 비용에 대해<br>
             무엇이든 질문하세요. 데이터 기반으로 답변합니다.
-          </div>
-          <div class="cloud-badges">
-            <span class="cloud-badge badge-aws">AWS CUR</span>
-            <span class="cloud-badge badge-gcp">GCP BigQuery</span>
-            <span class="cloud-badge badge-onprem">VMware vCenter</span>
           </div>
         </div>
         <div class="msg-meta">지금</div>
@@ -647,28 +642,28 @@ window.COST_REPORT_URL    = "%%COST_REPORT_URL%%";
 
 <!-- 예산 현황 탭 -->
 <div id="tab-budget" class="tab-page">
-  <div class="section-title">// 예산 현황 <span id="budget-month" style="color:var(--text3); font-size:11px;"></span></div>
+  <div class="section-title">예산 현황 <span id="budget-month" style="color:var(--text3); font-size:11px;"></span></div>
   <div class="dash-grid" id="budget-cards">
     <div class="dash-card"><div class="dash-card-label">로딩 중</div><div class="dash-card-value">—</div></div>
   </div>
   <div id="budget-alert" style="margin-bottom:20px;"></div>
-  <div class="section-title">// 클라우드별 비용 분석 (전월 대비)</div>
+  <div class="section-title">클라우드별 비용 분석 (전월 대비)</div>
   <div class="breakdown-grid" id="breakdown-grid"></div>
-  <div class="section-title">// 온프레미스 CAPEX / OPEX</div>
+  <div class="section-title">온프레미스 CAPEX / OPEX</div>
   <div id="capex-opex-wrap" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;"></div>
 </div>
 
 <!-- 비용 추이 탭 -->
 <div id="tab-trends" class="tab-page">
-  <div class="section-title">// 월별 비용 추이 (최근 3개월)</div>
+  <div class="section-title">월별 비용 추이 (최근 3개월)</div>
   <div class="chart-wrap"><canvas id="trends-chart" height="90"></canvas></div>
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
     <div>
-      <div class="section-title">// 이번 달 클라우드별 비율</div>
+      <div class="section-title">이번 달 클라우드별 비율</div>
       <div class="chart-wrap"><canvas id="pie-chart" height="160"></canvas></div>
     </div>
     <div>
-      <div class="section-title">// 월별 비용 상세</div>
+      <div class="section-title">월별 비용 상세</div>
       <div class="chart-wrap" id="trends-table"></div>
     </div>
   </div>
@@ -676,7 +671,7 @@ window.COST_REPORT_URL    = "%%COST_REPORT_URL%%";
 
 <!-- 보고서 탭 -->
 <div id="tab-report" class="tab-page">
-  <div class="section-title">// 월간 비용 보고서</div>
+  <div class="section-title">월간 비용 보고서</div>
   <div style="display:flex; gap:12px; align-items:center; margin-bottom:20px;">
     <button class="report-btn" onclick="generateReport()" style="margin-bottom:0;">보고서 생성 및 이메일 발송</button>
     <button class="report-btn" onclick="previewReport()" style="margin-bottom:0; background:var(--bg4); color:var(--text2); border:1px solid var(--border2);">미리보기</button>
