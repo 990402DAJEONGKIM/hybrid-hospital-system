@@ -297,6 +297,42 @@ resource "aws_lambda_function" "anomaly_detector" {
 }
 
 # ---------------------------------------------------------
+# Lambda — Cost Dashboard
+# ---------------------------------------------------------
+data "archive_file" "cost_dashboard" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/cost_dashboard"
+  output_path = "${path.module}/lambda/cost_dashboard.zip"
+}
+
+resource "aws_cloudwatch_log_group" "cost_dashboard" {
+  name              = "/aws/lambda/aws-lambda-cost-dashboard"
+  retention_in_days = 30
+  tags              = merge(local.common_tags, { Name = "aws-cwl-cost-dashboard" })
+}
+
+resource "aws_lambda_function" "cost_dashboard" {
+  function_name    = "aws-lambda-cost-dashboard"
+  role             = aws_iam_role.lambda_exec.arn
+  handler          = "handler.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 256
+  filename         = data.archive_file.cost_dashboard.output_path
+  source_code_hash = data.archive_file.cost_dashboard.output_base64sha256
+
+  environment {
+    variables = {
+      RAW_BUCKET         = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      ANNUAL_BUDGET_KRW  = var.annual_budget_krw
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.cost_dashboard]
+  tags       = merge(local.common_tags, { Name = "aws-lambda-cost-dashboard" })
+}
+
+# ---------------------------------------------------------
 # API Gateway — RAG 챗봇 엔드포인트
 # ---------------------------------------------------------
 resource "aws_api_gateway_rest_api" "cost_chat" {
@@ -377,12 +413,164 @@ resource "aws_lambda_permission" "apigw_cost_chat" {
   source_arn    = "${aws_api_gateway_rest_api.cost_chat.execution_arn}/*/*"
 }
 
+# /dashboard 리소스
+resource "aws_api_gateway_resource" "dashboard" {
+  rest_api_id = aws_api_gateway_rest_api.cost_chat.id
+  parent_id   = aws_api_gateway_rest_api.cost_chat.root_resource_id
+  path_part   = "dashboard"
+}
+
+resource "aws_api_gateway_method" "dashboard_get" {
+  rest_api_id      = aws_api_gateway_rest_api.cost_chat.id
+  resource_id      = aws_api_gateway_resource.dashboard.id
+  http_method      = "GET"
+  authorization    = "NONE"
+  api_key_required = true
+}
+
+resource "aws_api_gateway_method" "dashboard_options" {
+  rest_api_id   = aws_api_gateway_rest_api.cost_chat.id
+  resource_id   = aws_api_gateway_resource.dashboard.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "dashboard_get" {
+  rest_api_id             = aws_api_gateway_rest_api.cost_chat.id
+  resource_id             = aws_api_gateway_resource.dashboard.id
+  http_method             = aws_api_gateway_method.dashboard_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.cost_dashboard.invoke_arn
+}
+
+resource "aws_api_gateway_integration" "dashboard_options" {
+  rest_api_id = aws_api_gateway_rest_api.cost_chat.id
+  resource_id = aws_api_gateway_resource.dashboard.id
+  http_method = aws_api_gateway_method.dashboard_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "dashboard_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.cost_chat.id
+  resource_id = aws_api_gateway_resource.dashboard.id
+  http_method = aws_api_gateway_method.dashboard_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "dashboard_options" {
+  rest_api_id = aws_api_gateway_rest_api.cost_chat.id
+  resource_id = aws_api_gateway_resource.dashboard.id
+  http_method = aws_api_gateway_method.dashboard_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+  depends_on = [aws_api_gateway_method_response.dashboard_options_200]
+}
+
+resource "aws_lambda_permission" "apigw_cost_dashboard" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.cost_dashboard.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.cost_chat.execution_arn}/*/*"
+}
+
+# /report 리소스
+resource "aws_api_gateway_resource" "report" {
+  rest_api_id = aws_api_gateway_rest_api.cost_chat.id
+  parent_id   = aws_api_gateway_rest_api.cost_chat.root_resource_id
+  path_part   = "report"
+}
+
+resource "aws_api_gateway_method" "report_post" {
+  rest_api_id      = aws_api_gateway_rest_api.cost_chat.id
+  resource_id      = aws_api_gateway_resource.report.id
+  http_method      = "POST"
+  authorization    = "NONE"
+  api_key_required = true
+}
+
+resource "aws_api_gateway_method" "report_options" {
+  rest_api_id   = aws_api_gateway_rest_api.cost_chat.id
+  resource_id   = aws_api_gateway_resource.report.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "report_post" {
+  rest_api_id             = aws_api_gateway_rest_api.cost_chat.id
+  resource_id             = aws_api_gateway_resource.report.id
+  http_method             = aws_api_gateway_method.report_post.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.monthly_report.invoke_arn
+}
+
+resource "aws_api_gateway_integration" "report_options" {
+  rest_api_id = aws_api_gateway_rest_api.cost_chat.id
+  resource_id = aws_api_gateway_resource.report.id
+  http_method = aws_api_gateway_method.report_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "report_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.cost_chat.id
+  resource_id = aws_api_gateway_resource.report.id
+  http_method = aws_api_gateway_method.report_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "report_options" {
+  rest_api_id = aws_api_gateway_rest_api.cost_chat.id
+  resource_id = aws_api_gateway_resource.report.id
+  http_method = aws_api_gateway_method.report_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+  depends_on = [aws_api_gateway_method_response.report_options_200]
+}
+
+resource "aws_lambda_permission" "apigw_monthly_report" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.monthly_report.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.cost_chat.execution_arn}/*/*"
+}
+
 resource "aws_api_gateway_deployment" "cost_chat" {
   rest_api_id = aws_api_gateway_rest_api.cost_chat.id
 
   depends_on = [
     aws_api_gateway_integration.chat_post,
     aws_api_gateway_integration.chat_options,
+    aws_api_gateway_integration.dashboard_get,
+    aws_api_gateway_integration.dashboard_options,
+    aws_api_gateway_integration.report_post,
+    aws_api_gateway_integration.report_options,
   ]
 
   lifecycle {
