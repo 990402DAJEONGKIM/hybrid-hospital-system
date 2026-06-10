@@ -629,6 +629,31 @@ resource "aws_lambda_permission" "apigw_monthly_report" {
 resource "aws_api_gateway_deployment" "cost_chat" {
   rest_api_id = aws_api_gateway_rest_api.cost_chat.id
 
+  # API 정의(메서드/통합/CORS 응답)가 바뀌면 해시가 달라져 새 배포가 생성됩니다.
+  # depends_on 만으로는 재배포가 트리거되지 않아 스테이지에 변경이 반영되지 않습니다.
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.chat.id,
+      aws_api_gateway_resource.dashboard.id,
+      aws_api_gateway_resource.report.id,
+      aws_api_gateway_method.chat_post.id,
+      aws_api_gateway_method.chat_options.id,
+      aws_api_gateway_method.dashboard_get.id,
+      aws_api_gateway_method.dashboard_options.id,
+      aws_api_gateway_method.report_post.id,
+      aws_api_gateway_method.report_options.id,
+      aws_api_gateway_integration.chat_post.uri,
+      aws_api_gateway_integration.chat_options.id,
+      aws_api_gateway_integration.dashboard_get.uri,
+      aws_api_gateway_integration.dashboard_options.id,
+      aws_api_gateway_integration.report_post.uri,
+      aws_api_gateway_integration.report_options.id,
+      aws_api_gateway_integration_response.chat_options.response_parameters,
+      aws_api_gateway_integration_response.dashboard_options.response_parameters,
+      aws_api_gateway_integration_response.report_options.response_parameters,
+    ]))
+  }
+
   depends_on = [
     aws_api_gateway_integration.chat_post,
     aws_api_gateway_integration.chat_options,

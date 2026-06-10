@@ -5,9 +5,21 @@
 
 set -euo pipefail
 
-WEBROOT="/var/www/html"
+# 웹루트 결정: 인자로 받거나, nginx 설정에서 자동 감지 (서버마다 경로가 다름)
+#   사용법: sudo ./setup-cost-config.sh [웹루트경로]
+WEBROOT="${1:-}"
+if [ -z "${WEBROOT}" ]; then
+  WEBROOT=$(nginx -T 2>/dev/null | grep -oP '^\s*root\s+\K[^;]+' | head -1 | xargs)
+fi
+if [ -z "${WEBROOT}" ] || [ ! -d "${WEBROOT}" ]; then
+  echo "오류: 웹루트를 찾을 수 없습니다. 경로를 인자로 지정하세요." >&2
+  echo "  예) sudo $0 /usr/share/nginx/html" >&2
+  exit 1
+fi
+
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 HTML_FILE="${WEBROOT}/admin_chat.html"
+echo "웹루트: ${WEBROOT}"
 
 # ── SSM에서 값 읽기 ───────────────────────────────────
 API_URL=$(aws ssm get-parameter \
