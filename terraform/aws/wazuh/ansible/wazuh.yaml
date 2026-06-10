@@ -14,11 +14,10 @@
 
   tasks:
 
-    - name: Slack webhook URL SM에서 읽기
+    - name: Slack webhook URL SSM에서 읽기
       set_fact:
-        slack_webhook_url: "{{ lookup('amazon.aws.aws_secret', 'aws-wazuh-slack-alarm-webhook', region='ap-south-2') }}"
+        slack_webhook_url: "{{ lookup('amazon.aws.aws_ssm', '/wazuh/slack-alarm-webhook', region='ap-south-2', decrypt=True) }}"
       tags: always
-
 
     - name: Wazuh Indexer credentials SM에서 읽기 # [2026-06-10 박경수] Dashboard -> Indexer 인증용 kibanaserver password를 Secrets Manager에서 조회
       set_fact:
@@ -588,7 +587,7 @@
     - name: Dashboard OIDC client_secret 런타임 설정 # [2026-06-10 박경수] Secret 값은 Terraform 코드에 저장하지 않고 Secrets Manager에서 조회
       lineinfile:
         path: /etc/wazuh-dashboard/opensearch_dashboards.yml
-        regexp: '^opensearch_security.openid.client_secret:'
+        regexp: '^opensaarch_security.openid.client_secret:'
         line: 'opensearch_security.openid.client_secret: "{{ wazuh_openid_client_secret_effective }}"'
         state: present
       no_log: true

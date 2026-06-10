@@ -214,40 +214,7 @@
       poll: 30
       ignore_errors: yes
 
-    # # ──────────────────────────────────────────
-    # # CloudWatch Agent
-    # # ──────────────────────────────────────────
-    # - name: CloudWatch Agent 설치
-    #   shell: |
-    #     wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
-    #     dpkg -i /tmp/amazon-cloudwatch-agent.deb
-    #   args:
-    #     creates: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent
 
-    # - name: CloudWatch Agent 설정 배포
-    #   copy:
-    #     dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-    #     content: |
-    #       {
-    #         "metrics": {
-    #           "metrics_collected": {
-    #             "mem": {
-    #               "measurement": ["mem_used_percent"]
-    #             },
-    #             "disk": {
-    #               "measurement": ["disk_used_percent"],
-    #               "resources": ["/"]
-    #             }
-    #           },
-    #           "append_dimensions": {
-    #             "InstanceId": "${aws:InstanceId}"
-    #           }
-    #         }
-    #       }
-
-    # ──────────────────────────────────────────
-    # 설정 블록 (항상 실행)
-    # ──────────────────────────────────────────
     - name: JVM 힙 메모리 설정
       replace:
         path: /etc/wazuh-indexer/jvm.options
@@ -277,6 +244,7 @@
           [Unit]
           StartLimitIntervalSec=300
           StartLimitBurst=5
+          RequiresMountsFor=/mnt/wazuh-indexer-data  
 
           [Service]
           Restart=always
@@ -285,6 +253,74 @@
       notify: systemd reload
 
     - meta: flush_handlers
+
+
+    # ──────────────────────────────────────────
+    # 인덱서 데이터 전용 EBS 마운트 + 데이터 이전
+    # 추가 260610 김강환
+    # ──────────────────────────────────────────
+    - name: 데이터 디스크(/dev/sdf) 존재 확인
+      stat:
+        path: /dev/sdf
+      register: data_disk
+
+    - name: 데이터 디스크 파일시스템 생성 (비어있을 때만, 최초 1회)
+      filesystem:
+        fstype: ext4
+        dev: /dev/sdf
+      when: data_disk.stat.exists
+
+    - name: 마운트 포인트 생성
+      file:
+        path: /mnt/wazuh-indexer-data
+        state: directory
+      when: data_disk.stat.exists
+
+    - name: fstab 등록 후 마운트 (nofail 필수)
+      # nofail: EBS 미부착 상태로 부팅해도 서버가 멈추지 않게
+      # x-systemd.device-timeout: 디스크 없을 때 무한대기 방지
+      mount:
+        path: /mnt/wazuh-indexer-data
+        src: /dev/sdf
+        fstype: ext4
+        opts: defaults,nofail,x-systemd.device-timeout=10
+        state: mounted
+      when: data_disk.stat.exists
+
+    - name: 기존 인덱스 데이터를 EBS로 이전 (EBS가 비어있을 때만, 최초 1회)
+      # 재구축(AMI) 시엔 EBS에 이미 데이터가 있으므로 이 블록은 건너뜀 → 멱등
+      shell: |
+        if [ ! -d /mnt/wazuh-indexer-data/nodes ] && [ -d /var/lib/wazuh-indexer/nodes ]; then
+          systemctl stop wazuh-indexer
+          cp -a /var/lib/wazuh-indexer/. /mnt/wazuh-indexer-data/
+          echo "MOVED"
+        fi
+      register: data_move
+      changed_when: "'MOVED' in data_move.stdout"
+      when: data_disk.stat.exists
+
+    - name: 데이터 디렉토리 소유권 부여
+      file:
+        path: /mnt/wazuh-indexer-data
+        owner: wazuh-indexer
+        group: wazuh-indexer
+        recurse: yes
+      when: data_disk.stat.exists
+
+    - name: opensearch.yml path.data 를 EBS 마운트로 변경
+      lineinfile:
+        path: /etc/wazuh-indexer/opensearch.yml
+        regexp: '^path.data:'
+        line: 'path.data: /mnt/wazuh-indexer-data'
+      when: data_disk.stat.exists
+
+    - name: opensearch-security 백업 디렉토리 권한 fix
+      shell: |
+        find /etc/wazuh-indexer/ -name "opensearch-security.bak.*" \
+          -exec chown -R wazuh-indexer:wazuh-indexer {} \;
+      ignore_errors: yes
+      tags: config
+
 
 # ──────────────────────────────────────────
     # 서비스 재시작
@@ -340,13 +376,18 @@
       changed_when: false
       tags: oidc
 
+
+    #  .keys → ['keys']로 수정  -> 2026-06-10 김강환
+    # 원인: Jinja2에서 .keys는 Python dict.keys() 메서드로 인식되어
+    # selectattr 필터에 'builtin_function_or_method' 에러 발생
+    #['keys']로 접근하면 JSON 응답의 keys 배열로 올바르게 인식됨
     - name: Keycloak 서명용 인증서 PEM 생성 # [2026-06-10 박경수]
       copy:
         dest: /tmp/keycloak-sig.crt
         mode: '0600'
         content: |
           -----BEGIN CERTIFICATE-----
-          {{ (keycloak_jwks.json.keys | selectattr('use', 'equalto', 'sig') | list | first).x5c[0] }}
+          {{ (keycloak_jwks.json['keys'] | selectattr('use', 'equalto', 'sig') | list | first).x5c[0] }}
           -----END CERTIFICATE-----
       no_log: true
       tags: oidc
@@ -368,29 +409,16 @@
         mode: '0640'
       tags: oidc
 
-    - name: JWT 인증 도메인 Keycloak 공개키/flat roles 기준으로 보정 # [2026-06-10 박경수]
+
+    # [2026-06-10 박경수] Keycloak OIDC JWT 인증 설정. Wazuh Indexer JWT authenticator가 jwks_uri 및 중첩 roles_key를 안정적으로 처리하지 못해 signing_key + flat roles claim 사용.
+    # config yml 내 주석을 밖으로 빼냄 - 260610 김강환 
+    - name: JWT 인증 도메인 Keycloak 공개키/flat roles 기준으로 보정
+      # [2026-06-10 박경수] Keycloak OIDC JWT 인증 설정
+      # [2026-06-10 김강환] config.yml 내 주석 제거 - OpenSearch Security 파서가 주석 허용 안 함
       replace:
         path: /etc/wazuh-indexer/opensearch-security/config.yml
         regexp: '(?s)^      jwt_auth_domain:\n.*?^      clientcert_auth_domain:'
-        replace: |
-          # [2026-06-10 박경수] Keycloak OIDC JWT 인증 설정. Wazuh Indexer JWT authenticator가 jwks_uri 및 중첩 roles_key를 안정적으로 처리하지 못해 signing_key + flat roles claim 사용.
-          jwt_auth_domain:
-            description: "Authenticate via Keycloak OIDC JWT"
-            http_enabled: true
-            transport_enabled: true
-            order: 0
-            http_authenticator:
-              type: jwt
-              challenge: false
-              config:
-                signing_key: "{{ keycloak_signing_key.stdout }}"
-                jwt_header: "Authorization"
-                jwt_clock_skew_tolerance_seconds: 30
-                roles_key: "roles"
-                subject_key: "preferred_username"
-            authentication_backend:
-              type: noop
-          clientcert_auth_domain:
+        replace: "      jwt_auth_domain:\n        description: \"Authenticate via Keycloak OIDC JWT\"\n        http_enabled: true\n        transport_enabled: true\n        order: 0\n        http_authenticator:\n          type: jwt\n          challenge: false\n          config:\n            signing_key: \"{{ keycloak_signing_key.stdout }}\"\n            jwt_header: \"Authorization\"\n            jwt_clock_skew_tolerance_seconds: 30\n            roles_key: \"roles\"\n            subject_key: \"preferred_username\"\n        authentication_backend:\n          type: noop\n      clientcert_auth_domain:"
       no_log: true
       register: oidc_config_replace
       tags: oidc

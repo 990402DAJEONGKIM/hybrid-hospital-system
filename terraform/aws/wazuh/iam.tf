@@ -217,7 +217,6 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-slack-notify-secrets" {
 }
 
 
-
 # ══════════════════════════════════════════
 # Lambda IAM Role - Agent 정리
 # ecs-ec2 그룹 disconnected Agent 주기적 삭제
@@ -324,6 +323,58 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-recovery-policy" {
         Effect = "Allow"
         Action = ["iam:PassRole"]
         Resource = aws_iam_role.aws-wazuh-ssm-role.arn
+      }
+    ]
+  })
+}
+
+
+
+
+# ══════════════════════════════════════════
+# Lambda IAM Role - AMI 자동 백업
+# 매일 KST 03:00 매니저 EC2 AMI 생성 + 오래된 AMI/스냅샷 정리 -  260610 김강환
+# ══════════════════════════════════════════
+resource "aws_iam_role" "aws-wazuh-lambda-ami-backup-role" {
+  name = "aws-wazuh-lambda-ami-backup-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+  tags = { Name = "aws-wazuh-lambda-ami-backup-role", Owner = "st2" }
+}
+
+# Lambda 기본 실행 권한 (CloudWatch Logs 쓰기 - 증적용)
+resource "aws_iam_role_policy_attachment" "aws-wazuh-lambda-ami-backup-basic" {
+  role       = aws_iam_role.aws-wazuh-lambda-ami-backup-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# AMI 생성/삭제 + 스냅샷 정리 권한 (시크릿 권한 일절 없음 - ISMS-P 최소 권한 원칙)
+resource "aws_iam_role_policy" "aws-wazuh-lambda-ami-backup-policy" {
+  name = "aws-wazuh-lambda-ami-backup-policy"
+  role = aws_iam_role.aws-wazuh-lambda-ami-backup-role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # AMI 생성/삭제 + 스냅샷 삭제 (시크릿 권한 없음)
+        Sid    = "AMIBackupAndCleanup"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeImages",
+          "ec2:CreateImage",
+          "ec2:CreateTags",
+          "ec2:DeregisterImage",
+          "ec2:DeleteSnapshot",
+          "ec2:DescribeSnapshots"
+        ]
+        Resource = "*"
       }
     ]
   })
