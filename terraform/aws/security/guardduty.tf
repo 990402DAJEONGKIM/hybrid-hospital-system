@@ -3,7 +3,7 @@
 
 import {
   to = aws_guardduty_detector.aws-gd
-  id = "692bc5874baa41429fc7396c82c862c6"
+  id = var.guardduty_detector_id
 }
 
 
@@ -52,5 +52,5 @@ resource "aws_cloudwatch_event_rule" "aws-gd-high" {
 
 resource "aws_cloudwatch_event_target" "aws-gd-sns" {
   rule = aws_cloudwatch_event_rule.aws-gd-high.name
-  arn  = "arn:aws:sns:ap-south-2:476293896981:aws-wazuh-cw-alerts-01"
+  arn  = "arn:aws:sns:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:aws-wazuh-cw-alerts-01"
 }
