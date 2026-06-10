@@ -141,10 +141,7 @@ resource "aws_iam_role_policy" "aws-wazuh-s3-policy" {
         Action = ["secretsmanager:GetSecretValue"]
         Resource = [
           "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-indexer-credentials-*",
-          "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-slack-alarm-webhook-*",
-          # [2026-06-10 박경수] Wazuh Dashboard Keycloak OIDC 및 세션 cookie secret 읽기 권한 추가
-          "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-openid-client-secret-*",
-          "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-dashboard-cookie-password-*"
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:aws-wazuh-slack-alarm-webhook-*"
         ]
       },
       # 위 시크릿 복호화용 KMS (sm 키, Secrets Manager 경유만)

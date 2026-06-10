@@ -48,11 +48,27 @@
     </rule>
 
     <!-- gcp-rds-proxy-01 내부 복제 연결 — 무시 -->
-        <rule id="100206" level="0">
-            <if_sid>100200</if_sid>
-            <field name="source_ip">^10\.10\.1\.</field>
-            <description>GCP 내부 서브넷 연결 — 무시</description>
-            <group>cloudsql,noise,</group>
-        </rule>
+    <rule id="100206" level="0">
+        <if_sid>100200</if_sid>
+        <field name="source_ip">^10\.10\.1\.</field>
+        <description>GCP 내부 서브넷 연결 — 무시</description>
+        <group>cloudsql,noise,</group>
+    </rule>
 
-    </group>
+    <!-- GCP 내부 서브넷 접속 종료 무시 - 260609 김강환 -->
+    <rule id="100207" level="0">
+        <if_sid>100201</if_sid>
+        <field name="source_ip">^10\.10\.1\.</field>
+        <description>GCP 내부 서브넷 접속 종료 — 무시</description>
+        <group>cloudsql,noise,</group>
+    </rule>
+
+    <!-- 자동 백업 무시 - 260609 김강환 -->
+    <rule id="100208" level="0">
+        <if_sid>100202</if_sid>
+        <match>ADMIN_AUTOMATEDBACKU</match>
+        <description>Cloud SQL 자동 백업 — 무시</description>
+        <group>cloudsql,noise,</group>
+    </rule>
+
+</group>

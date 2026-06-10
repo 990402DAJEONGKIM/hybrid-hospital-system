@@ -201,9 +201,9 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-vpn-onprem-down-01" {
   }
   period              = 60
   evaluation_periods  = 2
-  statistic           = "Minimum"
-  comparison_operator = "LessThanThreshold"
-  threshold           = 1
+  statistic           = "Maximum"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  threshold           = 0   
   treat_missing_data  = "breaching"
   alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
   ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]

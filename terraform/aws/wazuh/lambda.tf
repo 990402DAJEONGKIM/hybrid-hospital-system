@@ -132,7 +132,6 @@ resource "aws_lambda_function" "aws-wazuh-lambda-recovery" {
   environment {
     variables = {
       TARGET_REGION     = var.aws_region
-      GOLDEN_AMI_ID     = var.golden_ami_id
       SUBNET_ID         = data.aws_subnet.aws-app-sub-2a.id
       SECURITY_GROUP_ID = aws_security_group.aws-wazuh-sg.id
       INSTANCE_PROFILE  = aws_iam_instance_profile.aws-wazuh-profile.name

@@ -132,6 +132,12 @@ systemctl enable --now --no-block alloy
 bash -c "$(curl -L https://setup.vector.dev)"
 dnf install -y vector
 mkdir -p /etc/vector
+
+# vector.toml 설정 전에 추가 - 260609 김강환
+touch /var/log/ecs-fastapi-audit.log
+chown vector:vector /var/log/ecs-fastapi-audit.log
+chmod 644 /var/log/ecs-fastapi-audit.log
+
 cat > /etc/vector/vector.toml << 'VECTOREOF'
 data_dir = "/var/lib/vector"
 
@@ -152,6 +158,7 @@ type = "remap"
 inputs = ["fastapi_only"]
 source = '''
   .host = get_env_var!("PRIVATE_IP")
+  . |= object!(parse_json!(.message))
 '''
 
 # S3 원본 저장

@@ -25,7 +25,7 @@
   </rule>
 
   <!-- VPN 터널 UP 기록용 -->
-  <rule id="100303" level="3">
+  <rule id="100303" level="0">
     <decoded_as>json</decoded_as>
     <field name="ike_phase1_state">^established$</field>
     <description>VPN 터널 수립 완료 로그 기록</description>

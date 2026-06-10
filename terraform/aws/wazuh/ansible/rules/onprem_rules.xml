@@ -33,7 +33,7 @@
   <!-- ISMS-P 2.5.1 접근통제, MITRE T1136 계정 생성 -->
   <rule id="100031" level="12">
     <if_sid>550,554,553</if_sid>
-    <field name="syscheck.path">/etc/passwd</field>
+    <field name="file">/etc/passwd</field>
     <description>온프레미스 /etc/passwd 변조 탐지</description>
     <group>fim,critical_file,onprem</group>
   </rule>
@@ -42,7 +42,7 @@
   <!-- ISMS-P 2.5.1 접근통제, MITRE T1003.008 크리덴셜 덤프 -->
   <rule id="100032" level="12">
     <if_sid>550,554,553</if_sid>
-    <field name="syscheck.path">/etc/shadow</field>
+    <field name="file">/etc/shadow</field>
     <description>온프레미스 /etc/shadow 변조 탐지</description>
     <group>fim,critical_file,onprem</group>
   </rule>
@@ -51,7 +51,7 @@
   <!-- ISMS-P 2.5.1 접근통제, MITRE T1098.004 SSH 키 추가 -->
   <rule id="100033" level="10">
     <if_sid>550,554,553</if_sid>
-    <field name="syscheck.path">/etc/ssh/sshd_config</field>
+    <field name="file">/etc/ssh/sshd_config</field>
     <description>온프레미스 SSH 설정 변경 탐지</description>
     <group>fim,ssh,onprem</group>
   </rule>
@@ -60,7 +60,7 @@
   <!-- ISMS-P 2.5.1 접근통제, MITRE T1548.003 sudo 권한 남용 -->
   <rule id="100034" level="12">
     <if_sid>550,554,553</if_sid>
-    <field name="syscheck.path">/etc/sudoers</field>
+    <field name="file">/etc/sudoers</field>
     <description>온프레미스 sudoers 변경 탐지</description>
     <group>fim,privilege_escalation,onprem</group>
   </rule>
@@ -69,7 +69,7 @@
   <!-- ISMS-P 2.8.1 정보자산 접근통제, MITRE T1610 컨테이너 배포 -->
   <rule id="100035" level="12">
     <if_sid>550,554,553</if_sid>
-    <field name="syscheck.path">/home/mspadmin/hospital-db/docker-compose.yml</field>
+    <field name="file">/home/mspadmin/hospital-db/docker-compose.yml</field>
     <description>온프레미스 hospital-db docker-compose.yml 변조 탐지</description>
     <group>fim,critical_file,onprem</group>
   </rule>
@@ -78,7 +78,7 @@
   <!-- ISMS-P 2.8.1 정보자산 접근통제, MITRE T1610 컨테이너 배포 -->
   <rule id="100036" level="12">
     <if_sid>550,554,553</if_sid>
-    <field name="syscheck.path">/home/mspadmin/deidentification-api/docker-compose.yml</field>
+    <field name="file">/home/mspadmin/deidentification-api/docker-compose.yml</field>
     <description>온프레미스 deidentification-api docker-compose.yml 변조 탐지</description>
     <group>fim,critical_file,onprem</group>
   </rule>
@@ -171,7 +171,7 @@
   <!-- 삭제(553)/추가(554)는 탐지 유지 — 로그 삭제는 공격 징후(MITRE T1562.008) -->
   <rule id="100049" level="0">
     <if_sid>550</if_sid>
-    <field name="syscheck.path" type="pcre2">vault-logs/audit\.log$</field>
+    <field name="file" type="pcre2">vault-logs/audit\.log$</field>
     <description>Vault audit.log 정상 append — 무시</description>
     <group>noise</group>
   </rule>
@@ -181,7 +181,7 @@
   <!-- 삭제(553)/추가(554)는 탐지 유지 — 키 파일 삭제/교체는 이상 징후 -->
   <rule id="100050" level="0">
     <if_sid>550</if_sid>
-    <field name="syscheck.path" type="pcre2">vault-data/core/_(master|keyring)$</field>
+    <field name="file" type="pcre2">vault-data/core/_(master|keyring)$</field>
     <description>Vault 내부 암호화 키 주기적 갱신 — 무시</description>
     <group>noise</group>
   </rule>
@@ -191,7 +191,7 @@
   <!-- modified는 탐지 유지 — 토큰 파일 내용 변조는 이상 징후 -->
   <rule id="100051" level="0">
     <if_sid>553,554</if_sid>
-    <field name="syscheck.path" type="pcre2">vault-data/sys/token/(id|accessor)/</field>
+    <field name="file" type="pcre2">vault-data/sys/token/(id|accessor)/</field>
     <description>Vault 토큰 발급/만료 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
@@ -201,7 +201,7 @@
   <!-- modified는 탐지 유지 -->
   <rule id="100052" level="0">
     <if_sid>553,554</if_sid>
-    <field name="syscheck.path" type="pcre2">vault-data/sys/expire/token/</field>
+    <field name="file" type="pcre2">vault-data/sys/expire/token/</field>
     <description>Vault 토큰 lease 생성/만료 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
@@ -211,7 +211,7 @@
   <!-- modified도 무시 — lease renew 시 파일 내용이 정상적으로 변경됨 -->
   <rule id="100053" level="0">
     <if_sid>550,553,554</if_sid>
-    <field name="syscheck.path" type="pcre2">vault-data/sys/expire/id/database/creds/</field>
+    <field name="file" type="pcre2">vault-data/sys/expire/id/database/creds/</field>
     <description>Vault DB 동적 자격증명 발급/갱신/만료 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
@@ -221,7 +221,7 @@
   <!-- modified는 탐지 유지 -->
   <rule id="100054" level="0">
     <if_sid>553,554</if_sid>
-    <field name="syscheck.path" type="pcre2">vault-data/sys/expire/id/auth/approle/login/</field>
+    <field name="file" type="pcre2">vault-data/sys/expire/id/auth/approle/login/</field>
     <description>Vault AppRole 로그인 lease 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
@@ -230,7 +230,7 @@
   <!-- 이유: vim으로 파일 편집 시 .swp 임시 파일 생성/삭제 -->
   <rule id="100055" level="0">
     <if_sid>550,553,554</if_sid>
-    <field name="syscheck.path" type="pcre2">\.swp$|\.swpx$</field>
+    <field name="file" type="pcre2">\.swp$|\.swpx$</field>
     <description>vim swap 파일 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
@@ -240,7 +240,7 @@
   <!-- 삭제(553)는 탐지 유지 — 히스토리 삭제는 흔적 제거 의심 -->
   <rule id="100056" level="0">
     <if_sid>550</if_sid>
-    <field name="syscheck.path" type="pcre2">\.psql_history$</field>
+    <field name="file" type="pcre2">\.psql_history$</field>
     <description>psql 히스토리 정상 변경 — 무시</description>
     <group>noise</group>
   </rule>
@@ -265,9 +265,9 @@
 <group name="onprem,fastapi,">
 
   <!-- 베이스 룰: EMR FastAPI 감사 로그 수신 -->
-  <!-- level=3 — 대시보드 기록용, Slack 알림 없음 -->
+  <!-- 86600(Suricata) 룰이 먼저 매칭 → if_sid로 child rule 처리 - 260609 김강환 -->
   <rule id="100600" level="3">
-    <decoded_as>json</decoded_as>
+    <if_sid>86600</if_sid>
     <field name="event_type">^fastapi_audit$</field>
     <description>EMR FastAPI 감사 로그 - $(method) $(path) $(result_code)</description>
     <group>onprem,fastapi,audit_archive,</group>
@@ -287,7 +287,7 @@
   <!-- 브루트포스 탐지: 1분 내 동일 IP에서 5회 이상 인증 실패 -->
   <!-- level=10 — Slack #wazuh-alarm 알림 발송 -->
   <!-- MITRE T1110.001 패스워드 추측 -->
-  <rule id="100602" level="10" frequency="5" timeframe="60">
+  <rule id="100602" level="10" frequency="8" timeframe="120">
     <if_matched_sid>100601</if_matched_sid>
     <same_srcip/>
     <description>EMR FastAPI Brute Force 의심 - ip: $(source_ip)</description>
