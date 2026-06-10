@@ -19,15 +19,15 @@ import boto3
 
 S3_BUCKET = os.environ["S3_BUCKET"]
 S3_PREFIX = os.environ["S3_PREFIX"]
+WEBHOOK_PARAM = os.environ["SLACK_WEBHOOK_PARAM"]
 VULN_KEY = os.environ.get("VULN_KEY", "wazuh/vuln/latest.json.gz")  # 취약점 스냅샷 경로
 BEDROCK_MODEL_ID = os.environ["BEDROCK_MODEL_ID"]
-SECRET_NAME = os.environ["SLACK_WEBHOOK_SECRET"]
 MIN_LEVEL = int(os.environ.get("MIN_LEVEL", "7"))
 REGION = os.environ.get("AWS_REGION_RUNTIME", "ap-south-2")
 
 s3 = boto3.client("s3", region_name=REGION)
 bedrock = boto3.client("bedrock-runtime", region_name=REGION)
-sm = boto3.client("secretsmanager", region_name=REGION)
+ssm = boto3.client("ssm", region_name=REGION)
 
 
 def _yesterday_prefix():
@@ -199,8 +199,8 @@ def _invoke_bedrock(prompt):
 
 
 def _get_webhook():
-    r = sm.get_secret_value(SecretId=SECRET_NAME)
-    return r["SecretString"]
+    r = ssm.get_parameter(Name=WEBHOOK_PARAM, WithDecryption=True)
+    return r["Parameter"]["Value"]
 
 
 def _send_slack(webhook, text, agg):
