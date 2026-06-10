@@ -38,7 +38,7 @@ resource "aws_iam_role_policy" "aws-firehose-lambda-policy" {
         Sid    = "KMSEncrypt"
         Effect = "Allow"
         Action = ["kms:GenerateDataKey", "kms:Decrypt"]
-        Resource = data.aws_kms_key.s3.arn
+        Resource = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
       }
     ]
   })
@@ -58,7 +58,7 @@ resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-lambda-01" {
     error_output_prefix = "lambda/errors/"
     buffering_size      = 5
     buffering_interval  = 300
-    kms_key_arn         = data.aws_kms_key.s3.arn
+    kms_key_arn         = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
   }
 
   tags = { Name = "aws-firehose-lambda-01" }
