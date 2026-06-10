@@ -1,10 +1,29 @@
 #local_rules.xml
 <group name="local,sudo,after_hours,fim,">
  
+<!-- ##################### 개발 단계의 룰임 ##########################-->
+<!-- SSH 브루트포스 Slack 알림 억제 - 개발 단계 임시 - 260610 김강환 -->
+<rule id="5551" level="7" overwrite="yes">
+  <if_sid>5550</if_sid>
+  <description>PAM: Multiple failed logins - suppressed Slack</description>
+</rule>
+<rule id="5763" level="7" overwrite="yes">
+  <if_sid>5700</if_sid>
+  <description>sshd: brute force - suppressed Slack</description>
+</rule>
+<rule id="5712" level="7" overwrite="yes">
+  <if_sid>5700</if_sid>
+  <description>sshd: non existent user - suppressed Slack</description>
+</rule>
+<rule id="2502" level="7" overwrite="yes">
+  <if_sid>2500</if_sid>
+  <description>syslog: multiple failed logins - suppressed Slack</description>
+</rule>
+
   <!-- ───────────────────────────────────── -->
   <!-- sudo 사용 탐지 -->
   <!-- ───────────────────────────────────── -->
- 
+
   <!-- 기본 sudo 실행 -->
   <rule id="100001" level="6">
     <if_sid>5402</if_sid>
@@ -343,14 +362,31 @@
     <group>guardduty,aws,</group>
   </rule>
   
-  <!-- 랜섬웨어: 60초 내 파일 변조 20건 이상 -->
+  <!-- 550, 554를 하나의 그룹으로 묶는 중간 룰 -->
+  <rule id="100507" level="0">
+    <if_sid>550,554</if_sid>
+    <field name="syscheck.path" type="pcre2">/home/mspadmin/test_ransomware</field>
+    <description>FIM 파일 변경/추가 — 랜섬웨어 카운터</description>
+    <group>ransomware_counter,</group>
+  </rule>
+
+  <!-- 100507이 60초 안에 100번 발화하면 랜섬웨어 탐지 -->
   <rule id="100508" level="15" frequency="100" timeframe="60">
-    <if_matched_sid>550</if_matched_sid>
+    <if_matched_sid>100507</if_matched_sid>
     <description>랜섬웨어 의심 — 짧은 시간 내 대량 파일 변조</description>
     <group>ransomware,malware,critical</group>
     <mitre><id>T1486</id></mitre>
   </rule>
 
+
+  <!-- 랜섬웨어: 60초 내 파일 변조 20건 이상 -->
+  <rule id="100508" level="15" frequency="100" timeframe="60">
+    <if_matched_sid>550</if_matched_sid>
+    <if_matched_sid>554</if_matched_sid>
+    <description>랜섬웨어 의심 — 짧은 시간 내 대량 파일 변조</description>
+    <group>ransomware,malware,critical</group>
+    <mitre><id>T1486</id></mitre>
+  </rule>
   <!-- /tmp, /dev/shm 실행파일 생성 — 드롭퍼 의심 -->
   <rule id="100509" level="14">
     <if_sid>554</if_sid>

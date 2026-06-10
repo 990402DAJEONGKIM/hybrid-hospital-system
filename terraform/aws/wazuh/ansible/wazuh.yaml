@@ -842,7 +842,6 @@
         mode: '0755'
         content: |
           #!/bin/bash
-          INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
           REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
 
           if systemctl is-active --quiet wazuh-manager; then
@@ -855,7 +854,7 @@
             --namespace "Custom/Wazuh" \
             --metric-name "wazuh_manager_running" \
             --value $VALUE \
-            --dimensions InstanceId=$INSTANCE_ID \
+            --dimensions Role=wazuh-manager \
             --region $REGION \
             --storage-resolution 60
       tags: cloudwatch

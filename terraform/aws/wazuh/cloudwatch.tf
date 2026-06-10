@@ -98,7 +98,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-status-01" {
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed"
   dimensions = {
-    InstanceId = aws_instance.aws-wazuh-01.id
+    Role = "wazuh-manager"  # InstanceId → Role
   }
   period              = 60
   evaluation_periods  = 1
