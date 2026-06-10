@@ -81,3 +81,43 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-recover" {
   tags = { Name = "aws-wazuh-indexer-recover" }
 }
 
+
+
+# ── 자동복구 2단: 서비스 다운/인스턴스 소실 트리거 ──
+# 추가 260610 김강환
+# 커스텀 메트릭이 0이거나 누락(인스턴스 사망)되면 발화
+resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-service-down" {
+  alarm_name          = "aws-wazuh-indexer-service-down"
+  namespace           = "Custom/Wazuh"
+  metric_name         = "wazuh_indexer_up"
+  dimensions          = { Role = "wazuh-indexer" }
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 3            # 3분 연속 죽어야 발화(정상 재부팅 오발화 방지)
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"  # 메트릭 누락 = 인스턴스 소실 → 발화
+  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-recovery.arn]
+
+  tags = { Name = "aws-wazuh-indexer-service-down", Owner = "st2" }
+}
+
+# 재구축 Lambda 전용 SNS
+resource "aws_sns_topic" "aws-wazuh-indexer-recovery" {
+  name = "aws-wazuh-indexer-recovery"
+}
+
+resource "aws_lambda_permission" "aws-wazuh-indexer-recovery-sns" {
+  statement_id  = "AllowSNSIndexerRecovery"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.aws-wazuh-indexer-recovery.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.aws-wazuh-indexer-recovery.arn
+}
+
+resource "aws_sns_topic_subscription" "aws-wazuh-indexer-recovery-sub" {
+  topic_arn  = aws_sns_topic.aws-wazuh-indexer-recovery.arn
+  protocol   = "lambda"
+  endpoint   = aws_lambda_function.aws-wazuh-indexer-recovery.arn
+  depends_on = [aws_lambda_permission.aws-wazuh-indexer-recovery-sns]
+}

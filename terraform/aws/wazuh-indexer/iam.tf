@@ -86,3 +86,71 @@ resource "aws_iam_instance_profile" "aws-wazuh-indexer-profile" {
   name = "aws-wazuh-indexer-profile"
   role = aws_iam_role.aws-wazuh-indexer-role.name
 }
+
+
+
+# 인덱서 자동복구 Lambda IAM
+# 추가 260610 김강환
+resource "aws_iam_role" "aws-wazuh-indexer-recovery-role" {
+  name = "aws-wazuh-indexer-recovery-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+  tags = { Name = "aws-wazuh-indexer-recovery-role", Owner = "st2" }
+}
+
+# 실행 로그 (증적용)
+resource "aws_iam_role_policy_attachment" "aws-wazuh-indexer-recovery-basic" {
+  role       = aws_iam_role.aws-wazuh-indexer-recovery-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "aws-wazuh-indexer-recovery-policy" {
+  name = "aws-wazuh-indexer-recovery-policy"
+  role = aws_iam_role.aws-wazuh-indexer-recovery-role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # EC2 재구축 + EBS 분리/부착 (시크릿 권한 일절 없음)
+        Sid    = "EC2AndEBSRecovery"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceStatus",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeImages",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances",
+          "ec2:CreateTags",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume"
+        ]
+        Resource = "*"
+      },
+      {
+        # 새 인스턴스에 마운트/서비스 기동 명령
+        Sid    = "SSMRecovery"
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation",
+          "ssm:DescribeInstanceInformation"
+        ]
+        Resource = "*"
+      },
+      {
+        # 새 인스턴스에 인덱서 인스턴스 프로파일 부여
+        Sid      = "PassIndexerRole"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${aws_iam_instance_profile.aws-wazuh-indexer-profile.role}"
+      }
+    ]
+  })
+}
