@@ -38,7 +38,7 @@ resource "aws_iam_role_policy" "aws-firehose-lambda-policy" {
         Sid    = "KMSEncrypt"
         Effect = "Allow"
         Action = ["kms:GenerateDataKey", "kms:Decrypt"]
-        Resource = data.aws_kms_key.s3.arn
+        Resource = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
       }
     ]
   })
