@@ -1,0 +1,51 @@
+Jun 10 02:30:10 ip-10-0-13-83 systemd-entrypoint[81481]: WARNING: Please consider reporting this to the maintainers of org.opensearch.bootstrap.OpenSearch
+Jun 10 02:30:10 ip-10-0-13-83 systemd-entrypoint[81481]: WARNING: System::setSecurityManager will be removed in a future release
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]: Exception in thread "main" org.opensearch.bootstrap.BootstrapException: java.nio.file.AccessDeniedException: /etc/wazuh-indexer/opensearch-security.bak.20260609
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]: Likely root cause: java.nio.file.AccessDeniedException: /etc/wazuh-indexer/opensearch-security.bak.20260609
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:90)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at java.base/sun.nio.fs.UnixException.asIOException(UnixException.java:115)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at java.base/sun.nio.fs.UnixFileSystemProvider.newDirectoryStream(UnixFileSystemProvider.java:501)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at java.base/java.nio.file.Files.newDirectoryStream(Files.java:482)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at java.base/java.nio.file.FileTreeWalker.visit(FileTreeWalker.java:301)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at java.base/java.nio.file.FileTreeWalker.next(FileTreeWalker.java:374)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at java.base/java.nio.file.Files.walkFileTree(Files.java:2833)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.common.logging.LogConfigurator.configure(LogConfigurator.java:227)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.common.logging.LogConfigurator.configure(LogConfigurator.java:146)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.bootstrap.Bootstrap.init(Bootstrap.java:373)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.bootstrap.OpenSearch.init(OpenSearch.java:181)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.bootstrap.OpenSearch.execute(OpenSearch.java:172)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.cli.EnvironmentAwareCommand.execute(EnvironmentAwareCommand.java:104)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.cli.Command.mainWithoutErrorHandling(Command.java:138)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.cli.Command.main(Command.java:101)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.bootstrap.OpenSearch.main(OpenSearch.java:138)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]:         at org.opensearch.bootstrap.OpenSearch.main(OpenSearch.java:104)
+Jun 10 02:30:11 ip-10-0-13-83 systemd-entrypoint[81481]: For complete error details, refer to the log at /var/log/wazuh-indexer/wazuh-indexer-cluster.log
+Jun 10 02:30:11 ip-10-0-13-83 systemd[1]: wazuh-indexer.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ An ExecStart= process belonging to unit wazuh-indexer.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+Jun 10 02:30:11 ip-10-0-13-83 systemd[1]: wazuh-indexer.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ The unit wazuh-indexer.service has entered the 'failed' state with result 'exit-code'.
+Jun 10 02:30:11 ip-10-0-13-83 systemd[1]: Failed to start wazuh-indexer.
+░░ Subject: A start job for unit wazuh-indexer.service has failed
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ A start job for unit wazuh-indexer.service has finished with a failure.
+░░ 
+░░ The job identifier is 14097 and the job result is failed.
+Jun 10 02:30:11 ip-10-0-13-83 systemd[1]: wazuh-indexer.service: Consumed 11.717s CPU time.
+░░ Subject: Resources consumed by unit runtime
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ The unit wazuh-indexer.service completed and consumed the indicated resources.
+

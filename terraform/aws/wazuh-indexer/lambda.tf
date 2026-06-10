@@ -21,7 +21,7 @@ resource "aws_lambda_function" "aws-wazuh-indexer-recovery" {
       SG_ID            = aws_security_group.aws-wazuh-indexer-sg.id
       INSTANCE_PROFILE = aws_iam_instance_profile.aws-wazuh-indexer-profile.name
       INSTANCE_TYPE    = "t3.xlarge"
-      PRIVATE_IP       = "10.0.13.83"
+      PRIVATE_IP       = var.indexer_private_ip
       INSTANCE_NAME    = "aws-wazuh-indexer"
       DATA_VOLUME_NAME = "aws-wazuh-indexer-data-01"
       DATA_DEVICE      = "/dev/sdf"

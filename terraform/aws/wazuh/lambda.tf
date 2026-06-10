@@ -36,6 +36,7 @@ resource "aws_lambda_function" "aws-wazuh-lambda-slack-notify" {
   role             = aws_iam_role.aws-wazuh-lambda-slack-notify-role.arn
   handler          = "lambda_slack_notify.lambda_handler"
   runtime          = "python3.12"
+  timeout          = 30
   filename         = data.archive_file.aws-wazuh-lambda-slack-notify.output_path
   source_code_hash = data.archive_file.aws-wazuh-lambda-slack-notify.output_base64sha256
 
@@ -155,3 +156,52 @@ resource "aws_sns_topic_subscription" "aws-wazuh-recovery-to-lambda" {
   endpoint  = aws_lambda_function.aws-wazuh-lambda-recovery.arn
 }
 
+
+
+# 추가 260610 김강환
+data "archive_file" "aws-wazuh-lambda-ami-backup" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/ami_backup.py"
+  output_path = "${path.module}/lambda/ami_backup.zip"
+}
+
+resource "aws_lambda_function" "aws-wazuh-lambda-ami-backup" {
+  function_name    = "aws-wazuh-lambda-ami-backup"
+  role             = aws_iam_role.aws-wazuh-lambda-ami-backup-role.arn
+  handler          = "ami_backup.handler"
+  runtime          = "python3.12"
+  timeout          = 60   # CreateImage는 비동기라 1분이면 충분
+  filename         = data.archive_file.aws-wazuh-lambda-ami-backup.output_path
+  source_code_hash = data.archive_file.aws-wazuh-lambda-ami-backup.output_base64sha256
+
+  environment {
+    variables = {
+      INSTANCE_NAME = "aws-wazuh-01"
+      AMI_PREFIX    = "aws-wazuh-"
+      KEEP_COUNT    = "3"
+      ACCOUNT_ID    = data.aws_caller_identity.current.account_id
+    }
+  }
+  tags = { Name = "aws-wazuh-lambda-ami-backup", Owner = "st2" }
+}
+
+# 매일 KST 03:00 = UTC 18:00 실행
+resource "aws_cloudwatch_event_rule" "aws-wazuh-ami-backup-schedule" {
+  name                = "aws-wazuh-ami-backup-schedule"
+  schedule_expression = "cron(0 18 * * ? *)"
+  description         = "매일 KST 03:00 매니저 AMI 자동 백업"
+  tags = { Name = "aws-wazuh-ami-backup-schedule", Owner = "st2" }
+}
+
+resource "aws_cloudwatch_event_target" "aws-wazuh-ami-backup-target" {
+  rule = aws_cloudwatch_event_rule.aws-wazuh-ami-backup-schedule.name
+  arn  = aws_lambda_function.aws-wazuh-lambda-ami-backup.arn
+}
+
+resource "aws_lambda_permission" "aws-wazuh-ami-backup-eventbridge" {
+  statement_id  = "AllowEventBridgeAMIBackup"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.aws-wazuh-lambda-ami-backup.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.aws-wazuh-ami-backup-schedule.arn
+}
