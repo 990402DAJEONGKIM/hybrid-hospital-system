@@ -1,0 +1,150 @@
+name: Deploy Cost Lambda Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/aws/bedrock/lambda/**'
+  workflow_dispatch:
+    inputs:
+      function:
+        description: '배포할 함수 (비우면 전체 배포)'
+        required: false
+        type: choice
+        options:
+          - ''
+          - aws_cost_collector
+          - gcp_billing_collector
+          - onprem_cost_calculator
+          - cost_to_kb
+          - monthly_report
+          - cost_chat
+          - anomaly_detector
+          - cost_dashboard
+
+env:
+  LAMBDA_DIR: terraform/aws/bedrock/lambda
+  AWS_REGION: ap-south-2
+
+# Lambda 디렉터리명 → AWS 함수명 매핑
+# main.tf의 function_name과 일치해야 합니다.
+# aws_cost_collector    → aws-lambda-cost-aws-collector
+# gcp_billing_collector → aws-lambda-cost-gcp-collector
+# onprem_cost_calculator→ aws-lambda-cost-onprem-calc
+# cost_to_kb            → aws-lambda-cost-to-kb
+# monthly_report        → aws-lambda-cost-monthly-report
+# cost_chat             → aws-lambda-cost-chat
+# anomaly_detector      → aws-lambda-cost-anomaly
+# cost_dashboard        → aws-lambda-cost-dashboard
+
+jobs:
+  deploy:
+    name: Deploy Lambda
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Detect target functions
+        id: targets
+        run: |
+          declare -A FUNC_MAP=(
+            [aws_cost_collector]="aws-lambda-cost-aws-collector"
+            [gcp_billing_collector]="aws-lambda-cost-gcp-collector"
+            [onprem_cost_calculator]="aws-lambda-cost-onprem-calc"
+            [cost_to_kb]="aws-lambda-cost-to-kb"
+            [monthly_report]="aws-lambda-cost-monthly-report"
+            [cost_chat]="aws-lambda-cost-chat"
+            [anomaly_detector]="aws-lambda-cost-anomaly"
+            [cost_dashboard]="aws-lambda-cost-dashboard"
+          )
+
+          PAIRS=""
+
+          # workflow_dispatch에서 특정 함수 지정한 경우
+          if [ -n "${{ github.event.inputs.function }}" ]; then
+            DIR="${{ github.event.inputs.function }}"
+            FUNC="${FUNC_MAP[$DIR]}"
+            PAIRS="${DIR}:${FUNC}"
+          else
+            # push 이벤트: lambda 디렉터리 내 변경된 파일로 함수 감지
+            CHANGED=$(git diff --name-only HEAD~1 HEAD -- "${LAMBDA_DIR}/" 2>/dev/null || \
+                      git diff --name-only HEAD^ HEAD -- "${LAMBDA_DIR}/" 2>/dev/null || echo "")
+            echo "Changed files: $CHANGED"
+
+            SEEN_DIRS=""
+            for filepath in $CHANGED; do
+              DIR=$(echo "$filepath" | awk -F'/' '{print $4}')
+              # 이미 처리한 디렉터리 중복 제거 (같은 함수에 여러 파일 변경 시)
+              if echo "$SEEN_DIRS" | grep -qw "$DIR"; then
+                continue
+              fi
+              FUNC="${FUNC_MAP[$DIR]}"
+              if [ -n "$FUNC" ]; then
+                PAIRS="$PAIRS ${DIR}:${FUNC}"
+                SEEN_DIRS="$SEEN_DIRS $DIR"
+              fi
+            done
+          fi
+
+          PAIRS=$(echo "$PAIRS" | xargs)  # trim whitespace
+          echo "pairs=$PAIRS" >> $GITHUB_OUTPUT
+          echo "Target functions: $PAIRS"
+
+      - name: Deploy functions
+        if: steps.targets.outputs.pairs != ''
+        run: |
+          SUCCESS=()
+          FAIL=()
+
+          for pair in ${{ steps.targets.outputs.pairs }}; do
+            DIR=$(echo "$pair" | cut -d':' -f1)
+            FUNC=$(echo "$pair" | cut -d':' -f2)
+            ZIP="/tmp/${DIR}.zip"
+
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "▶ Deploying: $FUNC  (source: $LAMBDA_DIR/$DIR/handler.py)"
+
+            # zip 생성 (handler.py + 폰트 등 부속 파일 포함)
+            cd "${LAMBDA_DIR}/${DIR}"
+            zip -q "$ZIP" handler.py
+            find . -name "*.ttf" -o -name "*.otf" | xargs -r zip -q "$ZIP"
+            cd -
+
+            # Lambda 코드 업데이트
+            if aws lambda update-function-code \
+                --function-name "$FUNC" \
+                --zip-file "fileb://${ZIP}" \
+                --region "${{ env.AWS_REGION }}" \
+                --query '{FunctionName:FunctionName,CodeSize:CodeSize,LastModified:LastModified}' \
+                --output json; then
+              SUCCESS+=("$FUNC")
+            else
+              echo "::error::$FUNC 배포 실패"
+              FAIL+=("$FUNC")
+            fi
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ 성공: ${SUCCESS[*]:-없음}"
+          echo "❌ 실패: ${FAIL[*]:-없음}"
+
+          [ ${#FAIL[@]} -eq 0 ] || exit 1
+
+      - name: No changes detected
+        if: steps.targets.outputs.pairs == ''
+        run: echo "Lambda handler 변경사항 없음 — 배포 건너뜀"

@@ -81,6 +81,12 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Action = ["ce:GetCostAndUsage"]
         Resource = "*"
       },
+      {
+        Sid    = "SelfInvoke"
+        Effect = "Allow"
+        Action = ["lambda:InvokeFunction"]
+        Resource = "arn:aws:lambda:*:${data.aws_caller_identity.current.account_id}:function:aws-lambda-cost-monthly-report"
+      },
     ]
   })
 }
