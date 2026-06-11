@@ -295,9 +295,24 @@ resource "cloudflare_record" "monitoring" {
 # #260609 박경수 — Keycloak 설치 스크립트 S3 업로드
 # user_data 16KB 제한으로 S3 분리
 resource "aws_s3_object" "keycloak_setup" {
-  bucket  = data.aws_s3_bucket.scripts.id
-  key     = "monitoring/keycloak_setup.sh"
-  content = file("${path.module}/keycloak_setup.sh")
+  bucket       = data.aws_s3_bucket.scripts.id
+  key          = "monitoring/keycloak_setup.sh"
+  content      = file("${path.module}/keycloak_setup.sh")
+  content_type = "text/x-shellscript; charset=utf-8"
+}
+
+resource "aws_s3_object" "admin_chat" {
+  bucket       = data.aws_s3_bucket.scripts.id
+  key          = "monitoring/admin_chat.html"
+  content      = file("${path.module}/admin_chat.html")
+  content_type = "text/html; charset=utf-8"
+}
+
+resource "aws_s3_object" "setup_cost_config" {
+  bucket       = data.aws_s3_bucket.scripts.id
+  key          = "monitoring/setup-cost-config.sh"
+  content      = file("${path.module}/setup-cost-config.sh")
+  content_type = "text/x-shellscript; charset=utf-8"
 }
 
 # #260609 박경수 — Wazuh EC2 → monitoring EC2 80 포트 (Keycloak OIDC)

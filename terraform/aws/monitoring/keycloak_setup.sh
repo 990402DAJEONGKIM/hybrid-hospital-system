@@ -459,6 +459,7 @@ cat > /var/www/monitoring/index.html << 'HTML'
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>mzclinic 통합 모니터링</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -480,6 +481,7 @@ cat > /var/www/monitoring/index.html << 'HTML'
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid #263244;
+      flex-shrink: 0;
     }
     .brand {
       display: flex;
@@ -493,6 +495,7 @@ cat > /var/www/monitoring/index.html << 'HTML'
       border-radius: 8px;
       background: linear-gradient(135deg, #38bdf8, #22c55e);
       box-shadow: 0 0 0 3px rgba(255,255,255,.08);
+      flex-shrink: 0;
     }
     .brand-title {
       font-size: 15px;
@@ -508,18 +511,18 @@ cat > /var/www/monitoring/index.html << 'HTML'
     .status {
       font-size: 12px;
       color: #9ca3af;
+      white-space: nowrap;
     }
     .dashboard {
-      --left: 50%;
       flex: 1;
       min-height: 0;
-      display: grid;
-      grid-template-columns: var(--left) 8px 1fr;
+      display: flex;
       gap: 0;
       padding: 10px;
+      overflow: hidden;
     }
     .panel {
-      min-width: 240px;
+      min-width: 0;
       min-height: 0;
       display: flex;
       flex-direction: column;
@@ -541,24 +544,33 @@ cat > /var/www/monitoring/index.html << 'HTML'
       align-items: center;
       gap: 8px;
       justify-content: space-between;
+      flex-shrink: 0;
     }
     .panel-title {
       display: flex;
       align-items: center;
       gap: 8px;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .dot {
       width: 9px;
       height: 9px;
       border-radius: 50%;
       display: inline-block;
+      flex-shrink: 0;
     }
     .grafana-dot { background: #f97316; }
     .wazuh-dot { background: #0ea5e9; }
+    .cost-dot { background: #10b981; }
     .panel-link {
       font-size: 11px;
       color: #64748b;
       text-decoration: none;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .panel-link:hover { color: #2563eb; }
     iframe {
@@ -569,11 +581,13 @@ cat > /var/www/monitoring/index.html << 'HTML'
       background: #ffffff;
     }
     .splitter {
+      flex: 0 0 8px;
       cursor: col-resize;
       display: flex;
       align-items: center;
       justify-content: center;
       user-select: none;
+      touch-action: none;
     }
     .splitter::before {
       content: "";
@@ -583,7 +597,8 @@ cat > /var/www/monitoring/index.html << 'HTML'
       background: #cbd5e1;
       transition: background .15s ease, height .15s ease;
     }
-    .splitter:hover::before {
+    .splitter:hover::before,
+    .splitter.active::before {
       background: #64748b;
       height: 84px;
     }
@@ -591,18 +606,26 @@ cat > /var/www/monitoring/index.html << 'HTML'
       cursor: col-resize;
       user-select: none;
     }
+    body.dragging iframe {
+      pointer-events: none;
+    }
     @media (max-width: 980px) {
+      header { height: 44px; padding: 0 12px; }
+      .brand-subtitle { display: none; }
       .dashboard {
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr 8px 1fr;
+        flex-direction: column;
+        overflow-y: auto;
+      }
+      .panel {
+        flex: 0 0 360px !important;
       }
       .splitter {
+        flex: 0 0 8px;
         cursor: row-resize;
       }
-      .splitter::before {
-        width: 56px;
-        height: 3px;
-      }
+      .splitter::before { width: 56px; height: 3px; }
+      .splitter:hover::before,
+      .splitter.active::before { width: 84px; height: 3px; }
     }
   </style>
 </head>
@@ -615,11 +638,11 @@ cat > /var/www/monitoring/index.html << 'HTML'
         <div class="brand-subtitle">통합 모니터링 대시보드</div>
       </div>
     </div>
-    <div class="status">Keycloak SSO</div>
+    <div class="status">Keycloak SSO · Grafana / Wazuh / Cost AI</div>
   </header>
 
   <main class="dashboard" id="dashboard">
-    <section class="panel">
+    <section class="panel" id="panel-grafana">
       <div class="panel-header">
         <div class="panel-title"><span class="dot grafana-dot"></span>Grafana</div>
         <a class="panel-link" href="https://grafana.mzclinic.cloud/d/msp-hospital-01/msp?orgId=1&theme=light&kiosk" target="_blank" rel="noopener">새 창</a>
@@ -627,49 +650,122 @@ cat > /var/www/monitoring/index.html << 'HTML'
       <iframe src="https://grafana.mzclinic.cloud/d/msp-hospital-01/msp?orgId=1&theme=light&kiosk" allow="same-origin"></iframe>
     </section>
 
-    <div class="splitter" id="splitter" title="드래그해서 화면 비율 조절"></div>
+    <div class="splitter" data-index="0" title="Grafana / Wazuh 비율 조절"></div>
 
-    <section class="panel">
+    <section class="panel" id="panel-wazuh">
       <div class="panel-header">
         <div class="panel-title"><span class="dot wazuh-dot"></span>Wazuh</div>
         <a class="panel-link" href="https://wazuh.mzclinic.cloud" target="_blank" rel="noopener">새 창</a>
       </div>
       <iframe src="https://wazuh.mzclinic.cloud" allow="same-origin"></iframe>
     </section>
+
+    <div class="splitter" data-index="1" title="Wazuh / Cost AI 비율 조절"></div>
+
+    <section class="panel" id="panel-cost">
+      <div class="panel-header">
+        <div class="panel-title"><span class="dot cost-dot"></span>Cost AI</div>
+        <a class="panel-link" href="/admin_chat.html" target="_blank" rel="noopener">새 창</a>
+      </div>
+      <iframe src="/admin_chat.html" allow="same-origin"></iframe>
+    </section>
   </main>
 
   <script>
-    const dashboard = document.getElementById('dashboard');
-    const splitter = document.getElementById('splitter');
-    const saved = localStorage.getItem('mzclinicDashboardLeft');
-    if (saved) dashboard.style.setProperty('--left', saved);
+    (() => {
+      const dashboard = document.getElementById('dashboard');
+      const panels = [
+        document.getElementById('panel-grafana'),
+        document.getElementById('panel-wazuh'),
+        document.getElementById('panel-cost'),
+      ];
+      const splitters = Array.from(document.querySelectorAll('.splitter'));
+      const storageKey = 'mzclinicDashboard3PaneLayout';
+      const defaultWidths = [40, 40, 20];
+      const minWidths = [18, 18, 12];
 
-    let dragging = false;
+      function normalize(widths) {
+        const next = widths.map((width, index) => Math.max(minWidths[index], Number(width) || defaultWidths[index]));
+        const total = next.reduce((sum, width) => sum + width, 0) || 100;
+        return next.map(width => width / total * 100);
+      }
 
-    splitter.addEventListener('mousedown', () => {
-      dragging = true;
-      document.body.classList.add('dragging');
-    });
+      function apply(widths, save = true) {
+        const next = normalize(widths);
+        panels.forEach((panel, index) => {
+          panel.style.flex = `0 0 ${next[index].toFixed(3)}%`;
+        });
+        if (save) localStorage.setItem(storageKey, JSON.stringify(next));
+        return next;
+      }
 
-    window.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false;
-      document.body.classList.remove('dragging');
-      localStorage.setItem('mzclinicDashboardLeft', dashboard.style.getPropertyValue('--left'));
-    });
+      let current = defaultWidths;
+      try {
+        current = JSON.parse(localStorage.getItem(storageKey) || 'null') || defaultWidths;
+      } catch (_) {
+        current = defaultWidths;
+      }
+      current = apply(current, false);
 
-    window.addEventListener('mousemove', (event) => {
-      if (!dragging) return;
-      const rect = dashboard.getBoundingClientRect();
-      const percent = ((event.clientX - rect.left) / rect.width) * 100;
-      const clamped = Math.min(75, Math.max(25, percent));
-      dashboard.style.setProperty('--left', clamped.toFixed(1) + '%');
-    });
+      splitters.forEach((splitter) => {
+        splitter.addEventListener('pointerdown', (event) => {
+          event.preventDefault();
+          splitter.classList.add('active');
+          document.body.classList.add('dragging');
+          splitter.setPointerCapture?.(event.pointerId);
+
+          const leftIndex = Number(splitter.dataset.index);
+          const rightIndex = leftIndex + 1;
+          const startX = event.clientX;
+          const availableWidth = dashboard.clientWidth - splitters.reduce((sum, el) => sum + el.offsetWidth, 0);
+          const start = panels.map(panel => panel.getBoundingClientRect().width / availableWidth * 100);
+          const pairTotal = start[leftIndex] + start[rightIndex];
+
+          const onMove = (moveEvent) => {
+            const deltaPct = (moveEvent.clientX - startX) / availableWidth * 100;
+            const next = [...start];
+            const left = Math.min(
+              Math.max(start[leftIndex] + deltaPct, minWidths[leftIndex]),
+              pairTotal - minWidths[rightIndex]
+            );
+            next[leftIndex] = left;
+            next[rightIndex] = pairTotal - left;
+            current = apply(next);
+          };
+
+          const onUp = () => {
+            splitter.classList.remove('active');
+            document.body.classList.remove('dragging');
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+          };
+
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp, { once: true });
+          window.addEventListener('pointercancel', onUp, { once: true });
+        });
+      });
+    })();
   </script>
 </body>
 </html>
 
 HTML
+
+# ── Cost AI 패널 HTML 배포/설정 주입 ─────────────────────
+# setup-cost-config.sh는 admin_chat.html의 %%COST_*%% 플레이스홀더를 SSM 값으로 치환해
+# /var/www/monitoring/admin_chat.html로 배포한다.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "${SCRIPT_DIR}/setup-cost-config.sh" ] && [ -f "${SCRIPT_DIR}/admin_chat.html" ]; then
+  if ! bash "${SCRIPT_DIR}/setup-cost-config.sh" /var/www/monitoring; then
+    echo "⚠️ Cost AI 설정 주입에 실패했습니다. 포털 배포는 계속 진행합니다." >&2
+    echo "   확인 대상: /mzclinic/cost/chat/api-url, /mzclinic/cost/chat/api-key, EC2 IAM ssm:GetParameter 권한" >&2
+  fi
+else
+  echo "⚠️ Cost AI 파일이 없어 admin_chat.html 배포를 건너뜁니다." >&2
+  echo "   필요 파일: ${SCRIPT_DIR}/setup-cost-config.sh, ${SCRIPT_DIR}/admin_chat.html" >&2
+fi
 
 nginx -t && systemctl enable nginx && systemctl restart nginx
 echo "✅ #260609 박경수 — Keycloak + nginx 통합 포털 설치 완료"
