@@ -16,7 +16,7 @@ variable "vpc_id" {
 variable "ec2_instance_type" {
   description = "ECS EC2 인스턴스 타입"
   type        = string
-  default = "t3.medium"  # 2026.0604 t3.large → t3.medium
+  default     = "t3.medium" # 2026.0604 t3.large → t3.medium
 }
 
 variable "ec2_ami_id" {
@@ -82,4 +82,17 @@ variable "log_bucket_name" {
   description = "로그 저장 S3 버킷 이름"
   type        = string
   default     = "aws-k2p-storage-01"
+}
+
+# ── SES 예약 알림 ─────────────────────────────────────────
+variable "ses_from_email" {
+  description = "SES 예약 알림 발신 이메일 (SES에 검증된 도메인의 주소여야 함)"
+  type        = string
+  default     = "no-reply@mzclinic.cloud"
+}
+
+variable "admin_email" {
+  description = "계정 잠금 등 보안 알림 수신 관리자 이메일 (SES 검증된 주소여야 함)"
+  type        = string
+  default     = "rlaekwjd248@gmail.com"
 }

@@ -19,10 +19,10 @@ locals {
   ]
 
   hospital_secrets = [
-    { name = "DATABASE_URL",        valueFrom = data.tfe_outputs.secrets.values.db_url_patient_secret_arn },
-    { name = "JWT_SECRET",          valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSCURRENT:" },
+    { name = "DATABASE_URL", valueFrom = data.tfe_outputs.secrets.values.db_url_patient_secret_arn },
+    { name = "JWT_SECRET", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSCURRENT:" },
     { name = "JWT_SECRET_PREVIOUS", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSPREVIOUS:" },
-    { name = "API_KEY",             valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
+    { name = "API_KEY", valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },
   ]
 }
 
@@ -40,8 +40,8 @@ resource "aws_ecs_task_definition" "hospital" {
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
-  cpu                      = "512"   # t3.medium 1대에 태스크 2개 수용 가능하도록 축소 김다정 20260604
-  memory                   = "1536"  # t3.medium 1대에 태스크 2개 수용 가능하도록 축소 김다정 20260604
+  cpu                      = "512"  # t3.medium 1대에 태스크 2개 수용 가능하도록 축소 김다정 20260604
+  memory                   = "1536" # t3.medium 1대에 태스크 2개 수용 가능하도록 축소 김다정 20260604
 
   container_definitions = jsonencode([
     {
@@ -53,7 +53,7 @@ resource "aws_ecs_task_definition" "hospital" {
         protocol      = "tcp"
       }]
       environment = []
-      secrets = local.nginx_secrets
+      secrets     = local.nginx_secrets
       logConfiguration = {
         logDriver = "json-file"
         options = {
@@ -75,12 +75,17 @@ resource "aws_ecs_task_definition" "hospital" {
         protocol      = "tcp"
       }]
       environment = [
-        { name = "COOKIE_SECURE",   value = "true" },
+        { name = "COOKIE_SECURE", value = "true" },
         # 단일 도메인 — 경로 기반 라우팅 (/patient/, /nurse/, /doctor/, /admin/)
-        { name = "ALLOWED_HOSTS",   value = "${var.frontend_domain},localhost" },
+        { name = "ALLOWED_HOSTS", value = "${var.frontend_domain},localhost" },
         { name = "ALLOWED_ORIGINS", value = "https://${var.frontend_domain}" },
-        { name = "TZ",              value = "Asia/Seoul" },
+        { name = "TZ", value = "Asia/Seoul" },
         # Vault 미사용 — ECS는 AWS Secrets Manager에서 시크릿 직접 주입 (hospital_secrets 참고) by 김다정 20260605
+        # SES 예약 알림 (TC-13) — AWS_REGION은 SES 도메인 identity가 검증된 리전과 일치해야 함
+        { name = "SES_FROM_EMAIL", value = var.ses_from_email },
+        { name = "AWS_REGION", value = var.aws_region },
+        # 계정 잠금 보안 알림 수신자 (core/ses.py send_lockout_alert)
+        { name = "ADMIN_EMAIL", value = var.admin_email },
       ]
       secrets = local.hospital_secrets
       logConfiguration = {
