@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>멀티클라우드 비용 분석</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Pretendard:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+/* ──────────────────────────────────────────────────────
+   API 설정 — 아래 값은 setup-cost-config.sh 가 배포 시 자동으로 채워줍니다.
+   로컬 테스트 시 직접 입력하거나 setup-cost-config.sh 를 실행하세요.
+   이 파일을 git 에 push 할 때 실제 키 값이 포함되지 않도록 주의하세요.
+   ────────────────────────────────────────────────────── */
+window.COST_API_URL       = "%%COST_API_URL%%";
+window.COST_API_KEY       = "%%COST_API_KEY%%";
+window.COST_DASHBOARD_URL = "%%COST_DASHBOARD_URL%%";
+window.COST_REPORT_URL    = "%%COST_REPORT_URL%%";
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* Grafana / Wazuh 라이트 테마 — 흰 배경, 둥근 카드, 미니멀 */
+  :root {
+    --bg:        #f0f2f5;
+    --bg2:       #ffffff;
+    --bg3:       #f7f8fa;
+    --bg4:       #eceef1;
+    --border:    #e2e6ec;
+    --border2:   #d0d5de;
+    --accent:    #1a73e8;
+    --accent2:   #1558b0;
+    --accent3:   #0d9488;
+    --text:      #1c2536;
+    --text2:     #5a6478;
+    --text3:     #9aa3b2;
+    --mono:      'DM Mono', monospace;
+    --sans:      'Pretendard', sans-serif;
+    --radius:    10px;
+    --radius-sm: 6px;
+    --radius-lg: 14px;
+    --shadow-sm: 0 1px 4px rgba(16,24,40,0.06), 0 0 0 1px rgba(16,24,40,0.04);
+    --shadow-md: 0 2px 8px rgba(16,24,40,0.08), 0 0 0 1px rgba(16,24,40,0.04);
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── BRAND NAV ── */
+  .brand-nav-bar {
+    position: relative;
+    z-index: 11;
+    display: flex;
+    align-items: stretch;
+    height: 46px;
+    padding: 0 24px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand-nav {
+    display: flex;
+    align-items: center;
+  }
+  .nav-item {
+    padding: 0 18px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+  .nav-item:hover { color: var(--text2); background: var(--bg3); }
+  .nav-item.active { color: var(--accent); border-bottom-color: var(--accent); background: transparent; }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 24px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    color: #fff;
+  }
+
+  .header-title {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .header-subtitle {
+    font-size: 12px;
+    color: var(--text3);
+    margin-top: 2px;
+  }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .status-dot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--text3);
+  }
+
+  .dot-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text3);
+    transition: background 0.3s;
+  }
+  .dot-pulse.active { background: #16a34a; animation: pulse 2s infinite; }
+  .dot-pulse.error  { background: #dc2626; animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  /* ── CHAT WINDOW ── */
+  #chat-window {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    position: relative;
+    z-index: 1;
+    scroll-behavior: smooth;
+  }
+
+  #chat-window::-webkit-scrollbar { width: 5px; }
+  #chat-window::-webkit-scrollbar-track { background: transparent; }
+  #chat-window::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 6px; }
+
+  /* ── MESSAGES ── */
+  .message {
+    display: flex;
+    gap: 12px;
+    max-width: 800px;
+    animation: fadeUp 0.2s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .message.bot .avatar {
+    background: rgba(26,115,232,0.1);
+    border: 1.5px solid rgba(26,115,232,0.25);
+    color: var(--accent);
+  }
+
+  .message.user .avatar {
+    background: rgba(13,148,136,0.1);
+    border: 1.5px solid rgba(13,148,136,0.3);
+    color: var(--accent3);
+  }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    line-height: 1.7;
+    max-width: 680px;
+  }
+
+  .message.bot .bubble {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-top-left-radius: 4px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .message.user .bubble {
+    background: rgba(26,115,232,0.07);
+    border: 1px solid rgba(26,115,232,0.18);
+    color: var(--text);
+    border-top-right-radius: 4px;
+  }
+
+  .msg-meta {
+    font-family: var(--sans);
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 5px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .message.user .msg-meta { justify-content: flex-end; }
+
+  .sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .src-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: rgba(26,115,232,0.07);
+    border: 1px solid rgba(26,115,232,0.2);
+    border-radius: 20px;
+    padding: 2px 10px;
+  }
+
+  .thinking-bubble {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 12px 16px;
+  }
+
+  .thinking-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text3);
+    animation: blink 1.4s infinite;
+    opacity: 0.4;
+  }
+
+  .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes blink {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
+    40% { opacity: 1; transform: scale(1.25); }
+  }
+
+  .thinking-label {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--text3);
+    margin-left: 4px;
+  }
+
+  .bubble.error {
+    border-color: rgba(220,38,38,0.25);
+    background: rgba(220,38,38,0.04);
+  }
+
+  /* ── SUGGESTIONS ── */
+  .suggestions {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    padding: 10px 28px 0;
+  }
+
+  .suggestion-btn {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .suggestion-btn:hover {
+    color: var(--accent);
+    border-color: rgba(26,115,232,0.35);
+    background: rgba(26,115,232,0.04);
+    box-shadow: none;
+  }
+
+  /* ── INPUT AREA ── */
+  .input-area {
+    position: relative;
+    z-index: 10;
+    padding: 14px 24px 18px;
+    background: #ffffff;
+    border-top: 1px solid var(--border);
+  }
+
+  .input-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--bg3);
+    border: 1.5px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+
+  .input-wrapper:focus-within {
+    border-color: rgba(26,115,232,0.5);
+    box-shadow: 0 0 0 3px rgba(26,115,232,0.1);
+    background: #ffffff;
+  }
+
+  #question {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: var(--sans);
+    font-size: 14px;
+    color: var(--text);
+    resize: none;
+    min-height: 24px;
+    max-height: 120px;
+    line-height: 1.6;
+  }
+
+  #question::placeholder { color: var(--text3); }
+
+  #send-btn {
+    background: var(--accent);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-sm);
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, transform 0.1s;
+    font-weight: 600;
+  }
+
+  #send-btn:hover  { background: var(--accent2); }
+  #send-btn:active { transform: scale(0.95); }
+  #send-btn:disabled { opacity: 0.3; cursor: default; transform: none; }
+
+  .input-hint {
+    font-family: var(--sans);
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 7px;
+    padding-left: 2px;
+  }
+
+  /* welcome card */
+  .welcome-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    max-width: 520px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .welcome-title {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .welcome-body {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+
+  .cloud-badges {
+    display: flex;
+    gap: 7px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  .cloud-badge {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 12px;
+    border-radius: 20px;
+    border: 1px solid;
+  }
+
+  .badge-aws   { color: #92400e; border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.08); }
+  .badge-gcp   { color: #1558b0; border-color: rgba(26,115,232,0.3);  background: rgba(26,115,232,0.07); }
+  .badge-onprem{ color: #065f46; border-color: rgba(13,148,136,0.35); background: rgba(13,148,136,0.08); }
+
+  /* ── MARKDOWN ── */
+  .bubble h1, .bubble h2, .bubble h3 {
+    font-family: var(--sans);
+    color: var(--text);
+    margin: 14px 0 6px;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  .bubble h1 { font-size: 15px; }
+  .bubble h2 { font-size: 14px; color: var(--accent); }
+  .bubble h3 { font-size: 13px; color: var(--text2); }
+  .bubble p  { margin: 6px 0; }
+  .bubble ul, .bubble ol { padding-left: 18px; margin: 6px 0; }
+  .bubble li { margin: 3px 0; }
+  .bubble strong { color: var(--text); font-weight: 600; }
+  .bubble em { color: var(--text2); }
+  .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+  .bubble table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 13px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .bubble th {
+    background: var(--bg4);
+    color: var(--text2);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border2);
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .bubble td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .bubble tr:last-child td { border-bottom: none; }
+  .bubble tr:hover td { background: var(--bg3); }
+  .bubble code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg4);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #1558b0;
+  }
+  .bubble blockquote {
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    background: rgba(26,115,232,0.04);
+    padding: 8px 12px;
+    color: var(--text2);
+    margin: 8px 0;
+  }
+
+  /* ── TAB PAGES ── */
+  .tab-page { display: none; overflow-y: auto; padding: 24px 28px; position: relative; z-index: 1; flex: 1; flex-direction: column; }
+  .tab-page.active { display: flex; }
+  #tab-budget.active, #tab-trends.active, #tab-report.active { display: block; }
+
+  /* ── DASHBOARD ── */
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .dash-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 22px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.15s;
+  }
+  .dash-card:hover { box-shadow: var(--shadow-md); }
+  .dash-card-label { font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
+  .dash-card-value { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+  .dash-card-sub { font-family: var(--sans); font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .dash-card.warn .dash-card-value { color: #d97706; }
+  .dash-card.danger .dash-card-value { color: #dc2626; }
+
+  .progress-bar-wrap { margin-top: 10px; background: var(--bg4); border-radius: 99px; height: 5px; overflow: hidden; }
+  .progress-bar { height: 5px; border-radius: 99px; background: var(--accent); transition: width 0.6s ease; }
+  .progress-bar.warn { background: #f59e0b; }
+  .progress-bar.danger { background: #dc2626; }
+
+  .section-title {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .breakdown-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+  .breakdown-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+  }
+  .breakdown-title { font-family: var(--sans); font-size: 12px; font-weight: 600; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .breakdown-title.aws { color: #b45309; }
+  .breakdown-title.gcp { color: #1558b0; }
+  .breakdown-title.onprem { color: #065f46; }
+  .breakdown-row { display: flex; justify-content: space-between; font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--bg4); color: var(--text2); }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-row span:last-child { font-family: var(--mono); font-size: 11px; color: var(--text); }
+
+  .chart-wrap {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* ── REPORT ── */
+  .report-content {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    line-height: 1.8;
+    box-shadow: var(--shadow-sm);
+  }
+  .report-btn {
+    background: var(--accent);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 9px 20px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 20px;
+    transition: background 0.15s;
+  }
+  .report-btn:hover { background: var(--accent2); }
+
+  /* ── DOWNLOAD BTN ── */
+  .download-btn {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 5px 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    box-shadow: var(--shadow-sm);
+  }
+  .download-btn:hover { color: var(--accent); border-color: rgba(26,115,232,0.35); }
+
+
+  /* 2026-06-11 Sean: monitoring 40:40:20 layout의 20% iframe 패널용 반응형 보정 */
+  html, body { min-width: 0; }
+
+  @media (max-width: 560px) {
+    .brand-nav-bar {
+      height: auto;
+      padding: 0 8px;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    .brand-nav { min-width: max-content; }
+    .nav-item {
+      height: 38px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+
+    header {
+      padding: 10px 12px;
+      gap: 8px;
+      min-width: 0;
+    }
+    .logo-icon { display: none; }
+    header > div:nth-child(2) { min-width: 0; }
+    .header-title {
+      max-width: 190px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 12px;
+    }
+    .header-subtitle,
+    .download-btn,
+    .status-dot,
+    .input-hint { display: none; }
+
+    #chat-window {
+      padding: 12px;
+      gap: 12px;
+    }
+    .message {
+      max-width: 100%;
+      gap: 8px;
+    }
+    .avatar {
+      width: 24px;
+      height: 24px;
+      font-size: 9px;
+    }
+    .bubble {
+      max-width: 100%;
+      padding: 10px 12px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .welcome-card { padding: 14px 16px !important; }
+
+    .suggestions {
+      padding: 8px 12px 0;
+      gap: 5px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+    .suggestion-btn {
+      flex: 0 0 auto;
+      padding: 5px 10px;
+      font-size: 11px;
+    }
+
+    .input-area { padding: 10px 12px; }
+    .input-wrapper { padding: 8px 10px; }
+    #question { font-size: 12px; }
+    #send-btn { width: 30px; height: 30px; }
+
+    .tab-page { padding: 12px; }
+    .dash-grid,
+    .breakdown-grid,
+    #capex-opex-wrap,
+    #tab-trends > div[style*="grid-template-columns"] {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+    .dash-card,
+    .breakdown-card,
+    .chart-wrap,
+    .report-content {
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .dash-card-value { font-size: 16px; }
+    .dash-card-label,
+    .section-title { font-size: 10px; }
+    .breakdown-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2px;
+    }
+    .chart-wrap { overflow-x: auto; }
+    .report-btn {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="brand-nav-bar">
+  <nav class="brand-nav">
+    <div class="nav-item active" onclick="switchTab('chat')">재무 분석</div>
+    <div class="nav-item" onclick="switchTab('budget')">예산 현황</div>
+    <div class="nav-item" onclick="switchTab('trends')">비용 추이</div>
+    <div class="nav-item" onclick="switchTab('report')">보고서 생성</div>
+  </nav>
+</div>
+
+<header>
+  <div class="logo-icon">☁</div>
+  <div>
+    <div class="header-title">김이박 클리닉 IT 인프라 비용 분석</div>
+    <div class="header-subtitle">AWS · GCP · On-premises</div>
+  </div>
+  <div class="header-right">
+    <button class="download-btn" onclick="downloadChat()">대화 저장 ↓</button>
+    <div class="status-dot">
+      <div class="dot-pulse" id="status-dot"></div>
+      <span id="status-text">대기 중</span>
+    </div>
+  </div>
+</header>
+
+<!-- 재무 분석 탭 -->
+<div id="tab-chat" class="tab-page active" style="padding:0;">
+  <div id="chat-window">
+    <div class="message bot">
+      <div class="avatar">AI</div>
+      <div>
+        <div class="bubble welcome-card" style="padding:20px 24px; max-width:520px">
+          <div class="welcome-title">비용 분석 준비 완료</div>
+          <div class="welcome-body">
+            AWS, GCP, 온프레미스 인프라 비용에 대해<br>
+            무엇이든 질문하세요. 데이터 기반으로 답변합니다.
+          </div>
+        </div>
+        <div class="msg-meta">지금</div>
+      </div>
+    </div>
+  </div>
+  <div class="suggestions">
+    <button class="suggestion-btn" onclick="fillQuestion('이번 달 전체 인프라 비용은 얼마야?')">이번 달 전체 비용</button>
+    <button class="suggestion-btn" onclick="fillQuestion('GCP 비용이 왜 이렇게 올랐어?')">GCP 비용 급등 원인</button>
+    <button class="suggestion-btn" onclick="fillQuestion('온프레미스 CAPEX vs OPEX 비율은?')">CAPEX / OPEX</button>
+    <button class="suggestion-btn" onclick="fillQuestion('연간 예산 집행률과 잔여 예산은?')">예산 집행률</button>
+    <button class="suggestion-btn" onclick="fillQuestion('비용 절감 방법을 추천해줘')">절감 추천</button>
+  </div>
+  <div class="input-area">
+    <div class="input-wrapper">
+      <textarea id="question" placeholder="비용 관련 질문을 입력하세요..." rows="1"></textarea>
+      <button id="send-btn" onclick="sendQuestion()" title="전송">↑</button>
+    </div>
+    <div class="input-hint">Enter 전송 &nbsp;·&nbsp; Shift+Enter 줄바꿈</div>
+  </div>
+</div>
+
+<!-- 예산 현황 탭 -->
+<div id="tab-budget" class="tab-page">
+  <div class="section-title">예산 현황 <span id="budget-month" style="color:var(--text3); font-size:11px;"></span></div>
+  <div class="dash-grid" id="budget-cards">
+    <div class="dash-card"><div class="dash-card-label">로딩 중</div><div class="dash-card-value">—</div></div>
+  </div>
+  <div id="budget-alert" style="margin-bottom:20px;"></div>
+  <div class="section-title">클라우드별 비용 분석 (전월 대비)</div>
+  <div class="breakdown-grid" id="breakdown-grid"></div>
+  <div class="section-title">온프레미스 CAPEX / OPEX</div>
+  <div id="capex-opex-wrap" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;"></div>
+</div>
+
+<!-- 비용 추이 탭 -->
+<div id="tab-trends" class="tab-page">
+  <div class="section-title">월별 비용 추이 (최근 3개월)</div>
+  <div class="chart-wrap"><canvas id="trends-chart" height="90"></canvas></div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+    <div>
+      <div class="section-title">이번 달 클라우드별 비율</div>
+      <div class="chart-wrap"><canvas id="pie-chart" height="160"></canvas></div>
+    </div>
+    <div>
+      <div class="section-title">월별 비용 상세</div>
+      <div class="chart-wrap" id="trends-table"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 보고서 탭 -->
+<div id="tab-report" class="tab-page">
+  <div class="section-title">월간 비용 보고서</div>
+  <div style="display:flex; gap:12px; align-items:center; margin-bottom:20px;">
+    <button class="report-btn" onclick="generateReport()" style="margin-bottom:0;">보고서 생성 및 이메일 발송</button>
+    <button class="report-btn" onclick="previewReport()" style="margin-bottom:0; background:var(--bg4); color:var(--text2); border:1px solid var(--border2);">미리보기</button>
+  </div>
+  <div id="report-content" class="report-content">
+    <div style="color:var(--text3); font-family:var(--mono); font-size:13px; line-height:2;">
+      <div>📋 월간 비용 보고서를 생성합니다.</div>
+      <div style="margin-top:8px;">· <b>보고서 생성 및 이메일 발송</b> — 보고서를 생성하고 관리자 이메일로 발송합니다.</div>
+      <div>· <b>미리보기</b> — 이메일 발송 없이 화면에서 보고서 내용을 확인합니다.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const chatWindow = document.getElementById('chat-window');
+  const questionEl = document.getElementById('question');
+  const sendBtn    = document.getElementById('send-btn');
+  const statusText = document.getElementById('status-text');
+  const statusDot  = document.getElementById('status-dot');
+
+  questionEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+  });
+
+  questionEl.addEventListener('input', () => {
+    questionEl.style.height = 'auto';
+    questionEl.style.height = Math.min(questionEl.scrollHeight, 120) + 'px';
+  });
+
+  function fillQuestion(text) {
+    questionEl.value = text;
+    questionEl.focus();
+  }
+
+  function now() {
+    return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function appendMessage(role, text, sources) {
+    const msg    = document.createElement('div');
+    msg.className = `message ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? 'YOU' : 'AI';
+
+    const wrap   = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    if (role === 'bot') {
+      bubble.innerHTML = marked.parse(text);
+    } else {
+      bubble.textContent = text;
+    }
+
+    if (sources && sources.length > 0) {
+      const srcDiv = document.createElement('div');
+      srcDiv.className = 'sources';
+      sources.forEach(s => {
+        const parts = s.split('/');
+        const tag = document.createElement('span');
+        tag.className = 'src-tag';
+        tag.textContent = parts.slice(-2).join('/');
+        srcDiv.appendChild(tag);
+      });
+      bubble.appendChild(srcDiv);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = now();
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    msg.appendChild(avatar);
+    msg.appendChild(wrap);
+    chatWindow.appendChild(msg);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return bubble;
+  }
+
+  function appendThinking() {
+    const msg = document.createElement('div');
+    msg.className = 'message bot';
+    msg.id = 'thinking-msg';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = 'AI';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble thinking-bubble';
+    bubble.innerHTML = `
+      <div class="thinking-dot"></div>
+      <div class="thinking-dot"></div>
+      <div class="thinking-dot"></div>
+      <span class="thinking-label">분석 중...</span>
+    `;
+
+    msg.appendChild(avatar);
+    msg.appendChild(bubble);
+    chatWindow.appendChild(msg);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+
+  function removeThinking() {
+    const el = document.getElementById('thinking-msg');
+    if (el) el.remove();
+  }
+
+  function setStatus(state) {
+    const map = {
+      idle:     { text: '대기 중',    cls: '' },
+      loading:  { text: '응답 생성 중', cls: 'active' },
+      connected:{ text: '연결됨',     cls: 'active' },
+      error:    { text: '오류',       cls: 'error' },
+    };
+    const s = map[state] || map.idle;
+    statusText.textContent = s.text;
+    statusDot.className = 'dot-pulse ' + s.cls;
+  }
+
+  async function sendQuestion() {
+    const apiUrl  = window.COST_API_URL;
+    const apiKey  = window.COST_API_KEY;
+    const question = questionEl.value.trim();
+
+    if (!apiUrl)  { alert('API 엔드포인트를 입력하세요.'); return; }
+    if (!question) return;
+
+    appendMessage('user', question);
+    questionEl.value = '';
+    questionEl.style.height = 'auto';
+    sendBtn.disabled = true;
+    appendThinking();
+    setStatus('loading');
+
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ question }),
+      });
+
+      const data = await resp.json();
+      removeThinking();
+
+      if (!resp.ok) {
+        const b = appendMessage('bot', data.error || '오류가 발생했습니다.');
+        b.classList.add('error');
+        setStatus('error');
+      } else {
+        appendMessage('bot', data.answer, data.sources);
+        setStatus('connected');
+      }
+    } catch (err) {
+      removeThinking();
+      const b = appendMessage('bot', `네트워크 오류: ${err.message}`);
+      b.classList.add('error');
+      setStatus('error');
+    } finally {
+      sendBtn.disabled = false;
+      questionEl.focus();
+    }
+  }
+
+  // ── 대화 저장 ──────────────────────────────────────────
+  function downloadChat() {
+    const messages = document.querySelectorAll('#chat-window .message');
+    let text = `멀티클라우드 비용 분석 대화 내보내기\n생성일시: ${new Date().toLocaleString('ko-KR')}\n${'='.repeat(60)}\n\n`;
+    messages.forEach(msg => {
+      const role   = msg.classList.contains('user') ? '사용자' : 'AI';
+      const bubble = msg.querySelector('.bubble');
+      if (!bubble) return;
+      const content = bubble.innerText.trim();
+      text += `[${role}]\n${content}\n\n`;
+    });
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `비용분석_${new Date().toISOString().slice(0,10)}.txt`;
+    a.click();
+  }
+
+  // ── Mock 데이터 (3개월치 — API 없을 때 사용) ────────────
+  const MOCK_DATA = {
+    budget: {
+      annual_krw: 30000000, monthly_krw: 2500000,
+      current_month_total: 97165867, year_to_date: 266215635,
+      monthly_utilization_pct: 3886.6, annual_utilization_pct: 887.4,
+      remaining_annual: -236215635, month_num: 5,
+    },
+    current: {
+      month: "2026-05", aws: 2495500, gcp: 94088400, onprem: 581967, total: 97165867,
+      aws_services:    { "EC2 (컴퓨팅)": 1680700, "RDS (데이터베이스)": 602000, "S3 (스토리지)": 119280, "기타": 93520 },
+      gcp_services:    { "Networking": 51531200, "Compute Engine": 21904400, "Cloud SQL": 16172800, "Cloud Storage": 4480000 },
+      onprem_services: { "서버 감가상각 (CAPEX)": 66667, "전기료": 170000, "네트워크 회선": 100000, "운영 인건비": 200000, "VMware 라이선스": 45300 },
+      onprem_capex: 66667, onprem_opex: 515300,
+    },
+    trends: [
+      {
+        month: "2026-03", aws: 1820000, gcp: 69500000, onprem: 581967, total: 71901967,
+        aws_services:    { "EC2 (컴퓨팅)": 1210000, "RDS (데이터베이스)": 420000, "S3 (스토리지)": 98000, "기타": 92000 },
+        gcp_services:    { "Networking": 38200000, "Compute Engine": 18500000, "Cloud SQL": 9800000, "Cloud Storage": 3000000 },
+        onprem_services: { "서버 감가상각 (CAPEX)": 66667, "전기료": 170000, "네트워크 회선": 100000, "운영 인건비": 200000, "VMware 라이선스": 45300 },
+        onprem_capex: 66667, onprem_opex: 515300,
+      },
+      {
+        month: "2026-04", aws: 2148300, gcp: 83000000, onprem: 581967, total: 85730267,
+        aws_services:    { "EC2 (컴퓨팅)": 1450000, "RDS (데이터베이스)": 520000, "S3 (스토리지)": 105000, "기타": 73300 },
+        gcp_services:    { "Networking": 44800000, "Compute Engine": 20100000, "Cloud SQL": 14100000, "Cloud Storage": 4000000 },
+        onprem_services: { "서버 감가상각 (CAPEX)": 66667, "전기료": 170000, "네트워크 회선": 100000, "운영 인건비": 200000, "VMware 라이선스": 45300 },
+        onprem_capex: 66667, onprem_opex: 515300,
+      },
+      {
+        month: "2026-05", aws: 2495500, gcp: 94088400, onprem: 581967, total: 97165867,
+        aws_services:    { "EC2 (컴퓨팅)": 1680700, "RDS (데이터베이스)": 602000, "S3 (스토리지)": 119280, "기타": 93520 },
+        gcp_services:    { "Networking": 51531200, "Compute Engine": 21904400, "Cloud SQL": 16172800, "Cloud Storage": 4480000 },
+        onprem_services: { "서버 감가상각 (CAPEX)": 66667, "전기료": 170000, "네트워크 회선": 100000, "운영 인건비": 200000, "VMware 라이선스": 45300 },
+        onprem_capex: 66667, onprem_opex: 515300,
+      },
+    ],
+  };
+
+  // ── 탭 전환 ────────────────────────────────────────────
+  let dashboardLoaded = false;
+  let trendsChart = null;
+  let pieChart = null;
+
+  function switchTab(tab) {
+    document.querySelectorAll('.nav-item').forEach((el, i) => {
+      el.classList.toggle('active', ['chat','budget','trends','report'][i] === tab);
+    });
+    document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    if ((tab === 'budget' || tab === 'trends' || tab === 'report') && !dashboardLoaded) {
+      loadDashboard();
+    }
+  }
+
+  // ── 공통 유틸 ──────────────────────────────────────────
+  function krw(n) { return Number(n).toLocaleString('ko-KR') + '원'; }
+  function pct(cur, prev) {
+    if (!prev || prev === 0) return '';
+    const v = ((cur - prev) / prev * 100).toFixed(1);
+    const up = v > 0;
+    return `<span style="font-size:11px; color:${up ? '#d63031' : '#00876b'}; margin-left:6px;">${up ? '▲' : '▼'} ${Math.abs(v)}%</span>`;
+  }
+
+  // ── 대시보드 데이터 로딩 ──────────────────────────────
+  async function loadDashboard() {
+    const apiUrl = window.COST_DASHBOARD_URL || window.COST_API_URL?.replace('/chat', '/dashboard');
+    const apiKey = window.COST_API_KEY;
+    let data = null;
+    try {
+      if (apiUrl) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['x-api-key'] = apiKey;
+        const resp = await fetch(apiUrl, { method: 'GET', headers });
+        const raw = await resp.json();
+        data = typeof raw.body === 'string' ? JSON.parse(raw.body) : raw;
+        // API 데이터에 trends 상세정보 없으면 mock으로 보완
+        if (data.trends && data.trends.length < 3) {
+          data.trends = MOCK_DATA.trends.slice(-3);
+          data.current = { ...MOCK_DATA.current, ...data.current };
+        }
+      }
+    } catch (e) {
+      console.warn('API 실패, Mock 데이터 사용:', e.message);
+    }
+    if (!data) data = MOCK_DATA;
+    dashboardLoaded = true;
+    renderBudget(data);
+    renderTrends(data);
+  }
+
+  // ── 예산 현황 렌더링 ──────────────────────────────────
+  function renderBudget(data) {
+    const b   = data.budget;
+    const cur = data.current;
+    const prev = data.trends?.length >= 2 ? data.trends[data.trends.length - 2] : null;
+    const util = b.monthly_utilization_pct;
+    const annualUtil = b.annual_utilization_pct;
+
+    document.getElementById('budget-month').textContent = cur ? `— ${cur.month} 기준` : '';
+
+    // 예산 소진 예측
+    const burnMonths = b.annual_krw > 0 ? (b.annual_krw / b.current_month_total).toFixed(1) : '∞';
+
+    const cardClass = util > 300 ? 'danger' : util > 100 ? 'warn' : '';
+    const barClass  = util > 300 ? 'danger' : util > 100 ? 'warn' : '';
+
+    document.getElementById('budget-cards').innerHTML = `
+      <div class="dash-card ${cardClass}">
+        <div class="dash-card-label">이번 달 총 비용</div>
+        <div class="dash-card-value">${krw(b.current_month_total)}${prev ? pct(b.current_month_total, prev.total) : ''}</div>
+        <div class="dash-card-sub">월 예산 ${krw(b.monthly_krw)}</div>
+        <div class="progress-bar-wrap"><div class="progress-bar ${barClass}" style="width:${Math.min(util / (util > 100 ? util : 100) * 100, 100)}%"></div></div>
+        <div class="dash-card-sub" style="margin-top:6px; color:${util > 100 ? '#d63031' : 'var(--text2)'};">월 예산 대비 ${util.toLocaleString()}% 집행</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-label">연간 예산 집행률</div>
+        <div class="dash-card-value" style="color:${annualUtil > 100 ? '#d63031' : 'var(--text)'};">${annualUtil.toLocaleString()}%</div>
+        <div class="dash-card-sub">연간 예산 ${krw(b.annual_krw)}</div>
+        <div class="progress-bar-wrap"><div class="progress-bar ${annualUtil > 100 ? 'danger' : ''}" style="width:100%"></div></div>
+        <div class="dash-card-sub" style="margin-top:6px;">누적 지출 ${krw(b.year_to_date)}</div>
+      </div>
+      <div class="dash-card" style="border-color:${b.remaining_annual < 0 ? 'rgba(214,48,49,0.3)' : 'var(--border)'};">
+        <div class="dash-card-label">잔여 예산</div>
+        <div class="dash-card-value" style="color:${b.remaining_annual < 0 ? '#d63031' : 'var(--accent)'};">${krw(b.remaining_annual)}</div>
+        <div class="dash-card-sub">${b.month_num}개월차 기준</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-label">예산 소진 예측</div>
+        <div class="dash-card-value" style="color:#cc7a00;">${burnMonths}개월</div>
+        <div class="dash-card-sub">현재 지출 속도 유지 시</div>
+        <div class="dash-card-sub" style="margin-top:4px; color:#d63031;">월 ${krw(b.current_month_total - b.monthly_krw)} 초과 중</div>
+      </div>
+    `;
+
+    // 경고 배너
+    const alerts = [];
+    if (util > 100) alerts.push(`이번 달 월 예산(${krw(b.monthly_krw)}) 대비 <b>${util.toLocaleString()}%</b> 집행`);
+    if (b.remaining_annual < 0) alerts.push(`연간 예산 <b>${krw(Math.abs(b.remaining_annual))}</b> 초과`);
+    if (cur && cur.gcp / cur.total > 0.9) alerts.push(`GCP 비용이 전체의 <b>${(cur.gcp / cur.total * 100).toFixed(1)}%</b> 차지 — 최적화 검토 필요`);
+    document.getElementById('budget-alert').innerHTML = alerts.length ? `
+      <div style="background:rgba(214,48,49,0.08); border:1px solid rgba(214,48,49,0.25); border-radius:var(--radius); padding:14px 18px;">
+        <div style="font-family:var(--mono); font-size:11px; color:#d63031; margin-bottom:8px;">⚠ 주요 이슈</div>
+        ${alerts.map(a => `<div style="font-size:13px; color:var(--text2); margin-bottom:4px;">· ${a}</div>`).join('')}
+      </div>` : '';
+
+    if (!cur) return;
+
+    // 클라우드별 breakdown (전월 대비)
+    const makeRows = (services, prevServices) =>
+      Object.entries(services).filter(([,v]) => v > 0).sort(([,a],[,b]) => b - a)
+        .map(([k, v]) => {
+          const p = prevServices?.[k] || 0;
+          return `<div class="breakdown-row"><span>${k}</span><span>${krw(v)}${p ? pct(v, p) : ''}</span></div>`;
+        }).join('');
+
+    const prevData = data.trends?.[data.trends.length - 2];
+    document.getElementById('breakdown-grid').innerHTML = `
+      <div class="breakdown-card">
+        <div class="breakdown-title aws">AWS — ${krw(cur.aws)}${prev ? pct(cur.aws, prev.aws) : ''}</div>
+        ${makeRows(cur.aws_services, prevData?.aws_services)}
+      </div>
+      <div class="breakdown-card">
+        <div class="breakdown-title gcp">GCP — ${krw(cur.gcp)}${prev ? pct(cur.gcp, prev.gcp) : ''}</div>
+        ${makeRows(cur.gcp_services, prevData?.gcp_services)}
+      </div>
+      <div class="breakdown-card">
+        <div class="breakdown-title onprem">On-premises — ${krw(cur.onprem)}</div>
+        ${makeRows(cur.onprem_services, prevData?.onprem_services)}
+      </div>
+    `;
+
+    // CAPEX / OPEX
+    const capex = cur.onprem_capex || 0;
+    const opex  = cur.onprem_opex  || 0;
+    const total = capex + opex;
+    document.getElementById('capex-opex-wrap').innerHTML = `
+      <div class="dash-card">
+        <div class="dash-card-label">CAPEX (자본비)</div>
+        <div class="dash-card-value">${krw(capex)}</div>
+        <div class="dash-card-sub">전체 온프레미스의 ${total ? (capex/total*100).toFixed(1) : 0}%</div>
+        <div class="dash-card-sub" style="margin-top:4px;">서버 감가상각</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-label">OPEX (운영비)</div>
+        <div class="dash-card-value">${krw(opex)}</div>
+        <div class="dash-card-sub">전체 온프레미스의 ${total ? (opex/total*100).toFixed(1) : 0}%</div>
+        <div class="dash-card-sub" style="margin-top:4px;">전기료 · 인건비 · 네트워크 · VMware</div>
+      </div>
+    `;
+  }
+
+  // ── 비용 추이 렌더링 ──────────────────────────────────
+  function renderTrends(data) {
+    const trends = data.trends;
+    if (!trends || trends.length === 0) return;
+
+    const labels    = trends.map(t => t.month);
+    const awsData   = trends.map(t => t.aws);
+    const gcpData   = trends.map(t => t.gcp);
+    const onpremData = trends.map(t => t.onprem);
+
+    if (trendsChart) trendsChart.destroy();
+    trendsChart = new Chart(document.getElementById('trends-chart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'AWS',         data: awsData,    backgroundColor: 'rgba(255,153,0,0.75)',  borderRadius: 4 },
+          { label: 'GCP',         data: gcpData,    backgroundColor: 'rgba(66,133,244,0.75)', borderRadius: 4 },
+          { label: 'On-premises', data: onpremData, backgroundColor: 'rgba(86,166,75,0.8)',  borderRadius: 4 },
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#46566a', font: { family: 'DM Mono', size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${krw(ctx.raw)}` } },
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: '#46566a' }, grid: { color: 'rgba(0,0,0,0.06)' } },
+          y: { stacked: true, ticks: { color: '#46566a', callback: v => (v / 10000).toFixed(0) + '만원' }, grid: { color: 'rgba(0,0,0,0.06)' } },
+        }
+      }
+    });
+
+    // 도넛 차트
+    const cur = data.current;
+    if (pieChart) pieChart.destroy();
+    pieChart = new Chart(document.getElementById('pie-chart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['AWS', 'GCP', 'On-premises'],
+        datasets: [{ data: [cur.aws, cur.gcp, cur.onprem], backgroundColor: ['rgba(255,153,0,0.85)', 'rgba(66,133,244,0.85)', 'rgba(86,166,75,0.85)'], borderWidth: 0 }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#46566a', font: { family: 'DM Mono', size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${krw(ctx.raw)} (${(ctx.raw / cur.total * 100).toFixed(1)}%)` } }
+        }
+      }
+    });
+
+    // 월별 상세 테이블 (전월 대비 증감 포함)
+    document.getElementById('trends-table').innerHTML = `
+      <table style="width:100%; font-size:12px; border-collapse:collapse;">
+        <thead><tr>
+          ${['월','합계','전월 대비'].map(h => `<th style="text-align:left; padding:6px 8px; color:var(--accent); font-family:var(--mono); font-size:10px; border-bottom:1px solid var(--border2); white-space:nowrap;">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${trends.map((t, i) => {
+            const prev = i > 0 ? trends[i-1] : null;
+            const diff = prev ? t.total - prev.total : null;
+            const diffStr = diff !== null
+              ? `<span style="color:${diff > 0 ? '#d63031' : '#00876b'};">${diff > 0 ? '▲' : '▼'} ${krw(Math.abs(diff))}</span>`
+              : '—';
+            return `<tr>
+              <td style="padding:6px 8px; border-bottom:1px solid var(--border); color:var(--text2); font-family:var(--mono); font-size:11px;">${t.month}</td>
+              <td style="padding:6px 8px; border-bottom:1px solid var(--border); color:var(--text); font-weight:600;">${krw(t.total)}</td>
+              <td style="padding:6px 8px; border-bottom:1px solid var(--border);">${diffStr}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // ── 보고서 생성 ────────────────────────────────────────
+  async function _callReport(sendEmail) {
+    const apiUrl = window.COST_REPORT_URL || window.COST_API_URL?.replace('/chat', '/report') || '';
+    const apiKey = window.COST_API_KEY;
+    const btns   = document.querySelectorAll('.report-btn');
+    const content = document.getElementById('report-content');
+    btns.forEach(b => b.disabled = true);
+    content.innerHTML = '<div style="color:var(--text3); font-family:var(--mono); font-size:13px; padding:20px 0;">보고서를 생성하고 있습니다...</div>';
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['x-api-key'] = apiKey;
+      const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify({ send_email: sendEmail }) });
+      const raw  = await resp.json();
+      const body = typeof raw.body === 'string' ? JSON.parse(raw.body) : raw;
+      const notice = sendEmail
+        ? `<div style="color:var(--accent); font-family:var(--mono); font-size:12px; margin-bottom:16px; padding:10px 14px; background:rgba(50,116,217,0.08); border-radius:8px; border:1px solid rgba(50,116,217,0.2);">✓ 보고서가 이메일로 발송되었습니다.</div>`
+        : '';
+      content.innerHTML = notice + `<div class="bubble" style="background:transparent; border:none; padding:0; max-width:100%;">${marked.parse(body.report || body.message || JSON.stringify(body, null, 2))}</div>`;
+    } catch (e) {
+      content.innerHTML = `<div style="color:#d63031; font-family:var(--mono);">오류: ${e.message}</div>`;
+    } finally {
+      btns.forEach(b => b.disabled = false);
+    }
+  }
+
+  function generateReport() { _callReport(true);  }
+  function previewReport()  { _callReport(false); }
+</script>
+</body>
+</html>

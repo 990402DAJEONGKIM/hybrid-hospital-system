@@ -360,10 +360,13 @@ echo "GF_SECURITY_CONTENT_SECURITY_POLICY=false" >> /etc/default/grafana-server
 systemctl enable grafana-server
 systemctl start grafana-server
 
-# #260609 박경수 — Keycloak + nginx 설치 (S3에서 스크립트 받아 실행)
+# #260609 박경수 — Keycloak + nginx + Cost AI 포털 설치 (S3에서 스크립트/HTML 받아 실행)
 # user_data 16KB 제한으로 별도 분리
-aws s3 cp s3://aws-k2p-storage-01/monitoring/keycloak_setup.sh /tmp/keycloak_setup.sh \
-  --region ap-south-2
-chmod +x /tmp/keycloak_setup.sh
+for file in keycloak_setup.sh admin_chat.html setup-cost-config.sh; do
+  aws s3 cp "s3://aws-k2p-storage-01/monitoring/$${file}" "/tmp/$${file}" \
+    --region ap-south-2
+done
+
+chmod +x /tmp/keycloak_setup.sh /tmp/setup-cost-config.sh
 bash /tmp/keycloak_setup.sh >> /var/log/keycloak_setup.log 2>&1
 # #260609 박경수 end
