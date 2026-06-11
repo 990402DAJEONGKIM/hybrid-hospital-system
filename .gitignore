@@ -49,3 +49,6 @@ hospital_schema.sql
 response.json
 *-key.json
 *-sa-*.json
+__pycache__/
+*.pyc
+*.pyo
