@@ -61,13 +61,13 @@ def _emit_wazuh_log(action_type, result_code, user_id, source_ip, path, method, 
 # (HTTP 메서드, 경로 패턴, action_type) — 순서 중요 (구체적인 경로 먼저)
 ACTION_MAP = [
     # 인증
-    ("POST",   r"^/auth/login$",                              "LOGIN"),
-    ("POST",   r"^/auth/logout$",                             "LOGOUT"),
-    ("POST",   r"^/auth/register$",                           "REGISTER"),
-    ("POST",   r"^/auth/refresh$",                            "TOKEN_REFRESH"),
-    ("POST",   r"^/auth/change-password$",                    "CHANGE_PASSWORD"),
-    ("GET",    r"^/auth/me$",                                 "READ_ME"),
-    ("GET",    r"^/auth/session-status$",                     "SESSION_STATUS"),
+    ("POST",   r"/auth/login$",                              "LOGIN"),
+    ("POST",   r"/auth/logout$",                             "LOGOUT"),
+    ("POST",   r"/auth/register$",                           "REGISTER"),
+    ("POST",   r"/auth/refresh$",                            "TOKEN_REFRESH"),
+    ("POST",   r"/auth/change-password$",                    "CHANGE_PASSWORD"),
+    ("GET",    r"/auth/me$",                                 "READ_ME"),
+    ("GET",    r"/auth/session-status$",                     "SESSION_STATUS"),
     # 환자 포털 — 예약
     ("GET",    r"^/portal/appointments$",                     "READ_APPOINTMENTS"),
     ("POST",   r"^/portal/appointments$",                     "CREATE_APPOINTMENT"),
