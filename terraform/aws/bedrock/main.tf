@@ -37,9 +37,9 @@ resource "aws_iam_role_policy" "lambda_exec" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "CloudWatchLogs"
-        Effect = "Allow"
-        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Sid      = "CloudWatchLogs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:*:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/aws-lambda-cost-*:*"
       },
       {
@@ -55,7 +55,10 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Sid    = "SSMParameters"
         Effect = "Allow"
         Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
-        Resource = "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/cost/*"
+        Resource = [
+          "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/cost/*",
+          "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/gcp/*",
+        ]
       },
       {
         Sid      = "KMS"
@@ -70,21 +73,21 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Resource = "*"
       },
       {
-        Sid    = "SES"
-        Effect = "Allow"
-        Action = ["ses:SendEmail", "ses:SendRawEmail"]
+        Sid      = "SES"
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
         Resource = "*"
       },
       {
-        Sid    = "CostExplorer"
-        Effect = "Allow"
-        Action = ["ce:GetCostAndUsage"]
+        Sid      = "CostExplorer"
+        Effect   = "Allow"
+        Action   = ["ce:GetCostAndUsage"]
         Resource = "*"
       },
       {
-        Sid    = "SelfInvoke"
-        Effect = "Allow"
-        Action = ["lambda:InvokeFunction"]
+        Sid      = "SelfInvoke"
+        Effect   = "Allow"
+        Action   = ["lambda:InvokeFunction"]
         Resource = "arn:aws:lambda:*:${data.aws_caller_identity.current.account_id}:function:aws-lambda-cost-monthly-report"
       },
     ]
@@ -163,9 +166,10 @@ resource "aws_lambda_function" "gcp_billing_collector" {
   source_code_hash = data.archive_file.gcp_billing_collector.output_base64sha256
   environment {
     variables = {
-      RAW_BUCKET    = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      RAW_BUCKET     = data.terraform_remote_state.s3.outputs.storage_bucket_name
       SSM_GCP_CF_URL = "/mzclinic/cost/gcp/cf-url"
       SSM_GCP_CF_KEY = "/mzclinic/cost/gcp/cf-api-key"
+      SSM_GCP_TABLE  = aws_ssm_parameter.gcp_billing_table_name.name
     }
   }
 
@@ -388,8 +392,8 @@ resource "aws_lambda_function" "cost_dashboard" {
 
   environment {
     variables = {
-      RAW_BUCKET         = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      ANNUAL_BUDGET_KRW  = var.annual_budget_krw
+      RAW_BUCKET        = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      ANNUAL_BUDGET_KRW = var.annual_budget_krw
     }
   }
 

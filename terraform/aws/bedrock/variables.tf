@@ -27,3 +27,9 @@ variable "annual_budget_krw" {
   type        = number
   default     = 30000000
 }
+
+variable "gcp_billing_table_name" {
+  description = "GCP 빌링 내보내기가 생성한 BigQuery 테이블명"
+  type        = string
+  default     = "gcp_billing_export_v1_011034_3337E0_C3B9BF"
+}
