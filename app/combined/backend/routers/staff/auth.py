@@ -175,31 +175,33 @@ def login(
 
     now = datetime.now(timezone.utc)
 
-    if user.locked_until and user.locked_until > now:
-        history.user_id = user.user_id
-        history.result = "locked"
-        db.add(history)
-        db.commit()
-        remaining = int((user.locked_until - now).total_seconds() / 60)
-        raise HTTPException(
-            status_code=401,
-            detail=f"계정이 잠겨 있습니다. {remaining}분 후 재시도하세요.",
-        )
+    # [임시] 계정 잠금 해제 - 원복 필요 (ISMS-P 2.9.1)
+    # if user.locked_until and user.locked_until > now:
+    #     history.user_id = user.user_id
+    #     history.result = "locked"
+    #     db.add(history)
+    #     db.commit()
+    #     remaining = int((user.locked_until - now).total_seconds() / 60)
+    #     raise HTTPException(
+    #         status_code=401,
+    #         detail=f"계정이 잠겨 있습니다. {remaining}분 후 재시도하세요.",
+    #     )
 
     if not verify_password(body.password, user.password_hash):
         policy = get_password_policy(db)
         history.user_id = user.user_id
         history.result = "fail"
         user.failed_login_cnt += 1
-        if user.failed_login_cnt >= policy.max_failed_logins:
-            user.locked_until = now + timedelta(minutes=policy.lockout_minutes)
-            history.result = "locked"
-            _record_audit(db, user.user_id, "ACCOUNT_LOCKED", "401", request)
-            send_lockout_alert(
-                target_email = user.email,
-                ip_address   = get_client_ip(request),
-                locked_until = user.locked_until.isoformat(),
-            )
+        # [임시] 계정 잠금 해제 - 원복 필요 (ISMS-P 2.9.1)
+        # if user.failed_login_cnt >= policy.max_failed_logins:
+        #     user.locked_until = now + timedelta(minutes=policy.lockout_minutes)
+        #     history.result = "locked"
+        #     _record_audit(db, user.user_id, "ACCOUNT_LOCKED", "401", request)
+        #     send_lockout_alert(
+        #         target_email = user.email,
+        #         ip_address   = get_client_ip(request),
+        #         locked_until = user.locked_until.isoformat(),
+        #     )
         db.add(history)
         db.commit()
         raise HTTPException(status_code=401, detail="회원번호 또는 비밀번호가 올바르지 않습니다.")
