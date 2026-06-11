@@ -17,13 +17,3 @@ resource "aws_ssm_parameter" "cost_chat_api_key" {
   value       = aws_api_gateway_api_key.cost_chat.value
   tags = merge(local.common_tags, { Name = "aws-ssm-cost-chat-api-key" })
 }
-
-import {
-  to = aws_ssm_parameter.cost_chat_api_url
-  id = "/mzclinic/cost/chat/api-url"
-}
-
-import {
-  to = aws_ssm_parameter.cost_chat_api_key
-  id = "/mzclinic/cost/chat/api-key"
-}
