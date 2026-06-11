@@ -63,8 +63,8 @@ resolve_config() {
     PROXY_VM=$(gcloud compute instance-groups managed list-instances "$PROXY_MIG" \
         --zone="$GCP_ZONE" \
         --project="$GCP_PROJECT" \
-        --filter="status=RUNNING" \
-        --format="value(instance)" | head -1 | xargs basename)
+        --filter="instanceStatus=RUNNING" \
+        --format="value(name)" | head -1)
 
     if [ -z "$PROXY_VM" ]; then
         echo -e "  ${RED}[ERROR] MIG($PROXY_MIG)에서 실행 중인 인스턴스를 찾을 수 없습니다.${NC}"
