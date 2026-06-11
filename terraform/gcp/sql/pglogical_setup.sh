@@ -5,9 +5,8 @@
 #
 # 사전 조건:
 #   - AWS-GCP VPN 연결 완료
-#   - GCP HAProxy VM 실행 중 (gcp-rds-proxy-01)
+#   - GCP HAProxy MIG 실행 중 (gcp-rds-proxy-mig)
 #   - RDS 실행 중, Cloud SQL 실행 중
-#   - GCP HAProxy VM(gcp-rds-proxy-01) 실행 중
 #
 # 사용법:
 #   ./pglogical_setup.sh init         # 최초 설정 (스키마 복제 + 데이터 동기화)
@@ -21,7 +20,8 @@ RDS_CLUSTER_ID="aws-aurora-01"
 GCP_INSTANCE="gcp-cloud-sql"
 GCP_PROJECT="gcp-project-496802"
 GCP_ZONE="asia-northeast3-a"
-PROXY_VM="gcp-rds-proxy-01"
+PROXY_MIG="gcp-rds-proxy-mig"
+PROXY_IP="10.10.1.37"   # Static Internal IP — MIG 재생성 후에도 고정
 PROXY_PORT="5433"
 
 GREEN='\033[0;32m'
@@ -59,10 +59,17 @@ resolve_config() {
         --project="$GCP_PROJECT" \
         --format="value(ipAddresses[0].ipAddress)")
 
-    PROXY_IP=$(gcloud compute instances describe "$PROXY_VM" \
+    # MIG에서 현재 실행 중인 인스턴스명 동적 조회
+    PROXY_VM=$(gcloud compute instance-groups managed list-instances "$PROXY_MIG" \
         --zone="$GCP_ZONE" \
         --project="$GCP_PROJECT" \
-        --format="value(networkInterfaces[0].networkIP)")
+        --filter="status=RUNNING" \
+        --format="value(instance)" | head -1 | xargs basename)
+
+    if [ -z "$PROXY_VM" ]; then
+        echo -e "  ${RED}[ERROR] MIG($PROXY_MIG)에서 실행 중인 인스턴스를 찾을 수 없습니다.${NC}"
+        exit 1
+    fi
 
     CLOUD_SQL_APP_PASS=$(gcloud secrets versions access latest \
         --secret=gcp-cloud-sql-app-password \
@@ -81,7 +88,8 @@ resolve_config() {
     echo -e "  RDS 엔드포인트:  ${GREEN}$RDS_ENDPOINT${NC}"
     echo -e "  RDS IP:          ${GREEN}$RDS_IP${NC}"
     echo -e "  Cloud SQL IP:    ${GREEN}$CLOUD_SQL_IP${NC}"
-    echo -e "  HAProxy IP:      ${GREEN}$PROXY_IP${NC}"
+    echo -e "  HAProxy VM:      ${GREEN}$PROXY_VM${NC} (MIG: $PROXY_MIG)"
+    echo -e "  HAProxy IP:      ${GREEN}$PROXY_IP${NC} (static)"
 }
 
 # =============================================================
