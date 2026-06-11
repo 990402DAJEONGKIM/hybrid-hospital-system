@@ -99,7 +99,7 @@ resource "aws_iam_role" "ec2_instance" {
 resource "aws_iam_role_policy_attachment" "ec2_ecs" {
   role       = aws_iam_role.ec2_instance.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
-  
+
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
@@ -114,6 +114,26 @@ resource "aws_iam_instance_profile" "ec2_instance" {
 
 
 
+# ECS 태스크 → SES 예약 알림 발송 (TC-13, SFR-001)
+# ses:FromAddress 조건으로 발신 주소를 고정해 최소 권한 유지
+resource "aws_iam_role_policy" "task_ses_send" {
+  name = "ecs-task-ses-send"
+  role = aws_iam_role.task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ses:SendEmail"]
+      Resource = "*"
+      Condition = {
+        StringEquals = { "ses:FromAddress" = var.ses_from_email }
+      }
+    }]
+  })
+}
+
+
 # ECS EC2 Vector → S3 쓰기 + KMS 권한 - 260608 김강환
 # Vector가 docker 로그를 S3 ecs/ prefix에 저장하기 위한 최소 권한
 resource "aws_iam_role_policy" "ec2_vector_s3" {
@@ -126,16 +146,16 @@ resource "aws_iam_role_policy" "ec2_vector_s3" {
       {
         Sid    = "S3Write"
         Effect = "Allow"
-        Action = ["s3:PutObject","s3:ListBucket"]
+        Action = ["s3:PutObject", "s3:ListBucket"]
         Resource = [
           "arn:aws:s3:::aws-k2p-storage-01",
           "arn:aws:s3:::aws-k2p-storage-01/ecs/*"
         ]
       },
       {
-        Sid    = "KMSEncrypt"
-        Effect = "Allow"
-        Action = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Sid      = "KMSEncrypt"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
         Resource = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
       }
     ]
