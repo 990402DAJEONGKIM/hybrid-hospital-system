@@ -24,8 +24,14 @@ router = APIRouter(prefix="/portal", tags=["patient-portal"])
 
 # ── 알림 헬퍼 ────────────────────────────────────────────────────
 
-def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
-    """예약 상태 변경 시 환자 이메일 알림 발송 + notifications 테이블 기록."""
+def _notify_patient(
+    db:        DbSession,
+    appt:      Appointment,
+    status:    str,
+    prev_date: Optional[str] = None,
+    prev_time: Optional[str] = None,
+) -> None:
+    """예약 상태 변경 시 환자 이메일 알림 발송 + notifications/audit_logs 기록."""
     try:
         patient = db.query(Patient).filter(Patient.patient_id_hash == appt.patient_id_hash).first()
         if not patient:
@@ -42,6 +48,8 @@ def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
             appt_time = appt.appointment_time.strftime("%H:%M") if appt.appointment_time else None,
             dept_code = appt.department_code,
             type_name = type_name,
+            prev_date = prev_date,
+            prev_time = prev_time,
         )
         now = datetime.now(timezone.utc)
         db.add(Notification(
@@ -51,6 +59,15 @@ def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
             status         = "sent" if sent else "failed",
             sent_at        = now if sent else None,
         ))
+        # 알림 발송 이벤트 감사 기록 (SER-005: action_type=NOTIFICATION_SENT)
+        record_audit(
+            db, action_type="NOTIFICATION_SENT",
+            result_code="200" if sent else "500",
+            user_id=patient_user.user_id if patient_user else None,
+            patient_id=appt.patient_id_hash,
+            target_table="notifications",
+            target_id=appt.appointment_id,
+        )
         db.commit()
     except Exception as exc:
         logger.warning("예약 알림 기록 실패 (appointment_id=%s): %s", appt.appointment_id, exc)
@@ -588,7 +605,11 @@ def update_appointment(
     db.commit()
     db.refresh(appt)
 
-    _notify_patient(db, appt, "updated")
+    _notify_patient(
+        db, appt, "updated",
+        prev_date = str(prev_date),
+        prev_time = prev_time.strftime("%H:%M") if prev_time else None,
+    )
 
     return _appt_out(appt)
 

@@ -10,7 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db, get_read_db
-from core.security import get_client_ip, get_current_user, has_permission
+from core.security import get_client_ip, get_current_user, has_permission, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
@@ -45,10 +45,13 @@ def _record_audit(
 
 
 def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
-    """예약 상태 변경 시 환자 이메일 알림 발송 + notifications 테이블 기록."""
+    """예약 상태 변경 시 환자 이메일 알림 발송 + notifications/audit_logs 기록."""
     try:
         patient = db.query(Patient).filter(Patient.patient_id_hash == appt.patient_id_hash).first()
         if not patient:
+            return
+        if not patient.email:
+            logger.info("이메일 미등록 환자 — 알림 생략 (patient_id_hash=%s)", appt.patient_id_hash)
             return
         patient_user = db.query(User).filter(User.patient_id == patient.patient_id).first()
         type_name = appt.appt_type.type_name if appt.appt_type else None
@@ -68,6 +71,15 @@ def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
             status         = "sent" if sent else "failed",
             sent_at        = now if sent else None,
         ))
+        # 알림 발송 이벤트 감사 기록 (SER-005: action_type=NOTIFICATION_SENT)
+        record_audit(
+            db, action_type="NOTIFICATION_SENT",
+            result_code="200" if sent else "500",
+            user_id=patient_user.user_id if patient_user else None,
+            patient_id=appt.patient_id_hash,
+            target_table="notifications",
+            target_id=appt.appointment_id,
+        )
         db.commit()
     except Exception as exc:
         logger.warning("예약 알림 기록 실패 (appointment_id=%s): %s", appt.appointment_id, exc)
