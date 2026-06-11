@@ -37,3 +37,9 @@ variable "cf_api_key" {
   type        = string
   sensitive   = true
 }
+
+variable "billing_export_table" {
+  description = "GCP 빌링 내보내기가 생성한 BigQuery 테이블명 (gcp_billing_export_v1_<빌링계정ID> 형식)"
+  type        = string
+  default     = "gcp_billing_export_v1_011034_3337E0_C3B9BF"
+}

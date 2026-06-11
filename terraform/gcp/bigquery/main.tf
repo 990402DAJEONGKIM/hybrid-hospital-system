@@ -1,10 +1,10 @@
 # ── BigQuery 데이터셋 ────────────────────────────────────────────────────────
 
 resource "google_bigquery_dataset" "billing" {
-  dataset_id                  = var.dataset_id
-  location                    = var.region
-  description                 = "GCP 클라우드 빌링 내보내기 데이터셋"
-  delete_contents_on_destroy  = false
+  dataset_id                 = var.dataset_id
+  location                   = var.region
+  description                = "GCP 클라우드 빌링 내보내기 데이터셋"
+  delete_contents_on_destroy = false
 
   labels = local.common_labels
 }
@@ -24,8 +24,8 @@ resource "google_iam_workload_identity_pool_provider" "aws_lambda" {
   description                        = "AWS Lambda 역할 기반 자격증명 프로바이더"
 
   attribute_mapping = {
-    "google.subject"     = "assertion.arn"
-    "attribute.aws_role" = "assertion.arn.extract('assumed-role/{role}/')"
+    "google.subject"        = "assertion.arn"
+    "attribute.aws_role"    = "assertion.arn.extract('assumed-role/{role}/')"
     "attribute.aws_account" = "assertion.account"
   }
 
@@ -105,6 +105,7 @@ resource "google_cloudfunctions2_function" "billing" {
     environment_variables = {
       GCP_PROJECT_ID = var.project_id
       BQ_DATASET     = var.dataset_id
+      BQ_TABLE       = var.billing_export_table
       CF_API_KEY     = var.cf_api_key
     }
   }
