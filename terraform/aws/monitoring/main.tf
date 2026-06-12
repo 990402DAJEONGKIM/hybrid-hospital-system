@@ -68,15 +68,7 @@ resource "aws_instance" "aws-monitoring-01" {
   vpc_security_group_ids = [aws_security_group.aws-monitoring-sg.id]
   iam_instance_profile   = aws_iam_instance_profile.aws-monitoring-profile.name
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
-    aws_region        = data.aws_region.current.region
-    base_domain       = var.base_domain
-    # #260609 박경수 — Keycloak 설치용 변수 추가
-    aurora_endpoint   = var.aurora_endpoint
-    monitoring_domain = var.monitoring_domain
-    wazuh_private_ip  = var.wazuh_private_ip
-    # #260609 박경수 end
-  }))
+  user_data = base64encode(file("${path.module}/user_data.sh.tpl"))
 
   root_block_device {
     volume_size           = 30    # Prometheus TSDB 15일 보존 기준
