@@ -35,18 +35,17 @@ def lambda_handler(event, context):
     import json
     alarm_name = ""
     try:
-        msg = json.loads(event['Records'][0]['Sns']['Message'])
-        alarm_name = msg.get('AlarmName', '')
-        new_state  = msg.get('NewStateValue', '')
+        # EventBridge 이벤트 형식
+        detail     = event.get('detail', {})
+        alarm_name = detail.get('alarmName', '')
+        new_state  = detail.get('state', {}).get('value', '')
         print(f"[INFO] 알람: {alarm_name}, 상태: {new_state}")
 
-        # OK 상태면 아무것도 안 함
         if new_state != 'ALARM':
             print("[INFO] ALARM 상태 아님. 종료.")
             return {"status": "SKIPPED"}
     except Exception as e:
-        print(f"[WARN] SNS 메시지 파싱 실패: {e}")
-
+        print(f"[WARN] 이벤트 파싱 실패: {e}")
     # EC2 상태 확인
     target_id = _get_instance_id_by_private_ip(PRIVATE_IP)
     print(f"[INFO] 조회된 인스턴스 ID: {target_id}")

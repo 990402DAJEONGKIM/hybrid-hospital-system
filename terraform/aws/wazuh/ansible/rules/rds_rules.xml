@@ -2,10 +2,13 @@
 <group name="rds,pgaudit,">
 
   <!-- RDS pgaudit 기본 탐지 (부모 룰) -->
+  <!-- RDS pgaudit 베이스 룰 - 260611 김강환 -->
+  <!-- if_sid>2502 + match로 RDS 로그 식별 -->
   <rule id="100100" level="3">
-    <location>Wazuh-AWS</location>
+    <if_sid>2502</if_sid>
     <match>AUDIT: SESSION</match>
     <description>RDS pgaudit 감사 로그</description>
+    <group>rds,pgaudit,</group>
   </rule>
 
   <!-- DDL 탐지 -->
@@ -16,22 +19,21 @@
     <group>ddl,database_change</group>
   </rule>
 
-  <!-- WRITE 탐지 -->
-  <rule id="100102" level="5">
+  <rule id="100102" level="2">
     <if_sid>100100</if_sid>
     <match>,WRITE,</match>
     <description>RDS WRITE 쿼리 탐지 - 데이터 변경</description>
     <group>write,database_change</group>
+    <options>no_log</options>
   </rule>
 
-  <!-- READ 탐지 -->
-  <rule id="100103" level="3">
-    <if_sid>100100</if_sid>
+  <rule id="100103" level="2">
+   <if_sid>100100</if_sid>
     <match>,READ,</match>
     <description>RDS SELECT 쿼리 탐지 - 데이터 조회</description>
     <group>read</group>
+    <options>no_log</options>
   </rule>
-
   <!-- rdsproxyadmin 헬스체크 필터링 -->
   <rule id="100104" level="0">
     <if_sid>100103</if_sid>
@@ -113,20 +115,20 @@
   </rule>
 
 
-  <!-- 슬로우 쿼리 탐지 -->
+  <!-- 슬로우 쿼리 탐지 - 수정 260611 김강환 -->
   <rule id="100112" level="6">
-    <location>Wazuh-AWS</location>
+    <if_sid>2502</if_sid>
     <match>duration: </match>
-    <description>RDS 슬로우 쿼리 탐지 (1초 이상 소요 쿼리)</description>
-    <group>performance,slow_query,</group>
+    <description>RDS 슬로우 쿼리 탐지</description>
+    <group>rds,performance,slow_query,</group>
   </rule>
 
-  <!-- 접속 기록 탐지 -->
+  <!-- 접속 기록 탐지 - 수정 260611 김강환 -->
   <rule id="100113" level="3">
-    <location>Wazuh-AWS</location>
+    <if_sid>2502</if_sid>
     <match>connection received</match>
     <description>RDS 클라이언트 접속 기록</description>
-    <group>authentication,connection,</group>
+    <group>rds,authentication,connection,</group>
   </rule>
 
   <!-- rdsproxyadmin WRITE 필터링 -->
@@ -258,4 +260,103 @@
     <group>after_hours,insider_threat,weekend,</group>
     <mitre><id>T1530</id></mitre>
   </rule>
+
+  <!-- rdsadmin 로컬 접속 기록 억제 - 260611 김강환 -->
+  <!-- host=[local] 패턴 = Aurora 내부 관리 프로세스 정상 동작 -->
+  <rule id="100132" level="0">
+    <if_sid>100113</if_sid>
+    <match>host=[local]</match>
+    <description>RDS 로컬 내부 접속 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- rdsadmin connection authorized 2502 억제 - 260611 김강환 -->
+  <!-- Aurora 내부 rdsadmin 프로세스 로그 -->
+  <rule id="100133" level="0">
+    <if_sid>2502</if_sid>
+    <match>rdsadmin</match>
+    <description>RDS rdsadmin 내부 프로세스 로그 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- RDS Proxy 내부 헬스체크 계정 로그 억제 - 추가 260611 김강환 -->
+  <!-- rdsproxyadmin: RDS Proxy가 백엔드 RDS 연결 상태 확인하는 내부 계정 -->
+  <rule id="100134" level="0">
+    <if_sid>2502</if_sid>
+    <match>rdsproxyadmin</match>
+    <description>RDS Proxy 내부 헬스체크 로그 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- GCP rds-proxy 정상 연결 억제 - 추가 260611 김강환 -->
+  <!-- 10.10.1.37 = GCP rds-proxy → AWS RDS TCP 포워딩 정상 동작 -->
+  <rule id="100135" level="0">
+    <if_sid>100113</if_sid>
+    <match>host=10.10.1.37</match>
+    <description>GCP rds-proxy 정상 연결 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- 온프레미스 서버 RDS 접속 억제 - 추가 260611 김강환 -->
+  <rule id="100136" level="0">
+    <if_sid>100113</if_sid>
+    <match>host=172.30.1.76</match>
+    <description>온프레미스 서버 RDS 정상 연결 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- 모니터링 서버 RDS 접속 억제 - 추가 260611 김강환 -->
+  <rule id="100137" level="0">
+    <if_sid>100113</if_sid>
+    <match>host=10.0.12.128</match>
+    <description>모니터링 서버 RDS 정상 연결 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- SELECT 1 헬스체크 억제 - 추가 260611 김강환 -->
+  <!-- ECS FastAPI 커넥션 풀 헬스체크 정상 동작 -->
+  <rule id="100138" level="0">
+    <if_sid>100103</if_sid>
+    <match>SELECT 1</match>
+    <description>DB 커넥션 풀 헬스체크 SELECT 1 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- Vault 동적 역할 실제 인증 실패 탐지 - 추가 260611 김강환 -->
+  <!-- Role이 존재하는데 인증 실패 = 자격증명 탈취 의심 -->
+  <rule id="100140" level="10">
+    <if_sid>2502</if_sid>
+    <regex>v-approle-api-role\.+FATAL</regex>
+    <description>Vault 동적 역할 DB 인증 실패</description>
+    <group>rds,vault,credential_theft</group>
+    <mitre><id>T1078</id></mitre>
+  </rule>
+
+
+  <!-- Keycloak RDS 연결 끊김 억제 - 추가 260611 김강환 -->
+  <rule id="100142" level="0">
+    <if_sid>2502</if_sid>
+    <match>keycloak@keycloak</match>
+    <description>Keycloak RDS 연결 끊김 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- 대량 RDS WRITE 탐지 - 추가 260612 김강환 -->
+  <!-- 1분 내 100건 이상 WRITE → 해킹/내부자 위협 의심 -->
+  <rule id="100145" level="12" frequency="100" timeframe="60">
+    <if_matched_sid>100102</if_matched_sid>
+    <description>RDS 대량 WRITE 탐지 — 해킹/내부자 위협 의심</description>
+    <group>rds,database_attack,insider_threat</group>
+    <mitre><id>T1485</id></mitre>
+  </rule>
+
+  <!-- 대량 RDS SELECT 탐지 - 추가 260612 김강환 -->
+  <!-- 1분 내 100건 이상 SELECT → 데이터 유출 의심 -->
+  <rule id="100146" level="12" frequency="100" timeframe="60">
+    <if_matched_sid>100103</if_matched_sid>
+    <description>RDS 대량 SELECT 탐지 — 데이터 유출 의심</description>
+    <group>rds,data_exfiltration,insider_threat</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
 </group>

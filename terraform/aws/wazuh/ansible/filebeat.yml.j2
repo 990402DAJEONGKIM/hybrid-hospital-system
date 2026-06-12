@@ -28,3 +28,11 @@ logging.files:
   name: filebeat
   keepfiles: 7
   permissions: 0644
+
+# glibc 2.35+ rseq syscall 허용 - 260611 김강환
+seccomp:
+  default_action: allow
+  syscalls:
+    - action: allow
+      names:
+        - rseq

@@ -293,6 +293,7 @@
         - waf_rules.xml
         - ecs_rules.xml
         - lambda_rules.xml
+        - local_decoder.xml
       tags: config
 
     # 1. ecs-ec2 그룹 생성
@@ -378,6 +379,40 @@
         group: wazuh
         mode: '0640'
       tags: config
+
+
+    # monitoring 그룹 생성 - 추가 260612 김강환
+    - name: monitoring Agent 그룹 생성
+      shell: |
+        /var/ossec/bin/agent_groups -a -g monitoring -q || true
+      tags: config
+
+    - name: monitoring 그룹 디렉토리 생성
+      file:
+        path: /var/ossec/etc/shared/monitoring
+        state: directory
+        owner: wazuh
+        group: wazuh
+        mode: '0770'
+      tags: config
+
+    - name: monitoring Agent 설정 배포
+      copy:
+        src: agent_monitoring.conf
+        dest: /var/ossec/etc/shared/monitoring/agent.conf
+        owner: wazuh
+        group: wazuh
+        mode: '0640'
+      tags: config
+
+    - name: monitoring Agent 그룹 이동
+      shell: |
+        /var/ossec/bin/agent_groups -a -i $(
+          /var/ossec/bin/agent_control -l | grep "monitoring" | awk '{print $2}' | tr -d ','
+        ) -g monitoring -q
+      ignore_errors: yes
+      tags: config
+
 
 
     - name: ossec.conf XML 검증
@@ -995,6 +1030,17 @@
         path: /var/ossec/etc/local_internal_options.conf
         regexp: '^remoted.guess_agent_group='
         line: 'remoted.guess_agent_group=1'
+        create: yes
+        owner: root
+        group: wazuh
+        mode: '0640'
+      tags: config
+
+    - name: wazuh_modules 디버그 비활성화  # 추가 260610 김강환
+      lineinfile:
+        path: /var/ossec/etc/local_internal_options.conf
+        regexp: '^wazuh_modules.debug='
+        line: 'wazuh_modules.debug=0'
         create: yes
         owner: root
         group: wazuh
