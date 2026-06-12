@@ -142,17 +142,31 @@ resource "aws_lambda_function" "aws-wazuh-lambda-recovery" {
   tags = { Name = "aws-wazuh-lambda-recovery", Owner = "st2" }
 }
 
-resource "aws_lambda_permission" "aws-wazuh-lambda-recovery-sns" {
-  statement_id  = "AllowSNSRecovery"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.aws-wazuh-lambda-recovery.function_name
-  principal     = "sns.amazonaws.com"
-  source_arn    = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+
+# recovery Lambda는 Manager 중단 알람에만 트리거 - 수정 260612 김강환
+resource "aws_cloudwatch_event_rule" "aws-wazuh-lambda-recovery" {
+  name        = "aws-wazuh-lambda-recovery"
+  description = "Wazuh Manager 중단 시 복구 Lambda 트리거"
+  event_pattern = jsonencode({
+    source      = ["aws.cloudwatch"]
+    detail-type = ["CloudWatch Alarm State Change"]
+    detail = {
+      alarmName = ["aws-wazuh-cw-manager-01"]
+      state     = { value = ["ALARM"] }
+    }
+  })
 }
 
-resource "aws_sns_topic_subscription" "aws-wazuh-recovery-to-lambda" {
-  topic_arn = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
-  protocol  = "lambda"
-  endpoint  = aws_lambda_function.aws-wazuh-lambda-recovery.arn
+resource "aws_cloudwatch_event_target" "aws-wazuh-lambda-recovery" {
+  rule = aws_cloudwatch_event_rule.aws-wazuh-lambda-recovery.name
+  arn  = aws_lambda_function.aws-wazuh-lambda-recovery.arn
+}
+
+resource "aws_lambda_permission" "aws-wazuh-lambda-recovery-eventbridge" {
+  statement_id  = "AllowEventBridgeRecovery"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.aws-wazuh-lambda-recovery.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.aws-wazuh-lambda-recovery.arn
 }
 

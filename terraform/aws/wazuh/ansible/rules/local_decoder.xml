@@ -1,0 +1,26 @@
+  - id         - event id
+  - url        - url of the event
+  - action     - event action (deny, drop, accept, etc)
+  - status     - event status (success, failure, etc)
+  - extra_data - Any extra data
+-->
+
+<decoder name="local_decoder_example">
+    <program_name>local_decoder_example</program_name>
+</decoder>
+
+
+<!-- db_audit 디코더 - 260611 김강환 -->
+<decoder name="db_audit">
+  <prematch>{"audit_log_id":</prematch>
+</decoder>
+
+
+<!-- UFW BLOCK 디코더 - 수정 260612 김강환 -->
+<decoder name="ufw-block">
+  <parent>kernel</parent>
+  <type>firewall</type>
+  <prematch>UFW BLOCK</prematch>
+  <regex>SRC=(\S+) DST=(\S+) \.+ PROTO=(\w+)</regex>
+  <order>srcip,dstip,protocol</order>
+</decoder>

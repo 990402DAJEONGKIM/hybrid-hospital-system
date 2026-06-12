@@ -153,7 +153,10 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-reboot-01" {
   statistic           = "Maximum"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   threshold           = 1
-  alarm_actions       = ["arn:aws:automate:ap-south-2:ec2:reboot"]
+  alarm_actions       = [
+    "arn:aws:automate:ap-south-2:ec2:reboot",
+    aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+    ]
   tags = { Name = "aws-wazuh-cw-reboot-01" }
 }
 
@@ -167,7 +170,10 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-recover-01" {
   statistic           = "Maximum"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   threshold           = 1
-  alarm_actions       = ["arn:aws:automate:ap-south-2:ec2:recover"]
+  alarm_actions       = [
+    "arn:aws:automate:ap-south-2:ec2:recover",
+    aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+    ]
   tags = { Name = "aws-wazuh-cw-recover-01" }
 }
 

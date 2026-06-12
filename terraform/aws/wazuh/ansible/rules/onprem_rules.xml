@@ -1,19 +1,22 @@
 <!-- =========================================================
      onprem_rules.xml
      온프레미스 서버(mspserver) 전용 탐지 룰
-     
+
      룰 ID 범위:
        100031~100036  FIM — 중요 설정 파일 변조 탐지
-       100044         USB 저장장치 연결 탐지
+       100058        USB 저장장치 연결 탐지
+       100044         Vault 감사 로그 베이스 룰
        100045~100047  Vault 감사 로그 이상 탐지
        100048         UFW 차단 이벤트
-       100049~100053  FIM 오탐 제거 (Vault 정상 동작)
-       100054         vim swap 파일 오탐 제거
-       100055         psql 히스토리 오탐 제거
+       100049~100056  FIM 오탐 제거 (Vault 정상 동작, vim, psql)
+       100057         CRON 노이즈 억제
        100600~100602  EMR FastAPI 감사 로그 탐지
-     
+       100650         DB 감사 로그 탐지
+       100659~100660  Ollama EMR 배치 로그 탐지
+
      ISMS-P 관련 조항:
        2.5.1  접근통제
+       2.6.1  네트워크 접근통제
        2.7.1  암호키 관리
        2.8.1  정보자산 접근통제
        2.9.1  로그관리 및 무결성
@@ -91,7 +94,8 @@
 
   <!-- USB Mass Storage 연결 — 데이터 유출 의심 -->
   <!-- MITRE T1091 이동식 매체를 통한 복제 -->
-  <rule id="100044" level="12">
+  <!-- 수정 260611 김강환: 100044 → 100037 (Vault 베이스 룰 ID 확보) -->
+  <rule id="100058" level="12">
     <if_sid>1002</if_sid>
     <match>USB Mass Storage</match>
     <description>온프레미스 USB 저장장치 연결 — 데이터 유출 의심</description>
@@ -104,14 +108,29 @@
        수집 경로: /home/mspadmin/hospital-db/vault-logs/audit.log
        Vault가 모든 API 요청을 JSON으로 기록
        ISMS-P 2.5.1 접근통제, 2.7.1 암호키 관리
+
+       구조:
+         100044 베이스 룰: Vault JSON 로그 식별
+         100045~100047: if_sid>100044 child 룰
        ========================================================= -->
+
+  <!-- Vault 감사 로그 베이스 룰 -->
+  <!-- type 필드(request/response)로 Vault 로그 식별 -->
+  <!-- 추가 260611 김강환 -->
+  <rule id="100044" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="type">^request$|^response$</field>
+    <description>Vault 감사 로그 수신</description>
+    <group>vault,onprem,</group>
+  </rule>
 
   <!-- Vault root 토큰 사용 탐지 -->
   <!-- 운영 환경에서 root 토큰 사용은 비정상 — 즉시 확인 필요 -->
   <!-- MITRE T1078.004 클라우드 계정 탈취 -->
+  <!-- 수정 260611 김강환: decoded_as 단독 → if_sid>100044 -->
   <rule id="100045" level="10">
-    <decoded_as>json</decoded_as>
-    <field name="auth.display_name">root</field>
+    <if_sid>100044</if_sid>
+    <field name="auth.display_name">^root$</field>
     <description>Vault root 토큰 사용 탐지 — 비정상 접근 의심</description>
     <group>vault,onprem,authentication_success</group>
     <mitre><id>T1078.004</id></mitre>
@@ -120,9 +139,10 @@
   <!-- Vault secret 삭제 탐지 -->
   <!-- secret/ 경로 데이터 삭제 — 데이터 파괴 또는 흔적 제거 의심 -->
   <!-- MITRE T1485 데이터 파괴 -->
+  <!-- 수정 260611 김강환: decoded_as 단독 → if_sid>100044 -->
   <rule id="100046" level="12">
-    <decoded_as>json</decoded_as>
-    <field name="request.operation">delete</field>
+    <if_sid>100044</if_sid>
+    <field name="request.operation">^delete$</field>
     <field name="request.path" type="pcre2">^secret/</field>
     <description>Vault secret 삭제 탐지</description>
     <group>vault,onprem,data_destruction</group>
@@ -132,33 +152,35 @@
   <!-- Vault 감사 로그 비활성화 시도 탐지 -->
   <!-- sys/audit/file 삭제 = 감사 로그 끄기 시도 — 로그 회피 공격 -->
   <!-- MITRE T1562.008 감사 로그 비활성화 -->
+  <!-- 수정 260611 김강환: decoded_as 단독 → if_sid>100044 -->
   <rule id="100047" level="13">
-    <decoded_as>json</decoded_as>
-    <field name="request.operation">delete</field>
-    <field name="request.path">sys/audit/file</field>
+    <if_sid>100044</if_sid>
+    <field name="request.operation">^delete$</field>
+    <field name="request.path">^sys/audit/file$</field>
     <description>Vault 감사 로그 비활성화 시도 — 로그 회피</description>
     <group>vault,onprem,defense_evasion</group>
     <mitre><id>T1562.008</id></mitre>
   </rule>
 
   <!-- =========================================================
-       UFW 방화벽 차단 이벤트
-       /var/log/syslog에서 UFW BLOCK 패턴 탐지
-       ISMS-P 2.6.1 네트워크 접근통제
-       ========================================================= -->
+  UFW 방화벽 차단 이벤트
+  /var/log/ufw.log에서 UFW BLOCK 패턴 탐지
+  ISMS-P 2.6.1 네트워크 접근통제
+  수정 260611 김강환: syslog → ufw.log로 수집 경로 변경
+  ========================================================= -->
   <rule id="100048" level="8">
-    <if_sid>4100</if_sid>
+    <if_sid>4100,2502</if_sid>
     <match>UFW BLOCK</match>
-    <description>UFW 차단 이벤트</description>
+    <description>UFW 차단 이벤트 — 출발지: $(srcip) 목적지: $(dstip)</description>
     <group>onprem,firewall,network</group>
   </rule>
 
   <!-- =========================================================
        FIM 오탐 제거 — Vault 정상 동작으로 인한 노이즈
-       
+
        Vault는 정상 동작 중에 아래 경로에 파일을 생성/수정/삭제함.
        이는 보안 이벤트가 아니므로 level=0으로 무시 처리.
-       
+
        단, 각 룰은 최소 범위만 무시하도록 event 타입을 구분함:
          - audit.log      : modified만 무시 (deleted/added는 탐지 유지)
          - core/_keyring  : modified만 무시 (deleted/added는 탐지 유지)
@@ -245,13 +267,23 @@
     <group>noise</group>
   </rule>
 
+
+  <!-- 이유: 매분 실행되는 크론이 syslog에 기록되어 2502로 잡힘 -->
+  <!-- onprem CRON 노이즈 억제 - 수정 260612 김강환 -->
+  <rule id="100057" level="0">
+    <if_sid>2502</if_sid>
+    <program_name>CRON</program_name>
+    <description>CRON 정상 동작 — 무시</description>
+    <group>noise</group>
+  </rule>
+
 </group>
 
 <!-- =========================================================
      EMR FastAPI 감사 로그 탐지
      수집 경로: /var/log/onprem-emr/audit.log
      FastAPI가 모든 API 요청을 JSON(fastapi_audit)으로 기록
-     
+
      필드:
        event_type  : fastapi_audit (고정)
        action_type : LOGIN, READ, WRITE 등
@@ -259,40 +291,93 @@
        source_ip   : 클라이언트 IP
        path        : 요청 URL 경로
        method      : HTTP 메서드
-     
+
      ISMS-P 2.9.1 개인정보처리시스템 접근기록
      ========================================================= -->
 <group name="onprem,fastapi,">
 
-  <!-- 베이스 룰: EMR FastAPI 감사 로그 수신 -->
-  <!-- 86600(Suricata) 룰이 먼저 매칭 → if_sid로 child rule 처리 - 260609 김강환 -->
+  <!-- 온프레미스 FastAPI 감사 로그 베이스 룰 - 수정 260612 김강환 -->
+  <!-- 86600(Suricata) overwrite → source_type 없는 fastapi_audit는 온프레미스로 처리 -->
   <rule id="100600" level="3">
     <if_sid>86600</if_sid>
     <field name="event_type">^fastapi_audit$</field>
-    <description>EMR FastAPI 감사 로그 - $(method) $(path) $(result_code)</description>
+    <description>온프레미스 FastAPI 감사 로그 - $(action_type) $(method) $(path) $(result_code)</description>
     <group>onprem,fastapi,audit_archive,</group>
   </rule>
-
-  <!-- 인증 실패 401/403 탐지 -->
   <!-- level=5 — 단일 실패는 기록만, 반복 시 100602로 escalate -->
   <!-- MITRE T1110 브루트포스 -->
   <rule id="100601" level="5">
     <if_sid>100600</if_sid>
     <field name="result_code">^401$|^403$</field>
-    <description>EMR FastAPI 인증 실패 - ip: $(source_ip) path: $(path)</description>
+    <description>온프레미스 FastAPI 로그인 실패 — IP: $(source_ip) 경로: $(path)</description>
     <group>onprem,fastapi,authentication_failed,</group>
     <mitre><id>T1110</id></mitre>
   </rule>
 
-  <!-- 브루트포스 탐지: 1분 내 동일 IP에서 5회 이상 인증 실패 -->
+  <!-- 브루트포스 탐지: 2분 내 동일 IP에서 8회 이상 인증 실패 -->
   <!-- level=10 — Slack #wazuh-alarm 알림 발송 -->
   <!-- MITRE T1110.001 패스워드 추측 -->
   <rule id="100602" level="10" frequency="8" timeframe="120">
     <if_matched_sid>100601</if_matched_sid>
-    <same_srcip/>
-    <description>EMR FastAPI Brute Force 의심 - ip: $(source_ip)</description>
+    <same_field>source_ip</same_field>
+    <description>온프레미스 FastAPI 브루트포스 의심 — 공격 IP: $(source_ip)</description>
     <group>onprem,fastapi,brute_force,</group>
     <mitre><id>T1110.001</id></mitre>
   </rule>
+
+  <!-- 온프레미스 FastAPI 정상 2xx 응답 억제 - 추가 260612 김강환 -->
+  <rule id="100603" level="0">
+    <if_sid>100600</if_sid>
+    <field name="result_code">^2</field>
+    <description>온프레미스 FastAPI 정상 응답 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+</group>
+
+<!-- =========================================================
+     DB 감사 로그 탐지
+     수집 경로: /var/log/deident/db_audit.log
+     ISMS-P 2.9.1 개인정보처리시스템 접근기록
+     ========================================================= -->
+<group name="onprem,db_audit,">
+  <!-- DB 감사 로그 베이스 + 2502 억제 - 260611 김강환 -->
+  <rule id="100650" level="3">
+    <if_sid>2502</if_sid>
+    <field name="audit_log_id">\.+</field>
+    <description>DB 감사 로그 - $(action_type) $(target_table)</description>
+    <group>onprem,db_audit,</group>
+  </rule>
+</group>
+
+
+
+
+
+
+
+<!-- =========================================================
+     Ollama EMR 배치 로그 탐지
+     수집 경로: /var/log/mzclinic/ollama/ollama-batch.log
+     ISMS-P 2.9.1 로그관리
+     ========================================================= -->
+<group name="onprem,ollama,">
+
+  <!-- Ollama 배치 로그 베이스 룰 - 260611 김강환 -->
+  <rule id="100659" level="3">
+    <if_sid>2502</if_sid>
+    <field name="service">^ollama-emr-batch$</field>
+    <description>Ollama EMR 배치 로그 - $(action_type)</description>
+    <group>onprem,ollama,</group>
+  </rule>
+
+  <!-- Ollama 배치 실패 탐지 - 260611 김강환 -->
+  <rule id="100660" level="10">
+    <if_sid>100659</if_sid>
+    <field name="level">^ERROR$</field>
+    <description>Ollama EMR 배치 실패 — $(action_type)</description>
+    <group>onprem,ollama,error,</group>
+  </rule>
+
 
 </group>

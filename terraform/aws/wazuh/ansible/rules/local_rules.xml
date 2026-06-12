@@ -1,36 +1,54 @@
+$ sudo cat /var/ossec/etc/rules/local_rules.xml
 #local_rules.xml
 <group name="local,sudo,after_hours,fim,">
- 
+
 <!-- ##################### 개발 단계의 룰임 ##########################-->
 <!-- SSH 브루트포스 Slack 알림 억제 - 개발 단계 임시 - 260610 김강환 -->
-<rule id="5551" level="7" overwrite="yes">
-  <if_sid>5550</if_sid>
-  <description>PAM: Multiple failed logins - suppressed Slack</description>
-</rule>
-<rule id="5763" level="7" overwrite="yes">
-  <if_sid>5700</if_sid>
-  <description>sshd: brute force - suppressed Slack</description>
-</rule>
-<rule id="5712" level="7" overwrite="yes">
-  <if_sid>5700</if_sid>
-  <description>sshd: non existent user - suppressed Slack</description>
-</rule>
-<rule id="2502" level="7" overwrite="yes">
-  <if_sid>2500</if_sid>
-  <description>syslog: multiple failed logins - suppressed Slack</description>
-</rule>
+<!-- SSH 관련 룰 전부 억제 - 추가 260612 김강환 -->
+<!-- 온프레미스 SSH 포트 차단 예정, ECS는 Security Group으로 제어 -->
+  <rule id="5762" level="0" overwrite="yes">
+    <if_sid>5700</if_sid>
+    <description>SSH connection reset 억제</description>
+  </rule>
+  <rule id="5501" level="0" overwrite="yes">
+    <if_sid>5500</if_sid>
+    <description>PAM Login session opened 억제</description>
+  </rule>
+  <rule id="5502" level="0" overwrite="yes">
+    <if_sid>5500</if_sid>
+    <description>PAM Login session closed 억제</description>
+  </rule>
+  <rule id="5551" level="0" overwrite="yes">
+    <if_sid>5550</if_sid>
+    <description>다중 로그인 실패 억제</description>
+  </rule>
+  <rule id="5763" level="0" overwrite="yes">
+    <if_sid>5700</if_sid>
+    <description>SSH 브루트포스 억제</description>
+  </rule>
+  <rule id="5712" level="0" overwrite="yes">
+    <if_sid>5700</if_sid>
+    <description>SSH 존재하지 않는 계정 억제</description>
+  </rule>
+  <rule id="5715" level="0" overwrite="yes">
+    <if_sid>5700</if_sid>
+    <description>SSH 로그인 성공 억제</description>
+  </rule>
 
   <!-- ───────────────────────────────────── -->
   <!-- sudo 사용 탐지 -->
   <!-- ───────────────────────────────────── -->
 
   <!-- 기본 sudo 실행 -->
+  <!-- sudo 명령어 실행 탐지 - 수정 260611 김강환 -->
+  <!-- if_sid>5400 + dstuser=root로 직접 탐지 -->
   <rule id="100001" level="6">
-    <if_sid>5402</if_sid>
-    <description>sudo 명령어 실행 탐지 - 사용자: $(srcuser)</description>
+    <if_sid>5400</if_sid>
+    <match>USER=root</match>
+    <description>sudo root 권한 전환 — 사용자: $(srcuser) 실행 명령: $(command)</description>
     <group>sudo_usage,privilege_escalation</group>
   </rule>
- 
+
   <!-- 업무 시간 외 sudo -->
   <!-- 주말 sudo (24시간 전부) -->
   <rule id="100043" level="8">
@@ -56,44 +74,44 @@
     <description>root 권한 전환 탐지 - 사용자: $(srcuser)</description>
     <group>sudo_usage,root_access,privilege_escalation</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- 파일 권한 변경 -->
   <!-- if_group>syscheck 대신 if_sid 사용, field name 대신 match 사용 -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100004" level="8">
     <if_sid>550</if_sid>
     <field name="changed_fields">^permission$</field>
     <description>파일 권한 변경 탐지</description>
     <group>fim,permission_change</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- 중요 시스템 파일 변조 -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100005" level="12">
     <if_sid>550,554,553</if_sid>
     <field name="file">/etc/passwd</field>
     <description>중요 파일 변조 탐지 - /etc/passwd</description>
     <group>fim,critical_file</group>
   </rule>
- 
+
   <rule id="100006" level="12">
     <if_sid>550,554,553</if_sid>
     <field name="file">/etc/shadow</field>
     <description>중요 파일 변조 탐지 - /etc/shadow</description>
     <group>fim,critical_file</group>
   </rule>
- 
+
   <rule id="100007" level="12">
     <if_sid>550,554,553</if_sid>
     <field name="file">/etc/sudoers$</field>
     <description>sudoers 파일 변경 탐지 - 권한 상승 의심</description>
     <group>fim,privilege_escalation</group>
   </rule>
- 
+
   <!-- sudoers.d persistence -->
   <rule id="100019" level="12">
     <if_sid>550,554,553</if_sid>
@@ -101,7 +119,7 @@
     <description>sudoers.d 파일 변경 탐지 - persistence 의심</description>
     <group>fim,privilege_escalation,persistence</group>
   </rule>
- 
+
   <!-- SSH 설정 변경 -->
   <rule id="100008" level="10">
     <if_sid>550,554,553</if_sid>
@@ -109,178 +127,160 @@
     <description>SSH 설정 변경 탐지</description>
     <group>fim,ssh</group>
   </rule>
- 
+
 </group>
- 
+
 <group name="web,nginx,attack,bruteforce,persistence,">
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- 웹쉘 업로드 탐지 -->
   <!-- if_sid 554 = 파일 추가, field name event 대신 if_sid로 구분 -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100010" level="12">
     <if_sid>554</if_sid>
     <field name="file" type="pcre2">(?i)^/var/www/.*\.(php|phtml|phar|sh|py|pl)$</field>
     <description>웹 서버 경로에 실행 파일 생성됨 (웹쉘 의심)</description>
     <group>web_attack,fim,webshell</group>
   </rule>
- 
+
   <rule id="100022" level="12">
     <if_sid>554</if_sid>
     <field name="file" type="pcre2">(?i)^/usr/share/nginx/.*\.(php|phtml|phar|sh|py|pl)$</field>
     <description>nginx 경로에 실행 파일 생성됨 (웹쉘 의심)</description>
     <group>web_attack,fim,webshell</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- Nginx Recon -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100011" level="10" frequency="20" timeframe="60">
     <if_matched_sid>31101</if_matched_sid>
     <match>404</match>
     <description>1분 내 20회 이상 404 발생 - 웹 스캔 의심</description>
     <group>web_scan,reconnaissance</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- SQL Injection -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100012" level="12">
     <if_sid>31106</if_sid>
     <match>union select|select from|insert into|drop table|or 1=1</match>
     <description>SQL Injection 공격 패턴 탐지</description>
     <group>web_attack,sql_injection</group>
   </rule>
- 
+
 
   <!-- ───────────────────────────────────── -->
   <!-- 중요 실행 파일 변조 -->
   <!-- if_sid 550 = 파일 수정 -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100014" level="9">
     <if_sid>550</if_sid>
     <match>/usr/bin/</match>
     <description>시스템 실행 파일 변조 탐지 (/usr/bin) - 백도어 의심</description>
     <group>fim,rootkit,persistence</group>
   </rule>
- 
+
   <rule id="100015" level="10">
     <if_sid>550</if_sid>
     <field name="file" type="pcre2">\/authorized_keys$</field>
     <description>SSH authorized_keys 수정 탐지 - 파일: $(file)</description>
     <group>fim,ssh_attack,persistence</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- SSH Persistence -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100016" level="9">
     <if_sid>550</if_sid>
     <match>/usr/sbin/</match>
     <description>관리자 실행 파일 변조 탐지 (/usr/sbin) - 백도어 의심</description>
     <group>fim,rootkit,persistence</group>
   </rule>
- 
-  <!-- ───────────────────────────────────── -->
-  <!-- 업무 시간 외 로그인 -->
-  <!-- ───────────────────────────────────── -->
- 
-  <!-- 주말 SSH (24시간 전부) -->
-  <rule id="100042" level="10">
-    <if_sid>5715</if_sid>
-    <weekday>saturday,sunday</weekday>
-    <description>주말 SSH 로그인 성공 - 비정상 접근 의심</description>
-    <group>after_hours,authentication_success,weekend,</group>
-  </rule>
 
-  <!-- 평일 야간 SSH (KST 18~익09 = UTC 09~24) -->
-  <rule id="100017" level="10">
-    <if_sid>5715</if_sid>
-    <time>9 am - 12 am</time>
-    <description>업무 시간 외 SSH 로그인 성공 - 계정 탈취 의심</description>
-    <group>after_hours,authentication_success,</group>
-  </rule>
- 
+
+
   <!-- ───────────────────────────────────── -->
   <!-- 신규 계정 생성 -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100018" level="12">
     <if_sid>5902</if_sid>
     <description>새로운 사용자 계정 생성 탐지 - persistence 의심</description>
     <group>account_management,privilege_escalation,persistence</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- systemd persistence -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100020" level="13">
     <if_sid>554,550</if_sid>
     <match>/etc/systemd/system/</match>
     <description>systemd 서비스 파일 변경 탐지 (/etc) - persistence 의심</description>
     <group>fim,persistence,systemd</group>
   </rule>
- 
+
   <rule id="100021" level="9">
     <if_sid>554,550</if_sid>
     <match>/usr/lib/systemd/system/</match>
     <description>systemd 서비스 파일 변경 탐지 (/usr/lib) - 패키지 변경 가능성 있음</description>
     <group>fim,systemd</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- cron persistence -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100023" level="12">
     <if_sid>550,554</if_sid>
     <match>/etc/crontab</match>
     <description>crontab 파일 변경 탐지 - persistence 의심</description>
     <group>fim,persistence,cron</group>
   </rule>
- 
+
   <rule id="100024" level="12">
     <if_sid>550,554</if_sid>
     <match>/etc/cron.d/</match>
     <description>cron.d 파일 변경 탐지 - persistence 의심</description>
     <group>fim,persistence,cron</group>
   </rule>
- 
+
   <rule id="100025" level="12">
     <if_sid>550,554</if_sid>
     <match>/etc/cron.</match>
     <description>cron 주기 디렉토리 파일 변경 탐지 - persistence 의심</description>
     <group>fim,persistence,cron</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- /usr/local/bin persistence -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100026" level="10">
     <if_sid>550,554</if_sid>
     <match>/usr/local/bin/</match>
     <description>시스템 실행 파일 변조 탐지 (/usr/local/bin) - 백도어 의심</description>
     <group>fim,rootkit,persistence</group>
   </rule>
- 
+
   <!-- ───────────────────────────────────── -->
   <!-- rc.local persistence -->
   <!-- ───────────────────────────────────── -->
- 
+
   <rule id="100027" level="12">
     <if_sid>550,554</if_sid>
     <match>/etc/rc.local</match>
     <description>rc.local 변경 탐지 - persistence 의심</description>
     <group>fim,persistence</group>
   </rule>
- 
+
   <!-- if_sid 554 = 파일 추가 -->
   <rule id="100028" level="12">
     <if_sid>554</if_sid>
@@ -288,7 +288,7 @@
     <description>시스템 경로에 신규 실행 파일 생성 탐지 (/usr/bin) - 백도어 의심</description>
     <group>fim,rootkit,persistence</group>
   </rule>
- 
+
   <rule id="100029" level="12">
     <if_sid>554</if_sid>
     <match>/usr/sbin/</match>
@@ -302,7 +302,7 @@
     <description>SSH .ssh 디렉토리 신규 파일 생성 탐지 - 파일: $(file)</description>
     <group>fim,ssh_attack,persistence</group>
   </rule>
-  
+
   <rule id="100038" level="12">
     <if_sid>553</if_sid>
     <field name="file" type="pcre2">\/\.ssh\/</field>
@@ -361,7 +361,7 @@
     <description>AWS GuardDuty HIGH 포트스캔 — 대시보드 기록용 (Slack은 EventBridge 담당)</description>
     <group>guardduty,aws,</group>
   </rule>
-  
+
   <!-- 550, 554를 하나의 그룹으로 묶는 중간 룰 -->
   <rule id="100507" level="0">
     <if_sid>550,554</if_sid>
@@ -379,14 +379,6 @@
   </rule>
 
 
-  <!-- 랜섬웨어: 60초 내 파일 변조 20건 이상 -->
-  <rule id="100508" level="15" frequency="100" timeframe="60">
-    <if_matched_sid>550</if_matched_sid>
-    <if_matched_sid>554</if_matched_sid>
-    <description>랜섬웨어 의심 — 짧은 시간 내 대량 파일 변조</description>
-    <group>ransomware,malware,critical</group>
-    <mitre><id>T1486</id></mitre>
-  </rule>
   <!-- /tmp, /dev/shm 실행파일 생성 — 드롭퍼 의심 -->
   <rule id="100509" level="14">
     <if_sid>554</if_sid>
@@ -407,8 +399,9 @@
   </rule>
 
   <!-- DDoS: WAF BLOCK 폭증 -->
+  <!-- 수정 260611 김강환: 100401 → 100400 (parent 룰 참조로 변경) -->
   <rule id="100511" level="13" frequency="50" timeframe="60">
-    <if_matched_sid>100401</if_matched_sid>
+    <if_matched_sid>100400</if_matched_sid>
     <description>DDoS 의심 — WAF 차단 이벤트 폭증</description>
     <group>ddos,waf,attack</group>
     <mitre><id>T1499</id></mitre>
@@ -442,7 +435,7 @@
   </rule>
 
   <!-- 비정상 HTTP 메서드 -->
-  <rule id="100507" level="10">
+  <rule id="100513" level="10">
     <if_sid>31103</if_sid>
     <match>^TRACE |^TRACK |^DEBUG |^CONNECT </match>
     <description>비정상 HTTP 메서드 탐지</description>
@@ -456,6 +449,72 @@
     <description>VPC Flow ACCEPT — 노이즈 제거</description>
     <group>noise</group>
   </rule>
+
+  <!-- filebeat 로그 2502 노이즈 억제 - 260611 김강환 -->
+  <!-- /var/log/filebeat/filebeat 로그가 2502로 잡히는 오탐 제거 -->
+  <rule id="100514" level="0">
+    <if_sid>2502</if_sid>
+    <location>/var/log/filebeat/filebeat</location>
+    <description>filebeat 로그 2502 오탐 억제</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- CRON PAM 세션 억제 - 추가 260611 김강환 -->
+  <!-- cron 정기 작업 PAM 세션 열림/닫힘 — 정상 동작 노이즈 -->
+  <rule id="100539" level="0">
+    <if_sid>5501,5502</if_sid>
+    <match>cron</match>
+    <description>CRON PAM 세션 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- sudo PAM 세션 열림/닫힘 억제 - 추가 260611 김강환 -->
+  <!-- 100001로 이미 sudo root 전환 탐지하므로 중복 제거 -->
+  <rule id="100540" level="0">
+    <if_sid>5501,5502</if_sid>
+    <match>sudo</match>
+    <description>sudo PAM 세션 — 무시 (100001로 탐지)</description>
+    <group>noise</group>
+  </rule>
+
+
+  <!-- ar.conf FIM mtime 변경 억제 - 추가 260611 김강환 -->
+  <!-- Wazuh 매니저 restart 시 mtime만 갱신되는 정상 동작 -->
+  <rule id="100541" level="0">
+    <if_sid>550</if_sid>
+    <field name="file">/var/ossec/etc/shared/ar.conf</field>
+    <description>Wazuh ar.conf mtime 변경 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+  <!-- rsyslogd action suspended/resumed 억제 - 수정 260612 김강환 -->
+  <rule id="100543" level="0">
+    <if_sid>2502</if_sid>
+    <program_name>rsyslogd</program_name>
+    <description>rsyslogd action suspended/resumed — 무시</description>
+    <group>noise</group>
+  </rule>
+
+
+  <!-- FIM 파일 변조 상세 표시 - 추가 260611 김강환 -->
+  <rule id="550" level="7" overwrite="yes">
+    <if_sid>500</if_sid>
+    <match>Integrity checksum changed</match>
+    <description>파일 무결성 변조 감지 — 경로: $(file) 변경 항목: $(changed_fields)</description>
+    <group>ossec,syscheck,syscheck_entry_modified,syscheck_file,</group>
+  </rule>
+
+
+
+  <!-- Web server 500 에러 상세 탐지 - 추가 260611 김강환 -->
+  <!-- srcip, url 필드 포함해서 대시보드에 상세 표시 -->
+  <rule id="31122" level="5" overwrite="yes">
+    <if_sid>31120</if_sid>
+    <id>^500</id>
+    <description>Web server 500 에러 - ip: $(srcip) url: $(url)</description>
+    <group>system_error,</group>
+  </rule>
+
 
 
 
