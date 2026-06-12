@@ -517,6 +517,15 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
 
 
 
+  <!-- AWS ALB WAF 차단 한글 표시 - 추가 260612 김강환 -->
+  <rule id="80328" level="5" overwrite="yes">
+    <if_sid>80325</if_sid>
+    <field name="aws.elb_status_code">403</field>
+    <options>no_full_log</options>
+    <description>AWS ALB WAF 차단 — 출발지: $(aws.client_ip) User-Agent: $(aws.user_agent)</description>
+    <group>aws_alb,</group>
+  </rule>
+
 
 </group>
 

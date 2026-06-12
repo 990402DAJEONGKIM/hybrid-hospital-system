@@ -294,6 +294,7 @@
         - ecs_rules.xml
         - lambda_rules.xml
         - local_decoder.xml
+        - monitoring_rules.xml
       tags: config
 
     # 1. ecs-ec2 그룹 생성
