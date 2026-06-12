@@ -276,6 +276,16 @@
     <description>CRON 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
+  <!-- 배포 백업 디렉토리 FIM 억제 - 추가 260612 김강환 -->
+  <rule id="100063" level="0">
+    <if_sid>554,553,550</if_sid>
+    <field name="file" type="pcre2">\.bak\.</field>
+    <description>배포 백업 디렉토리 파일 변경 — 무시</description>
+    <group>noise</group>
+  </rule>
+
+
+
 
 </group>
 

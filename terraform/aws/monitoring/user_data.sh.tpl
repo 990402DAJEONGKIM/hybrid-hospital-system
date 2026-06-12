@@ -360,6 +360,54 @@ echo "GF_SECURITY_CONTENT_SECURITY_POLICY=false" >> /etc/default/grafana-server
 systemctl enable grafana-server
 systemctl start grafana-server
 
+
+# ── Wazuh 에이전트 설치 - 추가 260612 김강환 ─────────────
+curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --no-default-keyring \
+  --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import
+chmod 644 /usr/share/keyrings/wazuh.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" \
+  | tee /etc/apt/sources.list.d/wazuh.list
+
+apt-get update -y
+
+WAZUH_MANAGER="${wazuh_private_ip}" \
+WAZUH_AGENT_NAME="monitoring" \
+WAZUH_AGENT_GROUP="monitoring" \
+  apt-get install -y wazuh-agent=4.14.5-1
+
+echo "wazuh-agent hold" | dpkg --set-selections
+
+cat > /var/ossec/etc/ossec.conf << 'OSSEC_EOF'
+<ossec_config>
+  <client>
+    <server>
+      <address>${wazuh_private_ip}</address>
+      <port>1514</port>
+      <protocol>tcp</protocol>
+      <max_retries>100</max_retries>
+      <retry_interval>15</retry_interval>
+    </server>
+    <notify_time>10</notify_time>
+    <time-reconnect>60</time-reconnect>
+    <auto_restart>yes</auto_restart>
+    <enrollment>
+      <enabled>yes</enabled>
+      <manager_address>${wazuh_private_ip}</manager_address>
+      <port>1515</port>
+      <agent_name>monitoring</agent_name>
+      <groups>monitoring</groups>
+    </enrollment>
+  </client>
+</ossec_config>
+OSSEC_EOF
+
+systemctl daemon-reload
+systemctl enable --now wazuh-agent
+
+
+
+
 # #260609 박경수 — Keycloak + nginx + Cost AI 포털 설치 (S3에서 스크립트/HTML 받아 실행)
 # user_data 16KB 제한으로 별도 분리
 for file in keycloak_setup.sh admin_chat.html setup-cost-config.sh; do
@@ -370,3 +418,7 @@ done
 chmod +x /tmp/keycloak_setup.sh /tmp/setup-cost-config.sh
 bash /tmp/keycloak_setup.sh >> /var/log/keycloak_setup.log 2>&1
 # #260609 박경수 end
+
+
+
+

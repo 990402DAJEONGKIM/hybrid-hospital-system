@@ -1,13 +1,8 @@
 # =========================================================
 # WAF — AWS WAFv2 Web ACL
 #
-# 통합 staff-alb 1개에 WAF 1개 연결 by 김다정 20260604
-#
-# 변경 전: WAF 2개 (patient-waf / staff-waf) — ALB 2개에 각각 연결
-# 변경 후: WAF 1개 (staff-waf 통합) — staff-alb 1개에 연결
-#   - patient.mzclinic.cloud : 공개 (OWASP + Rate limit만 적용)
-#   - staff.mzclinic.cloud   : 병원 IP만 허용 (ISMS-P 2.6.1)
-#   - admin.mzclinic.cloud   : 병원 IP만 허용 (ISMS-P 2.6.1)
+# 통합 hospital-alb 1개에 WAF 1개 연결
+# 수정 260612 김강환: staff → hospital 명칭 통일
 #
 # 룰 우선순위:
 #   0. Rate limit /auth/ (전체 도메인)
@@ -15,7 +10,6 @@
 #   2. OWASP CommonRuleSet (전체 도메인)
 #   3. SQL 인젝션 방어 (전체 도메인)
 #   4. 알려진 악성 입력값 차단 (전체 도메인)
-#   5. staff/admin 도메인 비허용 IP 차단 (ISMS-P 2.6.1)
 #   default: ALLOW (patient는 공개)
 # =========================================================
 
@@ -35,15 +29,14 @@
 
 
 # ─────────────────────────────────────────────────────────
-# Web ACL — 통합 (patient 공개 + staff/admin IP 제한)
-# by 김다정 20260604
+# Web ACL — 통합 병원 WAF
+# 수정 260612 김강환: staff → hospital
 # ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl" "staff" {
-  name  = "aws-staff-waf"
+resource "aws_wafv2_web_acl" "hospital" {
+  name  = "aws-hospital-waf"
   scope = "REGIONAL"
 
   # 기본 동작: 허용 (patient는 공개 접근)
-  # staff/admin은 Rule 5에서 비허용 IP 차단
   default_action {
     allow {}
   }
@@ -129,16 +122,14 @@ resource "aws_wafv2_web_acl" "staff" {
             count {}
           }
         }
-        # 추가: Wazuh 대시보드 /api/check-api 오탐 차단 해제 (AWS 공식 권장: rule_action_override + Count)
-        # 6/4 ALB 통합 후 EC2MetaDataSSRF_BODY가 Wazuh API 요청 body를 SSRF로 오탐 → Count 전환
-        # 룰 이름은 WAF 로그의 terminatingRule.ruleId에서 확인한 정확한 값 (대소문자 일치) - 260607 김강환
+        # Wazuh 대시보드 /api/check-api 오탐 차단 해제 - 260607 김강환
         rule_action_override {
           name = "EC2MetaDataSSRF_BODY"
           action_to_use {
             count {}
           }
         }
-        # 추가: GenericRFI_BODY도 /api/check-api를 오탐 차단 → count 전환 (260607)
+        # GenericRFI_BODY도 /api/check-api 오탐 차단 → count 전환 - 260607 김강환
         rule_action_override {
           name = "GenericRFI_BODY"
           action_to_use {
@@ -200,38 +191,38 @@ resource "aws_wafv2_web_acl" "staff" {
     }
   }
 
-  # Rule 5 삭제 — staff.mzclinic.cloud 온프레미스 이전으로 WAF IP 제한 불필요
-
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "StaffWAF"
+    metric_name                = "HospitalWAF"
     sampled_requests_enabled   = true
   }
 
   tags = {
-    Name    = "aws-staff-waf"
+    Name    = "aws-hospital-waf"
     Purpose = "ISMS-P 2.6.1 2.8.1 2.8.3 2.5.4"
   }
 }
 
 
 # ─────────────────────────────────────────────────────────
-# WAF → 통합 ALB 연결 (staff-alb)
+# WAF → 통합 ALB 연결 (hospital-alb)
+# 수정 260612 김강환: staff → hospital
 # ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl_association" "staff" {
+resource "aws_wafv2_web_acl_association" "hospital" {
   resource_arn = data.aws_lb.staff.arn
-  web_acl_arn  = aws_wafv2_web_acl.staff.arn
+  web_acl_arn  = aws_wafv2_web_acl.hospital.arn
 }
 
 
 # ─────────────────────────────────────────────────────────
 # WAF 로그 → Firehose → S3 (ISMS-P 2.9.1)
+# 수정 260612 김강환: staff → hospital
 # ─────────────────────────────────────────────────────────
-resource "aws_wafv2_web_acl_logging_configuration" "aws-waf-staff-logging" {
+resource "aws_wafv2_web_acl_logging_configuration" "aws-waf-hospital-logging" {
   log_destination_configs = [
-    aws_kinesis_firehose_delivery_stream.aws-firehose-waf-staff.arn
+    aws_kinesis_firehose_delivery_stream.aws-firehose-waf-hospital.arn
   ]
-  resource_arn = aws_wafv2_web_acl.staff.arn
+  resource_arn = aws_wafv2_web_acl.hospital.arn
 
   logging_filter {
     default_behavior = "DROP"
@@ -305,19 +296,20 @@ resource "aws_iam_role_policy" "aws-firehose-waf-policy" {
 #   tags = { Name = "aws-firehose-waf-patient" }
 # }
 
-resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-staff" {
-  name        = "aws-waf-logs-staff"
+# 수정 260612 김강환: staff → hospital
+resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-hospital" {
+  name        = "aws-waf-logs-hospital"
   destination = "extended_s3"
 
   extended_s3_configuration {
     role_arn            = aws_iam_role.aws-firehose-waf-role.arn
     bucket_arn          = "arn:aws:s3:::aws-k2p-storage-01"
-    prefix              = "waf/staff/"
-    error_output_prefix = "waf/staff/errors/"
+    prefix              = "waf/hospital/"
+    error_output_prefix = "waf/hospital/errors/"
     buffering_size      = 5
     buffering_interval  = 300
     kms_key_arn         = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
   }
 
-  tags = { Name = "aws-firehose-waf-staff" }
+  tags = { Name = "aws-firehose-waf-hospital" }
 }
