@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>진료과 안내 - 김이박 클리닉</title>
+    <link rel="stylesheet" href="css/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+<nav id="navbar"></nav>
+
+<div style="max-width:800px;margin:100px auto 60px;padding:0 16px;">
+
+    <!-- 뒤로 가기 -->
+    <a href="javascript:history.back()"
+       class="inline-flex items-center gap-2 text-sm text-blue-500 hover:text-blue-700 mb-6 font-medium">
+        <i class="fas fa-arrow-left"></i> 뒤로가기
+    </a>
+
+    <!-- 진료과 헤더 -->
+    <div id="deptHeader" class="bg-white rounded-2xl shadow-sm p-8 mb-6 flex items-center gap-6">
+        <div id="deptIcon" class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0"
+             style="background:#e3f2fd;color:#1e88e5;">
+            <i class="fas fa-stethoscope"></i>
+        </div>
+        <div>
+            <h1 id="deptName" class="text-2xl font-bold text-gray-800 mb-1">진료과</h1>
+            <p id="deptTagline" class="text-sm text-blue-500 font-medium"></p>
+        </div>
+    </div>
+
+    <!-- 진료과 설명 -->
+    <div class="bg-white rounded-2xl shadow-sm p-8 mb-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-info-circle text-blue-400 mr-2"></i>진료과 소개</h2>
+        <p id="deptDesc" class="text-gray-600 leading-relaxed text-sm"></p>
+    </div>
+
+    <!-- 주요 진료 질환 -->
+    <div class="bg-white rounded-2xl shadow-sm p-8 mb-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-list-ul text-blue-400 mr-2"></i>주요 진료 질환</h2>
+        <ul id="deptDiseases" class="space-y-2"></ul>
+    </div>
+
+    <!-- 예약 버튼 -->
+    <div class="text-center">
+        <a href="appointment.html"
+           class="inline-flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md">
+            <i class="fas fa-calendar-plus"></i> 이 진료과 예약하기
+        </a>
+    </div>
+
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script>
+    const DEPT_INFO = {
+        INTERNAL: {
+            icon: 'fas fa-heartbeat',
+            tagline: '내부 질환 전문 진료',
+            desc: '내과는 소화기, 호흡기, 순환기, 내분비 등 신체 내부 장기의 다양한 질환을 약물 및 비수술적 방법으로 진료하는 과입니다. 감기·독감부터 당뇨, 고혈압, 심부전 등 만성질환까지 폭넓게 다룹니다.',
+            diseases: ['고혈압·당뇨·고지혈증 등 만성질환', '감기·독감·폐렴 등 호흡기 질환', '위염·역류성 식도염·과민성장증후군', '빈혈·갑상선 질환', '급성·만성 간질환'],
+        },
+        CARDIO: {
+            icon: 'fas fa-heart',
+            tagline: '심장 전문 진료',
+            desc: '심장내과는 심장과 혈관 관련 질환을 전문적으로 진단하고 치료하는 과입니다. 심전도, 심장 초음파 등 정밀 검사를 통해 부정맥, 심부전, 협심증 등을 관리합니다.',
+            diseases: ['협심증·심근경색 등 관상동맥 질환', '부정맥 (심방세동·빈맥 등)', '심부전·심장판막질환', '고혈압성 심장질환', '선천성 심장 기형 추적 관리'],
+        },
+        NEURO: {
+            icon: 'fas fa-brain',
+            tagline: '신경 계통 질환 진료',
+            desc: '신경과는 뇌, 척수, 말초신경 및 근육 관련 질환을 진단하고 치료하는 과입니다. 두통, 어지럼증, 뇌졸중, 치매, 파킨슨병 등 다양한 신경계 질환을 다룹니다.',
+            diseases: ['두통·편두통·군발두통', '뇌졸중 (뇌경색·뇌출혈) 예방 및 재활', '치매·파킨슨병 등 퇴행성 신경질환', '어지럼증·이명·균형장애', '말초신경병증·근육 질환'],
+        },
+        ORTHO: {
+            icon: 'fas fa-bone',
+            tagline: '근골격계 질환 및 외상 진료',
+            desc: '정형외과는 뼈, 관절, 근육, 인대, 힘줄 등 근골격계 질환과 외상을 진단·치료하는 과입니다. 골절 처치부터 관절경 수술, 척추 수술까지 다양한 시술을 시행합니다.',
+            diseases: ['골절·탈구·스포츠 외상', '무릎·고관절·어깨 관절 질환', '척추 디스크·협착증', '관절염 (퇴행성·류마티스)', '성장기 소아 근골격계 이상'],
+        },
+        ANESTHESIA: {
+            icon: 'fas fa-syringe',
+            tagline: '수술 마취 및 통증 치료',
+            desc: '마취통증의학과는 수술 전·중·후 마취 관리를 담당하며, 급·만성 통증 치료도 전문으로 시행합니다. 신경 차단술, 통증 주사 등을 통해 삶의 질을 높입니다.',
+            diseases: ['수술 전 마취 상담 및 마취 시행', '만성 요통·목 통증 치료', '신경 차단술·경막외 주사', '수술 후 통증 관리 (PCA)', '암성 통증·대상포진 후 신경통'],
+        },
+        SURGERY: {
+            icon: 'fas fa-cut',
+            tagline: '외과적 수술 전문',
+            desc: '외과는 복부, 유방, 갑상선 등 외과적 수술이 필요한 질환을 진단하고 치료하는 과입니다. 복강경 최소침습 수술부터 개복 수술까지 다양한 술식을 시행합니다.',
+            diseases: ['충수염·탈장·담낭 결석 수술', '위암·대장암·간암 외과 치료', '유방 종양·갑상선 종양 수술', '복강경 최소침습 수술', '외상·열상 처치 및 창상 관리'],
+        },
+        PEDIATRICS: {
+            icon: 'fas fa-baby',
+            tagline: '소아·청소년 전문 진료',
+            desc: '소아청소년과는 신생아부터 만 18세 청소년까지 성장 발달과 건강을 전문으로 관리합니다. 예방접종, 성장 모니터링, 소아 감염 질환까지 포괄적으로 진료합니다.',
+            diseases: ['신생아 건강 검진 및 황달 관리', '소아 감기·중이염·폐렴 등 감염 질환', '성장 부진·비만·사춘기 이상', '아토피·알레르기·천식', '예방접종 및 영·유아 건강검진'],
+        },
+    };
+
+    function renderDept(code) {
+        const info = DEPT_INFO[code];
+        if (!info) {
+            document.getElementById('deptName').textContent = '진료과 정보 없음';
+            return;
+        }
+
+        document.title = `${document.getElementById('deptName').textContent} - 김이박 클리닉`;
+        document.getElementById('deptIcon').innerHTML = `<i class="${info.icon}"></i>`;
+        document.getElementById('deptTagline').textContent = info.tagline;
+        document.getElementById('deptDesc').textContent = info.desc;
+        document.getElementById('deptDiseases').innerHTML = info.diseases.map(d =>
+            `<li class="flex items-start gap-2 text-sm text-gray-600">
+                <i class="fas fa-check-circle text-blue-400 mt-0.5 flex-shrink-0"></i>${d}
+             </li>`
+        ).join('');
+    }
+
+    async function init() {
+        const params = new URLSearchParams(location.search);
+        const code   = params.get('code') || '';
+
+        // 진료과 이름은 API에서
+        try {
+            const r = await fetch(`${BASE_URL}/portal/departments`, {
+                credentials: 'include',
+                headers: { 'X-API-Key': API_KEY },
+            });
+            if (r.ok) {
+                const depts = await r.json();
+                const dept  = depts.find(d => d.department_code === code);
+                if (dept) document.getElementById('deptName').textContent = dept.department_name;
+            }
+        } catch (_) {}
+
+        renderDept(code);
+        document.title = `${document.getElementById('deptName').textContent} - 김이박 클리닉`;
+
+        if (typeof renderNavbar === 'function') renderNavbar();
+    }
+
+    init();
+</script>
+</body>
+</html>

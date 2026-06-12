@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인 - 김이박 클리닉 환자 포털</title>
+    <link rel="stylesheet" href="css/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%);
+            min-height: 100vh;
+        }
+        .login-card {
+            box-shadow: 0 8px 40px rgba(59, 130, 246, 0.12);
+        }
+        .login-btn {
+            background: linear-gradient(90deg, #2563eb, #06b6d4);
+            transition: opacity 0.2s;
+        }
+        .login-btn:hover { opacity: 0.9; }
+    </style>
+</head>
+<body style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:2rem 1rem;">
+
+    <div class="w-full max-w-md">
+
+        <!-- 로고 영역 -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+                <i class="fas fa-heartbeat text-3xl text-blue-500"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">김이박 클리닉</h1>
+            <p class="text-sm text-blue-500 mt-1 font-medium">환자 포털</p>
+        </div>
+
+        <!-- 카드 -->
+        <div class="login-card bg-white rounded-2xl p-8">
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">회원번호</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                            <i class="fas fa-id-card text-sm"></i>
+                        </span>
+                        <input type="text" id="loginMemberNumber" required placeholder="회원번호 입력" inputmode="numeric"
+                            class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white transition">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                            <i class="fas fa-lock text-sm"></i>
+                        </span>
+                        <input type="password" id="loginPw" required
+                            class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white transition">
+                    </div>
+                </div>
+
+                <div id="apiError" class="hidden p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="apiErrorMsg"></span>
+                </div>
+
+                <button type="submit" id="submitBtn"
+                    class="login-btn w-full text-white py-3 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                    로그인
+                </button>
+            </form>
+
+        </div>
+
+    </div>
+
+    <script src="js/config.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const memberNumber = document.getElementById('loginMemberNumber').value.trim();
+            const pw           = document.getElementById('loginPw').value;
+            const errorBox     = document.getElementById('apiError');
+            const errorMsg     = document.getElementById('apiErrorMsg');
+            const submitBtn    = document.getElementById('submitBtn');
+
+            errorBox.classList.add('hidden');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '로그인 중...';
+
+            try {
+                const res = await fetch(`${BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                    body: JSON.stringify({ member_number: memberNumber, password: pw }),
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    const meRes = await fetch(`${BASE_URL}/auth/me`, {
+                        credentials: 'include',
+                        headers: { 'X-API-Key': API_KEY },
+                    });
+                    const meData = await meRes.json();
+
+                    if (meData.password_expired) {
+                        window.location.href = 'change-password.html';
+                        return;
+                    }
+                    window.location.href = 'index.html';
+                } else {
+                    errorMsg.textContent = data.detail || '로그인 중 오류가 발생했습니다.';
+                    errorBox.classList.remove('hidden');
+                }
+            } catch {
+                errorMsg.textContent = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.';
+                errorBox.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '로그인';
+            }
+        });
+    </script>
+</body>
+</html>

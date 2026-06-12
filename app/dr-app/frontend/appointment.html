@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>예약 유형 선택 - 김이박 클리닉</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .appt-form-wrap {
+            max-width: 600px;
+            margin: 100px auto 40px;
+            padding: 0 16px;
+        }
+        .type-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-top: 24px;
+        }
+        @media (max-width: 600px) {
+            .type-grid { grid-template-columns: 1fr; }
+        }
+        .type-card {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 24px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .type-card:hover {
+            border-color: var(--primary, #1976d2);
+            box-shadow: 0 4px 16px rgba(25, 118, 210, 0.12);
+        }
+        .type-card i {
+            font-size: 32px;
+            color: var(--primary, #1976d2);
+            margin-bottom: 12px;
+            display: block;
+        }
+        .type-card h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #263238;
+            margin: 0 0 8px;
+        }
+        .type-card p {
+            font-size: 13px;
+            color: #78909c;
+            margin: 0;
+            line-height: 1.5;
+        }
+        .info-note {
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #1565c0;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .info-note i { margin-top: 2px; flex-shrink: 0; }
+    </style>
+</head>
+<body style="margin:0;">
+<div class="portal-layout">
+<aside class="portal-sidebar" id="portalSidebar"></aside>
+<main class="portal-content">
+<div class="appt-form-wrap" style="margin:0;max-width:560px;">
+    <h2 style="margin-bottom:8px;"><i class="fas fa-calendar-plus" style="color:var(--primary);margin-right:8px;"></i>예약 신청</h2>
+    <p style="color:#78909c; font-size:14px; margin-bottom:20px;">원하시는 예약 유형을 선택해주세요.</p>
+
+    <div class="info-note">
+        <i class="fas fa-info-circle"></i>
+        <span>웹 예약은 이전 방문 이력이 있는 환자만 이용하실 수 있습니다.<br>처음 방문하시는 경우 원무과(☎ 1234-5678)로 문의해주세요.</span>
+    </div>
+
+    <div class="type-grid">
+        <div class="type-card" onclick="location.href='appointment-return.html'">
+            <i class="fas fa-user-check"></i>
+            <h3>외래 예약</h3>
+            <p>이전에 방문하셨던 진료과의 재진 예약</p>
+        </div>
+        <div class="type-card" onclick="location.href='appointment-inpatient.html'">
+            <i class="fas fa-bed"></i>
+            <h3>입원 예약</h3>
+            <p>병동 입원 및 병상 배정 신청</p>
+        </div>
+        <div class="type-card" onclick="location.href='appointment-surgery.html'">
+            <i class="fas fa-procedures"></i>
+            <h3>수술 전 예약</h3>
+            <p>수술 전 필수 검사 및 일정 확인</p>
+        </div>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
+<script>
+    renderSidebar('appointment.html');
+    (async () => {
+        const me = await requireLogin();
+        if (!me) return;
+    })();
+</script>
+</main>
+</div>
+</body>
+</html>
