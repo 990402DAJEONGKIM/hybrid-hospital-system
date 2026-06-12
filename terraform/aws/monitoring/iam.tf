@@ -80,6 +80,37 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
           }
         }
       },
+
+      {
+        # grafana/ prefix 읽기 권한
+        # user_data 실행 시 초기화 스크립트 + 대시보드 JSON S3에서 가져오기 - 추가 260612 김강환
+        Sid    = "GrafanaS3Read"
+        Effect = "Allow"
+        Action = ["s3:GetObject", "s3:ListBucket"]
+        Resource = [
+          "arn:aws:s3:::aws-k2p-storage-01",
+          "arn:aws:s3:::aws-k2p-storage-01/grafana/*"
+        ]
+      },
+      {
+        # S3 grafana/ prefix KMS 복호화 권한 - 추가 260612 김강환
+        Sid    = "S3KMSDecrypt"
+        Effect = "Allow"
+        Action = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
+      },
+
+      {
+        # SSM Parameter Store 읽기 - user_data 런타임 변수 조회 - 추가 260612 김강환
+        Sid    = "SSMParamRead"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter", "ssm:GetParameters"]
+        Resource = [
+          "arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/keycloak/*",
+          "arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter/wazuh/*"
+        ]
+      },
+
       {
         Sid    = "ResourceRead"
         Effect = "Allow"
