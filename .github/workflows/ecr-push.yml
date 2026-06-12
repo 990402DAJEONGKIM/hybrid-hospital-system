@@ -66,7 +66,9 @@ jobs:
             -t $REGISTRY/aws-hospital-nginx:$TAG \
             -t $REGISTRY/aws-hospital-nginx:latest . &
           PID2=$!
-          wait $PID1 $PID2
+          wait $PID1; EXIT1=$?
+          wait $PID2; EXIT2=$?
+          [ $EXIT1 -eq 0 ] && [ $EXIT2 -eq 0 ] || exit 1
 
       - name: Push images (IMMUTABLE 태그 중복 방지)
         env:
@@ -95,7 +97,9 @@ jobs:
           PID1=$!
           push_if_not_exists aws-hospital-nginx &
           PID2=$!
-          wait $PID1 $PID2
+          wait $PID1; EXIT1=$?
+          wait $PID2; EXIT2=$?
+          [ $EXIT1 -eq 0 ] && [ $EXIT2 -eq 0 ] || exit 1
 
   # ── 2단계: hospital-service 배포 ──────────────────────────────
   deploy:
