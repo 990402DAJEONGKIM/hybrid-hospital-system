@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# 의존성 먼저 설치 (레이어 캐시 활용)
+COPY app/combined/backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 소스 복사
+COPY app/combined/backend/ .
+
+# entrypoint 복사 및 실행 권한 부여
+COPY local-test/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8000
+
+ENTRYPOINT ["/entrypoint.sh"]
