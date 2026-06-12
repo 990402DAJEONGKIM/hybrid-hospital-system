@@ -22,8 +22,9 @@ from core.middleware import AuditLogMiddleware, SessionExpiryMiddleware
 from models import db as _models  # noqa: F401 — Base에 모델 등록
 
 from routers.patient import auth as patient_auth, portal as patient_portal
-from routers.staff import auth as staff_auth, portal as staff_portal, admin as staff_admin, emr as staff_emr
-from routers.portal_app import auth as portal_auth, portal as portal_portal, admin as portal_admin
+from routers.staff import auth as staff_auth  # AWS nginx 노출: /staff/auth/login, /staff/auth/me 만 사용 — by 김다정, 2026-06-12
+# 제거: staff_portal, staff_admin, staff_emr → AWS nginx 미노출, 온프레미스 전용 — by 김다정, 2026-06-12
+# 제거: portal_auth, portal_portal, portal_admin → 온프레미스 전용 — by 김다정, 2026-06-12
 
 app = FastAPI(
     title="김이박 병원 통합 API",
@@ -51,16 +52,8 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 app.include_router(patient_auth.router,   prefix="/patient")
 app.include_router(patient_portal.router, prefix="/patient")
 
-# ── 의료진 포털 (/staff/auth/, /staff/portal/, /staff/admin/, /staff/emr/) ──
-app.include_router(staff_auth.router,   prefix="/staff")
-app.include_router(staff_portal.router, prefix="/staff")
-app.include_router(staff_admin.router,  prefix="/staff")
-app.include_router(staff_emr.router,    prefix="/staff")
-
-# ── 병원 포털 (/portal/auth/, /portal/portal/, /portal/admin/) ──
-app.include_router(portal_auth.router,    prefix="/portal")
-app.include_router(portal_portal.router,  prefix="/portal")
-app.include_router(portal_admin.router,   prefix="/portal")
+# ── 의료진 인증 (/staff/auth/) — AWS nginx 노출 경로만 유지 — by 김다정, 2026-06-12
+app.include_router(staff_auth.router, prefix="/staff")
 
 
 @app.get("/health")
