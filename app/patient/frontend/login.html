@@ -115,21 +115,24 @@
             submitBtn.textContent = '로그인 중...';
 
             try {
-                const res  = await fetch('/api/staff/auth/login', {
+                const loginRes  = await fetch('/api/staff/auth/login', {
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ member_number: memberNumber, password: pw }),
                 });
-                const data = await res.json();
+                const loginData = await loginRes.json();
 
-                if (!res.ok) {
-                    errorMsg.textContent = data.detail || '로그인 중 오류가 발생했습니다.';
+                if (!loginRes.ok) {
+                    errorMsg.textContent = loginData.detail || '로그인 중 오류가 발생했습니다.';
                     errorBox.classList.remove('hidden');
                     return;
                 }
 
-                const role = data.role || '';
+                // 로그인 성공 → /me 호출로 role 확인 (쿠키 기반, 응답 body에 의존하지 않음)
+                const meRes  = await fetch('/api/staff/auth/me', { credentials: 'include' });
+                const meData = await meRes.json();
+                const role   = meData.role || '';
 
                 if (STAFF_ROLES.has(role)) {
                     // 직원: 관리자 전용 Wazuh 링크
@@ -144,11 +147,6 @@
                     document.getElementById('loginForm').style.display = 'none';
                 } else {
                     // 환자: 비밀번호 만료 확인 후 포털로 이동
-                    const meRes  = await fetch(`${BASE_URL}/auth/me`, {
-                        credentials: 'include',
-                        headers: { 'X-API-Key': API_KEY },
-                    });
-                    const meData = await meRes.json();
                     window.location.href = (meData.password_expired || meData.must_change_password)
                         ? 'change-password.html'
                         : 'index.html';
