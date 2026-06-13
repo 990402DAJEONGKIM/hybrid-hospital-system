@@ -13,7 +13,7 @@ from core.security import get_current_user, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
-    Notification, Patient, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
+    Notification, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
     SyncEncounter, SyncPatient, SyncSurgery, SyncWard, User,
 )
 
@@ -33,16 +33,15 @@ def _notify_patient(
 ) -> None:
     """예약 상태 변경 시 환자 이메일 알림 발송 + notifications/audit_logs 기록."""
     try:
-        patient = db.query(Patient).filter(Patient.patient_id_hash == appt.patient_id_hash).first()
-        if not patient:
+        patient_user = db.query(User).filter(User.patient_id_hash == appt.patient_id_hash).first()
+        if not patient_user:
             return
-        if not patient.email:
+        if not patient_user.email:
             logger.info("이메일 미등록 환자 — 알림 생략 (patient_id_hash=%s)", appt.patient_id_hash)
             return
-        patient_user = db.query(User).filter(User.patient_id == patient.patient_id).first()
         type_name = appt.appt_type.type_name if appt.appt_type else None
         sent = send_appointment_notification(
-            to_email  = patient.email,
+            to_email  = patient_user.email,
             status    = status,
             appt_date = str(appt.appointment_date),
             appt_time = appt.appointment_time.strftime("%H:%M") if appt.appointment_time else None,
