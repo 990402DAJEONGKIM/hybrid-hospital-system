@@ -17,7 +17,8 @@ BUCKET      = os.environ["BUCKET"]
 RAW_PREFIX  = os.environ.get("RAW_PREFIX", "cost/cost-raw")
 ALERT_EMAIL = os.environ["ALERT_EMAIL"]
 FROM_EMAIL  = os.environ.get("FROM_EMAIL", ALERT_EMAIL)
-ANOMALY_THRESHOLD = 0.30
+# 환경변수로 임계값 조정 가능 — 테스트 시 낮춰서 트리거, 운영 시 0.30 유지
+ANOMALY_THRESHOLD = float(os.environ.get("ANOMALY_THRESHOLD", "0.30"))
 
 
 def _get_months() -> tuple[tuple[str, str], tuple[str, str]]:

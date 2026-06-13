@@ -4,6 +4,13 @@ variable "aws_region" {
   default     = "ap-south-2"
 }
 
+# TC-17 Step 4 — 이상 감지 임계값 (운영: 0.30, 테스트: 0.01)
+variable "anomaly_threshold" {
+  description = "비용 이상 감지 임계값 — 전월 대비 증가율 (0.30 = 30%)"
+  type        = string
+  default     = "0.30"
+}
+
 variable "bedrock_region" {
   description = "Bedrock Knowledge Base 리전 (ap-south-2 미지원 → us-east-1)"
   type        = string
