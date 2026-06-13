@@ -97,7 +97,7 @@ resource "aws_iam_role_policy" "ecs_db_rotator" {
         ]
         Resource = [
           data.tfe_outputs.secrets.values.db_url_patient_secret_arn,
-          data.tfe_outputs.secrets.values.db_url_staff_secret_arn,
+          data.tfe_outputs.secrets.values.db_read_url_patient_secret_arn,
         ]
       },
       {
@@ -181,12 +181,12 @@ resource "aws_lambda_permission" "secretsmanager_patient" {
   source_arn    = data.tfe_outputs.secrets.values.db_url_patient_secret_arn
 }
 
-resource "aws_lambda_permission" "secretsmanager_staff" {
-  statement_id  = "AllowSecretsManagerRotationStaff"
+resource "aws_lambda_permission" "secretsmanager_reader" {
+  statement_id  = "AllowSecretsManagerRotationReader"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.ecs_db_rotator.function_name
   principal     = "secretsmanager.amazonaws.com"
-  source_arn    = data.tfe_outputs.secrets.values.db_url_staff_secret_arn
+  source_arn    = data.tfe_outputs.secrets.values.db_read_url_patient_secret_arn
 }
 
 
@@ -200,8 +200,8 @@ resource "aws_secretsmanager_secret_rotation" "patient_db_url" {
   }
 }
 
-resource "aws_secretsmanager_secret_rotation" "staff_db_url" {
-  secret_id           = data.tfe_outputs.secrets.values.db_url_staff_secret_arn
+resource "aws_secretsmanager_secret_rotation" "reader_db_url" {
+  secret_id           = data.tfe_outputs.secrets.values.db_read_url_patient_secret_arn
   rotation_lambda_arn = aws_lambda_function.ecs_db_rotator.arn
 
   rotation_rules {

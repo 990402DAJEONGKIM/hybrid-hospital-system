@@ -19,7 +19,8 @@ locals {
   ]
 
   hospital_secrets = [
-    { name = "DATABASE_URL", valueFrom = data.tfe_outputs.secrets.values.db_url_patient_secret_arn },
+    { name = "DATABASE_URL",      valueFrom = data.tfe_outputs.secrets.values.db_url_patient_secret_arn },
+    { name = "DATABASE_READ_URL", valueFrom = data.tfe_outputs.secrets.values.db_read_url_patient_secret_arn },
     { name = "JWT_SECRET", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSCURRENT:" },
     { name = "JWT_SECRET_PREVIOUS", valueFrom = "${data.tfe_outputs.secrets.values.jwt_secret_arn}::AWSPREVIOUS:" },
     { name = "API_KEY", valueFrom = data.tfe_outputs.secrets.values.api_key_secret_arn },

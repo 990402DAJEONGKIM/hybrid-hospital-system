@@ -16,7 +16,7 @@ CLUSTER = os.environ['ECS_CLUSTER']
 # EventBridge 이벤트에서 온 시크릿 ARN으로 어떤 서비스를 재배포할지 결정
 SECRET_TO_SERVICE = {
     os.environ['PATIENT_SECRET_ARN']: os.environ['PATIENT_SERVICE'],  # patient 시크릿 → patient-service
-    os.environ['STAFF_SECRET_ARN']:   os.environ['STAFF_SERVICE'],    # staff 시크릿 → staff-service
+    os.environ['READER_SECRET_ARN']:  os.environ['HOSPITAL_SERVICE'], # reader 시크릿 → hospital-service
 }
 
 def lambda_handler(event, context):

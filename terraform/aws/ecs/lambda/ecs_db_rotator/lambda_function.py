@@ -129,7 +129,7 @@ def set_secret(secret_id, token):
     master = json.loads(master_raw['SecretString'])  # {"username": ..., "password": ...}
 
     conn = psycopg2.connect(
-        host=new_db['host'],
+        host=AURORA_HOST or new_db['host'],
         port=new_db['port'],
         dbname=new_db['dbname'],
         user=master['username'],
