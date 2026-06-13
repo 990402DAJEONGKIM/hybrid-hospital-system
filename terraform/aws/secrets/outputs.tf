@@ -75,10 +75,9 @@ output "db_url_patient_secret_arn" {
   value       = aws_secretsmanager_secret.db_url_patient_v2.arn
   sensitive   = true
 }
-# db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
-output "db_url_staff_secret_arn" {
-  description = "aws-ecs-staff-database-url-secret ARN"
-  value       = aws_secretsmanager_secret.db_url_staff_v2.arn
+output "db_read_url_patient_secret_arn" {
+  description = "aws-ecs-patient-database-read-url-secret ARN (Aurora Reader endpoint 전용)"
+  value       = aws_secretsmanager_secret.db_read_url_patient_v2.arn
   sensitive   = true
 }
 

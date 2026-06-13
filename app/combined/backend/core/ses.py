@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 SES_FROM_EMAIL = os.getenv("SES_FROM_EMAIL", "")
 ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "")
-AWS_REGION     = os.getenv("AWS_REGION", "ap-northeast-2")
+AWS_REGION     = os.getenv("AWS_REGION", "ap-south-2")
 
 _APPT_SUBJECT = {
     "pending":   "[MZ Clinic] 예약 접수 확인",

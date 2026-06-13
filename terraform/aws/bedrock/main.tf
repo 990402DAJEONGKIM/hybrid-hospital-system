@@ -90,6 +90,19 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Action   = ["lambda:InvokeFunction"]
         Resource = "arn:aws:lambda:*:${data.aws_caller_identity.current.account_id}:function:aws-lambda-cost-monthly-report"
       },
+      # 미사용 리소스 감지용 EC2/ASG 읽기 권한 (TC-17 Step 5)
+      {
+        Sid    = "EC2ReadOnly"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeAddresses",
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeWarmPool",
+        ]
+        Resource = "*"
+      },
     ]
   })
 }
@@ -354,10 +367,12 @@ resource "aws_lambda_function" "anomaly_detector" {
 
   environment {
     variables = {
-      BUCKET      = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      ALERT_EMAIL = var.alert_email
-      FROM_EMAIL  = "no-reply@mzclinic.cloud"
-      SES_REGION  = var.aws_region
+      BUCKET             = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      ALERT_EMAIL        = var.alert_email
+      FROM_EMAIL         = "no-reply@mzclinic.cloud"
+      SES_REGION         = var.aws_region
+      # TC-17 Step 4 테스트용 — 운영 시 0.30으로 원복
+      ANOMALY_THRESHOLD  = var.anomaly_threshold
     }
   }
 
@@ -735,9 +750,63 @@ resource "aws_iam_role_policy" "scheduler" {
         aws_lambda_function.cost_to_kb.arn,
         aws_lambda_function.anomaly_detector.arn,
         aws_lambda_function.monthly_report.arn,
+        aws_lambda_function.unused_resources_detector.arn,
       ]
     }]
   })
+}
+
+# ---------------------------------------------------------
+# Lambda — Unused Resources Detector (TC-17 Step 5)
+# ---------------------------------------------------------
+data "archive_file" "unused_resources_detector" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/unused_resources_detector"
+  output_path = "${path.module}/lambda/unused_resources_detector.zip"
+}
+
+resource "aws_cloudwatch_log_group" "unused_resources_detector" {
+  name              = "/aws/lambda/aws-lambda-unused-resources"
+  retention_in_days = 30
+  tags              = merge(local.common_tags, { Name = "aws-cwl-unused-resources" })
+}
+
+resource "aws_lambda_function" "unused_resources_detector" {
+  function_name    = "aws-lambda-unused-resources"
+  role             = aws_iam_role.lambda_exec.arn
+  handler          = "handler.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 60
+  memory_size      = 128
+  filename         = data.archive_file.unused_resources_detector.output_path
+  source_code_hash = data.archive_file.unused_resources_detector.output_base64sha256
+
+  environment {
+    variables = {
+      ALERT_EMAIL = var.alert_email
+      FROM_EMAIL  = "no-reply@mzclinic.cloud"
+      SES_REGION  = var.aws_region
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.unused_resources_detector]
+  tags       = merge(local.common_tags, { Name = "aws-lambda-unused-resources" })
+}
+
+# 매주 월요일 09:00 KST (= 00:00 UTC) 실행
+resource "aws_scheduler_schedule" "unused_resources_detector" {
+  name        = "aws-sch-unused-resources"
+  description = "미사용 리소스 감지 — 매주 월요일 09:00 KST"
+  group_name  = "default"
+
+  flexible_time_window { mode = "OFF" }
+  schedule_expression          = "cron(0 0 ? * MON *)"
+  schedule_expression_timezone = "UTC"
+
+  target {
+    arn      = aws_lambda_function.unused_resources_detector.arn
+    role_arn = aws_iam_role.scheduler.arn
+  }
 }
 
 # ---------------------------------------------------------

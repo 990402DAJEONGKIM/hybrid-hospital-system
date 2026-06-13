@@ -176,13 +176,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     noncurrent_version_expiration { noncurrent_days = 3 }
   }
 
-  # ── DB 덤프 30일 ─────────────────────────────────────────
+  # by 김다정, 2026-06-13 추가 — DB 덤프 보존 정책
   rule {
-    id     = "db-dump-lifecycle"
-    status = "Enabled"
-    filter { prefix = "db-dumps/" }
-    expiration { days = var.db_dump_retention_days }
-    noncurrent_version_expiration { noncurrent_days = 7 }
+  id     = "db-dump-lifecycle"
+  status = "Enabled"
+  filter { prefix = "db-dumps/" }
+  transition {
+    days          = var.db_dump_retention_days
+    storage_class = "GLACIER"
+  }
+  expiration { days = var.db_dump_expiration_days }
+  noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
   # ── GitHub 백업 소스/tfstate 90일 ────────────────────────

@@ -63,17 +63,16 @@ resource "aws_secretsmanager_secret" "db_url_patient_v2" {
   tags = merge(local.common_tags, { Name = "aws-ecs-patient-database-url-secret" })
 }
 
-# db_url 추가: 기존 db_url은 patient 용으로하고 신규 db_url은 staff 용으로 분리 (by 김다정, 2026.05.28)
-resource "aws_secretsmanager_secret" "db_url_staff_v2" {
-  name        = "aws-ecs-staff-database-url-secret"
-  description = "ECS 앱 DB 연결 URL"
+resource "aws_secretsmanager_secret" "db_read_url_patient_v2" {
+  name        = "aws-ecs-patient-database-read-url-secret"
+  description = "ECS 앱 DB 읽기 전용 연결 URL (Aurora Reader endpoint, ecs_staff_user READ ONLY)"
   kms_key_id  = data.aws_kms_key.secretsmanager.arn
 
   lifecycle {
     prevent_destroy = true
   }
 
-  tags = merge(local.common_tags, { Name = "aws-ecs-staff-database-url-secret" })
+  tags = merge(local.common_tags, { Name = "aws-ecs-patient-database-read-url-secret" })
 }
 
 

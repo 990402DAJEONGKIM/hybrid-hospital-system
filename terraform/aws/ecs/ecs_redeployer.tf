@@ -67,8 +67,8 @@ resource "aws_lambda_function" "ecs_redeployer" {
       ECS_CLUSTER        = "aws-ecs-cluster-01"
       PATIENT_SECRET_ARN = data.tfe_outputs.secrets.values.db_url_patient_secret_arn
       PATIENT_SERVICE    = "patient-service"
-      STAFF_SECRET_ARN   = data.tfe_outputs.secrets.values.db_url_staff_secret_arn
-      STAFF_SERVICE      = "staff-service"
+      READER_SECRET_ARN  = data.tfe_outputs.secrets.values.db_read_url_patient_secret_arn
+      HOSPITAL_SERVICE   = "hospital-service"
     }
   }
 
@@ -85,7 +85,7 @@ resource "aws_cloudwatch_event_rule" "secret_rotation_complete" {
     detail-type = ["Rotation Succeeded"]
     resources = [
       data.tfe_outputs.secrets.values.db_url_patient_secret_arn,
-      data.tfe_outputs.secrets.values.db_url_staff_secret_arn,
+      data.tfe_outputs.secrets.values.db_read_url_patient_secret_arn,
     ]
   })
 

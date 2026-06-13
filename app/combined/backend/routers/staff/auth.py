@@ -1,6 +1,9 @@
+import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -20,7 +23,8 @@ from core.ses import send_lockout_alert
 import os
 
 from models.db import (
-    AuditLog, LoginHistory, Menu, OnpremDepartment, OnpremDoctor,
+    AuditLog, LoginHistory, Menu,
+    # OnpremDepartment, OnpremDoctor,  # 불필요, by 김다정, 2026-06-13
     Role, RoleMenu, Session as SessionModel,
     SyncDepartment, SyncDoctor, User,
 )
@@ -75,32 +79,33 @@ def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result:
     try:
         log = AuditLog(
             user_id=user_id,
-            patient_id=patient_id,
+            patient_id_hash=str(patient_id) if patient_id else None,
             action_type=action,
             source_ip=get_client_ip(request),
             result_code=result
         )
         db.add(log)
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.error("감사 로그 기록 실패 (action=%s user=%s): %s", action, user_id, exc)
 
 
 def _build_token_payload(user: User) -> dict:
-    import os
+    # import os  # 불필요, by 김다정, 2026-06-13
     payload = {
         "sub":  str(user.user_id),
         "role": user.role_ref.role_code,
     }
-    # DB_MODE 분기: 클라우드는 patient_id_hash, 온프레미스는 patient_id UUID — by 김다정, 2026-06-06
-    if os.getenv("DB_MODE", "cloud") == "onprem":
-        pid = getattr(user, "patient_id", None)
-        if pid:
-            payload["pid"] = str(pid)
-    else:
-        pid = getattr(user, "patient_id_hash", None)
-        if pid:
-            payload["pid"] = pid
+    # 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+    # if os.getenv("DB_MODE", "cloud") == "onprem":
+    #     pid = getattr(user, "patient_id", None)
+    #     if pid:
+    #         payload["pid"] = str(pid)
+    # else:
+    pid = getattr(user, "patient_id_hash", None)
+    if pid:
+        payload["pid"] = pid
     if user.doctor_id:
         payload["did"] = str(user.doctor_id)
     return payload
@@ -389,27 +394,29 @@ def me(
         "must_change_password": user.must_change_password,
         "password_expire_days": policy.expire_days,
     }
-    if user.patient_id:
-        result["patient_id_hash"] = str(user.patient_id)
+    # 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+    # if user.patient_id:
+    #     result["patient_id_hash"] = str(user.patient_id)
     if user.doctor_id:
-        if _DB_MODE == "onprem":
-            doctor = db.query(OnpremDoctor).filter(OnpremDoctor.doctor_id == user.doctor_id).first()
-            if doctor:
-                result["department_code"] = doctor.department_code
-                result["doctor_name"]     = doctor.doctor_name
-                dept = db.query(OnpremDepartment).filter(
-                    OnpremDepartment.department_code == doctor.department_code
-                ).first()
-                result["department_name"] = dept.department_name if dept else doctor.department_code
-        else:
-            doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
-            if doctor:
-                result["department_code"] = doctor.department_code
-                result["doctor_name"]     = doctor.doctor_name
-                dept = db.query(SyncDepartment).filter(
-                    SyncDepartment.department_code == doctor.department_code
-                ).first()
-                result["department_name"] = dept.department_name if dept else doctor.department_code
+        # 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+        # if _DB_MODE == "onprem":
+        #     doctor = db.query(OnpremDoctor).filter(OnpremDoctor.doctor_id == user.doctor_id).first()
+        #     if doctor:
+        #         result["department_code"] = doctor.department_code
+        #         result["doctor_name"]     = doctor.doctor_name
+        #         dept = db.query(OnpremDepartment).filter(
+        #             OnpremDepartment.department_code == doctor.department_code
+        #         ).first()
+        #         result["department_name"] = dept.department_name if dept else doctor.department_code
+        # else:
+        doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
+        if doctor:
+            result["department_code"] = doctor.department_code
+            result["doctor_name"]     = doctor.doctor_name
+            dept = db.query(SyncDepartment).filter(
+                SyncDepartment.department_code == doctor.department_code
+            ).first()
+            result["department_name"] = dept.department_name if dept else doctor.department_code
     return result
 
 
