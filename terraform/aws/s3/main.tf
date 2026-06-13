@@ -189,14 +189,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  rule {
-    id     = "db-dump-lifecycle"
-    status = "Enabled"
-    filter { prefix = "db-dumps/" }
-    expiration { days = var.db_dump_retention_days }
-    noncurrent_version_expiration { noncurrent_days = 7 }
-  }
-
   # ── GitHub 백업 소스/tfstate 90일 ────────────────────────
   rule {
     id     = "github-backup-source-lifecycle"
