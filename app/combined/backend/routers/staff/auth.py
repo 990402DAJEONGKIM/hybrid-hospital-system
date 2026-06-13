@@ -237,11 +237,19 @@ def login(
     # AWS와 온프레미스 각각 독립 로그인. 토큰 크로스 도메인 공유 없음.
     # access_token은 httponly 쿠키로만 설정 (mzclinic.cloud 도메인 한정).
     # 프론트엔드에서 역할 분기 UI용으로 role만 응답 body에 포함.
+    policy = get_password_policy(db)
+    password_expired = (
+        (now - user.password_changed_at).days >= policy.expire_days
+        if user.password_changed_at else False
+    )
+
     response = JSONResponse({
         "token_type":              "bearer",
         "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
         "access_token_expires_at": access_token_expires_at,
         "role":                    user.role_ref.role_code,
+        "must_change_password":    user.must_change_password,
+        "password_expired":        password_expired,
     })
     _set_auth_cookies(response, access_token, refresh_token)
     return response
