@@ -1,8 +1,6 @@
 name: Backup Source Code to S3
 
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: '0 15 * * *'   # KST 자정 (UTC 15:00)
   workflow_dispatch:
