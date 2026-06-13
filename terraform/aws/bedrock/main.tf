@@ -354,10 +354,12 @@ resource "aws_lambda_function" "anomaly_detector" {
 
   environment {
     variables = {
-      BUCKET      = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      ALERT_EMAIL = var.alert_email
-      FROM_EMAIL  = "no-reply@mzclinic.cloud"
-      SES_REGION  = var.aws_region
+      BUCKET             = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      ALERT_EMAIL        = var.alert_email
+      FROM_EMAIL         = "no-reply@mzclinic.cloud"
+      SES_REGION         = var.aws_region
+      # TC-17 Step 4 테스트용 — 운영 시 0.30으로 원복
+      ANOMALY_THRESHOLD  = var.anomaly_threshold
     }
   }
 
