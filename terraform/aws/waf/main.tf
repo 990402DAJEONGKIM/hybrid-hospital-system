@@ -292,6 +292,7 @@ resource "aws_iam_role_policy" "aws-firehose-waf-policy" {
 #     buffering_size      = 5
 #     buffering_interval  = 300
 #     kms_key_arn         = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
+
 #   }
 #   tags = { Name = "aws-firehose-waf-patient" }
 # }
@@ -309,6 +310,7 @@ resource "aws_kinesis_firehose_delivery_stream" "aws-firehose-waf-hospital" {
     buffering_size      = 5
     buffering_interval  = 300
     kms_key_arn         = data.terraform_remote_state.aws-kms.outputs.s3_kms_key_arn
+    compression_format  = "GZIP"
   }
 
   tags = { Name = "aws-firehose-waf-hospital" }
