@@ -129,10 +129,23 @@
                     return;
                 }
 
-                // 로그인 성공 → /me 호출로 role 확인 (쿠키 기반, 응답 body에 의존하지 않음)
-                const meRes  = await fetch('/api/staff/auth/me', { credentials: 'include' });
-                const meData = await meRes.json();
-                const role   = meData.role || '';
+                // role 확인: 로그인 응답 body 우선, 없으면 /me 폴백
+                let role = loginData.role || '';
+                let mustChange = loginData.must_change_password || false;
+                let pwExpired  = loginData.password_expired    || false;
+
+                if (!role) {
+                    const meRes = await fetch('/api/staff/auth/me', { credentials: 'include' });
+                    if (!meRes.ok) {
+                        errorMsg.textContent = '사용자 정보를 확인할 수 없습니다. 다시 로그인해주세요.';
+                        errorBox.classList.remove('hidden');
+                        return;
+                    }
+                    const meData = await meRes.json();
+                    role       = meData.role || '';
+                    mustChange = meData.must_change_password || false;
+                    pwExpired  = meData.password_expired     || false;
+                }
 
                 if (STAFF_ROLES.has(role)) {
                     // 직원: 관리자 전용 Wazuh 링크
@@ -147,7 +160,7 @@
                     document.getElementById('loginForm').style.display = 'none';
                 } else {
                     // 환자: 비밀번호 만료 확인 후 포털로 이동
-                    window.location.href = (meData.password_expired || meData.must_change_password)
+                    window.location.href = (pwExpired || mustChange)
                         ? 'change-password.html'
                         : 'index.html';
                 }
