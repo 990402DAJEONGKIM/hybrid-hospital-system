@@ -23,6 +23,13 @@ variable "db_dump_retention_days" {
   default     = 30
 }
 
+# by 김다정 2026-06-13 추가
+variable "db_dump_expiration_days" {
+  description = "DB 덤프 최종 삭제 기간 (일) — Glacier 전환 후 보존"
+  type        = number
+  default     = 365
+}
+
 # 추가: s3 백업 보존 기간 지정 - (20260530, by 김다정)
 variable "github_backup_retention_days" {
   description = "GitHub 백업 보존 기간 (일) — source/, tfstate/"
