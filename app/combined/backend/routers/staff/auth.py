@@ -52,9 +52,6 @@ class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
 
-class SetTokenRequest(BaseModel):
-    token: str
-
 
 # ── 비밀번호 정책 검증 (ISMS-P 2.5.3) ──────────────────────
 
@@ -236,14 +233,15 @@ def login(
         now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)
     ).isoformat()
 
-    # access_token을 응답 body에도 포함 — by 김다정, 2026-06-06
-    # mzclinic.cloud(AWS)에서 로그인 후 staff.mzclinic.cloud(온프레미스)로 이동 시
-    # 서로 다른 도메인이라 쿠키 공유 불가 → JS가 토큰을 읽어 URL 해시로 전달하는 방식 사용
+    # 이중 로그인 전환 — by 김다정, 2026-06-14
+    # AWS와 온프레미스 각각 독립 로그인. 토큰 크로스 도메인 공유 없음.
+    # access_token은 httponly 쿠키로만 설정 (mzclinic.cloud 도메인 한정).
+    # 프론트엔드에서 역할 분기 UI용으로 role만 응답 body에 포함.
     response = JSONResponse({
         "token_type":              "bearer",
         "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
         "access_token_expires_at": access_token_expires_at,
-        "access_token":            access_token,   # 크로스 도메인 전달용 — by 김다정, 2026-06-06
+        "role":                    user.role_ref.role_code,
     })
     _set_auth_cookies(response, access_token, refresh_token)
     return response
@@ -327,26 +325,9 @@ def refresh(
     return response
 
 
-@router.post("/set-token", status_code=204)
-def set_token(
-    body:     SetTokenRequest,
-    response: Response,
-    _:        str = Depends(verify_api_key),
-):
-    """mzclinic.cloud 에서 발급된 JWT 를 온프레미스 HTTP-only 쿠키로 설정. — by 김다정, 2026-06-06
-    토큰 검증 실패 시 401 반환 → 브라우저가 일반 로그인 화면을 표시.
-    """
-    from core.security import decode_access_token
-    decode_access_token(body.token)  # 유효하지 않으면 401 raise
-    response.set_cookie(
-        key      = "access_token",
-        value    = body.token,
-        httponly = True,
-        secure   = COOKIE_SECURE,
-        samesite = "strict",
-        max_age  = ACCESS_TOKEN_EXPIRE_SECONDS,
-        path     = "/",
-    )
+# /set-token 엔드포인트 제거 — by 김다정, 2026-06-14
+# 단일 로그인(AWS JWT → 온프레미스 쿠키 중계) 방식 폐기.
+# AWS/온프레미스 이중 로그인으로 전환, 토큰 공유 없음.
 
 
 @router.post("/logout", status_code=204)
