@@ -565,10 +565,11 @@ def update_appointment(
     except ValueError:
         raise HTTPException(status_code=422, detail="유효하지 않은 예약 ID입니다.")
 
+    # 수정 대상 행 먼저 잠금
     appt = db.query(Appointment).filter(
         Appointment.appointment_id  == appt_uuid,
         Appointment.patient_id_hash == pid,
-    ).first()
+    ).with_for_update().first()
     if not appt:
         raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
 
@@ -595,6 +596,26 @@ def update_appointment(
             appt.appointment_time = time_type(int(h), int(m))
         except (ValueError, AttributeError):
             raise HTTPException(status_code=422, detail="시간 형식이 올바르지 않습니다. (HH:MM)")
+
+    # 변경된 날짜·시간 기준 중복 예약 검증 (자기 자신 제외)
+    if body.appointment_date is not None or body.appointment_time is not None:
+        conflict_q = (
+            db.query(Appointment)
+            .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
+            .filter(
+                Appointment.appointment_id  != appt_uuid,
+                Appointment.appointment_date == appt.appointment_date,
+                Appointment.appointment_time == appt.appointment_time,
+                ~AppointmentStatus.status_code.in_(["cancelled", "no_show"]),
+            )
+            .with_for_update(nowait=False)
+        )
+        if appt.doctor_id:
+            conflict_q = conflict_q.filter(Appointment.doctor_id == appt.doctor_id)
+        else:
+            conflict_q = conflict_q.filter(Appointment.department_code == appt.department_code)
+        if conflict_q.first():
+            raise HTTPException(status_code=409, detail="선택한 시간대에 이미 예약이 있습니다. 다른 시간을 선택해주세요.")
 
     if body.notes is not None:
         appt.notes = body.notes
