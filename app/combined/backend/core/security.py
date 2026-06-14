@@ -24,6 +24,7 @@ JWT_SECRET          = os.getenv("JWT_SECRET", "")           # Vault에서 주입
 JWT_SECRET_PREVIOUS = os.getenv("JWT_SECRET_PREVIOUS", "")  # 키 교체 grace period용
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 API_KEY       = os.getenv("API_KEY", "")
+HASH_SALT     = os.getenv("HASH_SALT", "")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
 pwd_context    = CryptContext(schemes=["bcrypt", "argon2"], deprecated="auto")
@@ -36,10 +37,11 @@ def reload_jwt_secrets() -> None:
     Python 모듈 변수는 임포트 시점에 평가되므로,
     Vault 로드 이후 이 함수를 명시적으로 호출해야 반영됩니다.
     """
-    global JWT_SECRET, JWT_SECRET_PREVIOUS, API_KEY
+    global JWT_SECRET, JWT_SECRET_PREVIOUS, API_KEY, HASH_SALT
     JWT_SECRET          = os.getenv("JWT_SECRET", "")
     JWT_SECRET_PREVIOUS = os.getenv("JWT_SECRET_PREVIOUS", "")
     API_KEY             = os.getenv("API_KEY", "")
+    HASH_SALT           = os.getenv("HASH_SALT", "")
 
 
 def get_client_ip(request: Request) -> Optional[str]:
@@ -68,6 +70,12 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def sha256_hex(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def hash_phone(phone_number: str) -> str:
+    """전화번호를 HASH_SALT와 결합해 SHA-256 해시 반환 (온프레미스 sync_patients.phone_hash와 동일 방식)."""
+    normalized = "".join(c for c in phone_number if c.isdigit())
+    return hashlib.sha256(f"{HASH_SALT}{normalized}".encode()).hexdigest()
 
 
 def generate_refresh_token() -> str:
