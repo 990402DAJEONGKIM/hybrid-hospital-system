@@ -70,3 +70,16 @@ data "aws_s3_bucket" "scripts" {
   bucket = "aws-k2p-storage-01"
 }
 # #260609 박경수 end
+
+
+# wazuh 워크스페이스 참조 - 추가 260614 김강환
+# Slack 알림용 SNS ARN 가져오기
+data "terraform_remote_state" "wazuh" {
+  backend = "remote"
+  config = {
+    organization = "k2p"
+    workspaces = {
+      name = "TC-aws-wazuh"
+    }
+  }
+}

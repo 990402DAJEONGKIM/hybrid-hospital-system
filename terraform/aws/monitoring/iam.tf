@@ -264,3 +264,70 @@ resource "aws_iam_role_policy" "monitoring_keycloak_secrets" {
   })
 }
 # #260609 박경수 end
+
+
+
+# 모니터링 복구 Lambda IAM - 추가 260614 김강환
+# 인덱서(aws-wazuh-indexer-recovery-role)와 동일한 패턴
+resource "aws_iam_role" "aws-monitoring-lambda-recovery-role" {
+  name = "aws-monitoring-lambda-recovery-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = { Name = "aws-monitoring-lambda-recovery-role" }
+}
+
+resource "aws_iam_role_policy_attachment" "aws-monitoring-lambda-recovery-basic" {
+  role       = aws_iam_role.aws-monitoring-lambda-recovery-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "aws-monitoring-lambda-recovery-policy" {
+  name = "aws-monitoring-lambda-recovery-policy"
+  role = aws_iam_role.aws-monitoring-lambda-recovery-role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # EC2 재구축
+        Sid    = "EC2Recovery"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceStatus",
+          "ec2:DescribeImages",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances",
+          "ec2:CreateTags"
+        ]
+        Resource = "*"
+      },
+      {
+        # SSM으로 서비스 재시작
+        Sid    = "SSMRecovery"
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation",
+          "ssm:DescribeInstanceInformation"
+        ]
+        Resource = "*"
+      },
+      {
+        # 새 인스턴스에 모니터링 인스턴스 프로파일 부여
+        Sid      = "PassMonitoringRole"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${aws_iam_instance_profile.aws-monitoring-profile.role}"
+      }
+    ]
+  })
+}

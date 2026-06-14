@@ -137,6 +137,84 @@ resource "aws_cloudwatch_metric_alarm" "aws-monitoring-recover" {
   tags = { Name = "aws-monitoring-system-recover" }
 }
 
+
+
+
+# ─────────────────────────────────────────────────────────
+# 모니터링 복구 Lambda 전용 SNS - 추가 260614 김강환
+# 인덱서(aws-wazuh-indexer-recovery)와 동일한 패턴
+# ─────────────────────────────────────────────────────────
+resource "aws_sns_topic" "aws-monitoring-recovery" {
+  name = "aws-monitoring-recovery"
+}
+
+resource "aws_lambda_permission" "aws-monitoring-recovery-sns" {
+  statement_id  = "AllowSNSMonitoringRecovery"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.aws-monitoring-lambda-recovery.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.aws-monitoring-recovery.arn
+}
+
+resource "aws_sns_topic_subscription" "aws-monitoring-recovery-sub" {
+  topic_arn  = aws_sns_topic.aws-monitoring-recovery.arn
+  protocol   = "lambda"
+  endpoint   = aws_lambda_function.aws-monitoring-lambda-recovery.arn
+  depends_on = [aws_lambda_permission.aws-monitoring-recovery-sns]
+}
+
+# Grafana 프로세스 다운 감지 - 추가 260614 김강환
+resource "aws_cloudwatch_metric_alarm" "aws-cw-grafana-down-01" {
+  alarm_name          = "aws-cw-grafana-down-01"
+  alarm_description   = "Grafana 프로세스 다운 감지 - 즉시 확인 필요"
+  namespace           = "Custom/Monitoring"
+  metric_name         = "grafana_running"
+  dimensions = {
+    InstanceId = aws_instance.aws-monitoring-01.id
+  }
+  period              = 60
+  evaluation_periods  = 2
+  statistic           = "Minimum"
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions = [
+    aws_sns_topic.aws-monitoring-recovery.arn,
+    data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
+  ]
+  ok_actions = [
+    data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
+  ]
+  tags = { Name = "aws-cw-grafana-down-01" }
+}
+
+# Prometheus 프로세스 다운 감지 - 추가 260614 김강환
+resource "aws_cloudwatch_metric_alarm" "aws-cw-prometheus-down-01" {
+  alarm_name          = "aws-cw-prometheus-down-01"
+  alarm_description   = "Prometheus 프로세스 다운 감지 - 즉시 확인 필요"
+  namespace           = "Custom/Monitoring"
+  metric_name         = "prometheus_running"
+  dimensions = {
+    InstanceId = aws_instance.aws-monitoring-01.id
+  }
+  period              = 60
+  evaluation_periods  = 2
+  statistic           = "Minimum"
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions = [
+    aws_sns_topic.aws-monitoring-recovery.arn,
+    data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
+  ]
+  ok_actions = [
+    data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
+  ]
+  tags = { Name = "aws-cw-prometheus-down-01" }
+}
+
+
+
 # ─────────────────────────────────────────────────────────
 # DLM — 1시간마다 스냅샷 자동 생성
 # 실수로 terminate 시 최신 스냅샷으로 복구
@@ -334,45 +412,3 @@ resource "aws_security_group_rule" "monitoring_443_from_wazuh" {
 # #260609 박경수 end
 
 
-
-# Grafana 프로세스 다운 감지 - 추가 260614 김강환
-# systemctl is-active grafana-server → CloudWatch 커스텀 메트릭
-# Wazuh 매니저 헬스체크(aws-wazuh-cw-manager-01)와 동일한 패턴
-resource "aws_cloudwatch_metric_alarm" "aws-cw-grafana-down-01" {
-  alarm_name          = "aws-cw-grafana-down-01"
-  alarm_description   = "Grafana 프로세스 다운 감지 - 즉시 확인 필요"
-  namespace           = "Custom/Monitoring"
-  metric_name         = "grafana_running"
-  dimensions = {
-    InstanceId = aws_instance.aws-monitoring-01.id
-  }
-  period              = 60
-  evaluation_periods  = 2
-  statistic           = "Minimum"
-  comparison_operator = "LessThanThreshold"
-  threshold           = 1
-  treat_missing_data  = "breaching"
-  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
-  tags = { Name = "aws-cw-grafana-down-01" }
-}
-
-# Prometheus 프로세스 다운 감지 - 추가 260614 김강환
-resource "aws_cloudwatch_metric_alarm" "aws-cw-prometheus-down-01" {
-  alarm_name          = "aws-cw-prometheus-down-01"
-  alarm_description   = "Prometheus 프로세스 다운 감지 - 즉시 확인 필요"
-  namespace           = "Custom/Monitoring"
-  metric_name         = "prometheus_running"
-  dimensions = {
-    InstanceId = aws_instance.aws-monitoring-01.id
-  }
-  period              = 60
-  evaluation_periods  = 2
-  statistic           = "Minimum"
-  comparison_operator = "LessThanThreshold"
-  threshold           = 1
-  treat_missing_data  = "breaching"
-  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
-  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
-  tags = { Name = "aws-cw-prometheus-down-01" }
-}
