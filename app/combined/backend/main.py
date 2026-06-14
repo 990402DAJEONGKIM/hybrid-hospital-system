@@ -23,6 +23,7 @@ from models import db as _models  # noqa: F401 — Base에 모델 등록
 
 from routers.patient import auth as patient_auth, portal as patient_portal
 from routers.staff import auth as staff_auth, admin as staff_admin
+from routers.nurse import dashboard as nurse_dashboard
 
 app = FastAPI(
     title="김이박 병원 통합 API",
@@ -53,6 +54,9 @@ app.include_router(patient_portal.router, prefix="/patient")
 # ── 의료진 인증 / 관리자 (/staff/) ────────────────────────────
 app.include_router(staff_auth.router,  prefix="/staff")
 app.include_router(staff_admin.router, prefix="/staff")
+
+# ── 간호사 대시보드 (/nurse/) ─────────────────────────────────
+app.include_router(nurse_dashboard.router, prefix="/staff")
 
 
 @app.get("/health")

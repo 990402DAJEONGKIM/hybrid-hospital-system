@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>간호사 대시보드 - 김이박 클리닉</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { margin: 0; background: #f0f4f8; font-family: 'Segoe UI', sans-serif; color: #263238; }
+
+        /* 헤더 */
+        .nd-header {
+            background: #1565c0; color: #fff;
+            padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .nd-header h1 { margin: 0; font-size: 17px; font-weight: 700; }
+        .nd-header .meta { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+        .nd-logout { background: rgba(255,255,255,0.15); border: none; color: #fff;
+            padding: 6px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; }
+        .nd-logout:hover { background: rgba(255,255,255,0.25); }
+
+        /* 컨텐츠 */
+        .nd-content { max-width: 800px; margin: 0 auto; padding: 20px 16px 40px; }
+
+        /* 섹션 카드 */
+        .nd-card {
+            background: #fff; border-radius: 14px; padding: 20px;
+            margin-bottom: 20px; box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+        .nd-card-title {
+            font-size: 15px; font-weight: 700; color: #263238;
+            margin: 0 0 16px; display: flex; align-items: center; gap: 8px;
+        }
+        .nd-card-title i { font-size: 16px; }
+
+        /* 새로고침 상태 */
+        .nd-refresh-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 12px; color: #90a4ae; margin-bottom: 16px;
+        }
+        .nd-refresh-bar button {
+            background: none; border: none; color: #1976d2; font-size: 12px;
+            cursor: pointer; display: flex; align-items: center; gap: 4px;
+        }
+
+        /* 기능 1 — 대기 현황 테이블 */
+        .wait-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .wait-table th {
+            background: #e3f2fd; color: #1565c0; font-weight: 700;
+            padding: 9px 10px; text-align: center; border-bottom: 2px solid #90caf9;
+        }
+        .wait-table th:first-child { text-align: left; }
+        .wait-table td { padding: 9px 10px; border-bottom: 1px solid #f0f4f8; text-align: center; }
+        .wait-table td:first-child { text-align: left; font-weight: 600; color: #37474f; }
+        .wait-table tr:last-child td { border-bottom: none; }
+        .wait-table tr:hover td { background: #f5f9ff; }
+        .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-weight: 700; font-size: 13px; }
+        .badge-wait { background: #fff8e1; color: #f57f17; }
+        .badge-progress { background: #e3f2fd; color: #1565c0; }
+        .badge-done { background: #e8f5e9; color: #2e7d32; }
+        .badge-total { background: #f3e5f5; color: #6a1b9a; }
+
+        /* 기능 2 — 중증 알레르기 */
+        .allergy-empty {
+            text-align: center; padding: 20px; color: #66bb6a;
+            font-size: 14px; font-weight: 600;
+        }
+        .allergy-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px; border-radius: 8px; margin-bottom: 8px;
+            background: #fff3e0; border-left: 4px solid #e53935;
+        }
+        .allergy-item:last-child { margin-bottom: 0; }
+        .allergy-name { font-weight: 700; color: #b71c1c; font-size: 14px; }
+        .allergy-cnt {
+            background: #e53935; color: #fff;
+            border-radius: 20px; padding: 2px 12px; font-size: 13px; font-weight: 700;
+        }
+
+        /* 로딩 / 오류 */
+        .nd-loading { text-align: center; padding: 30px; color: #90a4ae; font-size: 14px; }
+        .nd-error { text-align: center; padding: 20px; color: #e53935; font-size: 13px; }
+
+        /* 로그인 화면 */
+        #loginSection {
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+        }
+        .login-box {
+            background: #fff; border-radius: 16px; padding: 36px 32px;
+            width: 100%; max-width: 360px; box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+        }
+        .login-box h2 { margin: 0 0 6px; font-size: 20px; color: #1565c0; }
+        .login-box p { margin: 0 0 24px; font-size: 13px; color: #90a4ae; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: #546e7a; margin-bottom: 6px; }
+        .form-group input {
+            width: 100%; padding: 10px 12px; border: 1px solid #cfd8dc;
+            border-radius: 8px; font-size: 14px;
+        }
+        .form-group input:focus { outline: none; border-color: #1565c0; }
+        .login-btn {
+            width: 100%; padding: 12px; background: #1565c0; color: #fff;
+            border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer;
+        }
+        .login-btn:hover { background: #0d47a1; }
+        .login-btn:disabled { background: #b0bec5; cursor: not-allowed; }
+        .login-err { color: #e53935; font-size: 13px; margin-top: 8px; min-height: 18px; }
+
+        /* 반응형 */
+        @media (max-width: 480px) {
+            .wait-table th, .wait-table td { padding: 7px 6px; font-size: 12px; }
+            .nd-card { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 로그인 섹션 -->
+<div id="loginSection">
+    <div class="login-box">
+        <h2><i class="fas fa-user-nurse" style="margin-right:8px;"></i>간호사 로그인</h2>
+        <p>김이박 클리닉 간호사 전용 대시보드</p>
+        <div class="form-group">
+            <label for="memberId">아이디</label>
+            <input type="text" id="memberId" placeholder="아이디 입력" autocomplete="username">
+        </div>
+        <div class="form-group">
+            <label for="memberPw">비밀번호</label>
+            <input type="password" id="memberPw" placeholder="비밀번호 입력" autocomplete="current-password">
+        </div>
+        <div class="login-err" id="loginErr"></div>
+        <button class="login-btn" id="loginBtn" onclick="doLogin()">로그인</button>
+    </div>
+</div>
+
+<!-- 대시보드 섹션 -->
+<div id="dashboardSection" style="display:none;">
+    <div class="nd-header">
+        <div>
+            <h1><i class="fas fa-user-nurse" style="margin-right:8px;"></i>간호사 대시보드</h1>
+            <div class="meta" id="headerMeta"></div>
+        </div>
+        <button class="nd-logout" onclick="doLogout()"><i class="fas fa-sign-out-alt" style="margin-right:4px;"></i>로그아웃</button>
+    </div>
+
+    <div class="nd-content">
+
+        <div class="nd-refresh-bar">
+            <span id="lastUpdated"></span>
+            <button onclick="loadDashboard()"><i class="fas fa-sync-alt"></i> 새로고침</button>
+        </div>
+
+        <!-- 기능 1: 진료과별 대기 현황 -->
+        <div class="nd-card">
+            <div class="nd-card-title">
+                <i class="fas fa-clock" style="color:#1976d2;"></i>오늘 진료과별 대기 현황
+            </div>
+            <div id="waitingSection"><div class="nd-loading"><i class="fas fa-spinner fa-spin"></i> 불러오는 중...</div></div>
+        </div>
+
+        <!-- 기능 2: 중증 알레르기 현황 -->
+        <div class="nd-card">
+            <div class="nd-card-title">
+                <i class="fas fa-exclamation-triangle" style="color:#e53935;"></i>오늘 중증 알레르기 현황
+                <span style="font-size:11px;font-weight:400;color:#90a4ae;margin-left:4px;">(severity: severe)</span>
+            </div>
+            <div id="allergySection"><div class="nd-loading"><i class="fas fa-spinner fa-spin"></i> 불러오는 중...</div></div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const STAFF_BASE = '/api/staff';
+    let _refreshTimer = null;
+
+    async function staffCall(path, opts = {}) {
+        return fetch(STAFF_BASE + path, {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+            ...opts,
+        });
+    }
+
+    async function doLogin() {
+        const btn = document.getElementById('loginBtn');
+        const err = document.getElementById('loginErr');
+        const id  = document.getElementById('memberId').value.trim();
+        const pw  = document.getElementById('memberPw').value;
+
+        if (!id || !pw) { err.textContent = '아이디와 비밀번호를 입력해주세요.'; return; }
+        btn.disabled = true; btn.textContent = '로그인 중...'; err.textContent = '';
+
+        const res = await staffCall('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ member_number: id, password: pw }),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok) {
+            if (data.role !== 'nurse') {
+                err.textContent = '간호사 계정만 접근할 수 있습니다.';
+                btn.disabled = false; btn.textContent = '로그인';
+                return;
+            }
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('dashboardSection').style.display = 'block';
+            document.getElementById('headerMeta').textContent = `${data.member_number} · 간호사`;
+            loadDashboard();
+            _refreshTimer = setInterval(loadDashboard, 5 * 60 * 1000);
+        } else {
+            err.textContent = data.detail || '로그인에 실패했습니다.';
+            btn.disabled = false; btn.textContent = '로그인';
+        }
+    }
+
+    async function doLogout() {
+        await staffCall('/auth/logout', { method: 'POST' }).catch(() => {});
+        clearInterval(_refreshTimer);
+        document.getElementById('dashboardSection').style.display = 'none';
+        document.getElementById('loginSection').style.display = 'flex';
+        document.getElementById('memberPw').value = '';
+        document.getElementById('loginErr').textContent = '';
+    }
+
+    async function loadDashboard() {
+        const res = await staffCall('/nurse/dashboard');
+        if (!res.ok) {
+            document.getElementById('waitingSection').innerHTML  = '<div class="nd-error"><i class="fas fa-exclamation-circle"></i> 데이터를 불러올 수 없습니다.</div>';
+            document.getElementById('allergySection').innerHTML = '<div class="nd-error"><i class="fas fa-exclamation-circle"></i> 데이터를 불러올 수 없습니다.</div>';
+            return;
+        }
+        const data = await res.json();
+
+        // 마지막 업데이트 시각
+        const now = new Date();
+        document.getElementById('lastUpdated').textContent =
+            `마지막 업데이트: ${now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} (5분마다 자동 갱신)`;
+
+        renderWaiting(data.waiting_by_dept || []);
+        renderAllergies(data.severe_allergies || []);
+    }
+
+    function renderWaiting(list) {
+        const el = document.getElementById('waitingSection');
+        if (!list.length) {
+            el.innerHTML = '<div class="nd-loading" style="color:#90a4ae;">오늘 진료 데이터가 없습니다.</div>';
+            return;
+        }
+        el.innerHTML = `
+        <table class="wait-table">
+            <thead>
+                <tr>
+                    <th>진료과</th>
+                    <th>대기</th>
+                    <th>진행 중</th>
+                    <th>완료</th>
+                    <th>합계</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${list.map(r => `
+                <tr>
+                    <td>${r.department_name}</td>
+                    <td><span class="badge badge-wait">${r.waiting}</span></td>
+                    <td><span class="badge badge-progress">${r.in_progress}</span></td>
+                    <td><span class="badge badge-done">${r.completed}</span></td>
+                    <td><span class="badge badge-total">${r.total}</span></td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
+    }
+
+    function renderAllergies(list) {
+        const el = document.getElementById('allergySection');
+        if (!list.length) {
+            el.innerHTML = '<div class="allergy-empty"><i class="fas fa-check-circle" style="margin-right:6px;"></i>오늘 중증 알레르기 내원 없음</div>';
+            return;
+        }
+        el.innerHTML = list.map(a => `
+        <div class="allergy-item">
+            <span class="allergy-name"><i class="fas fa-exclamation-circle" style="margin-right:6px;"></i>${a.allergy_name}</span>
+            <span class="allergy-cnt">${a.count}건</span>
+        </div>`).join('');
+    }
+
+    // 엔터키 로그인
+    ['memberId', 'memberPw'].forEach(id => {
+        document.getElementById(id).addEventListener('keydown', e => {
+            if (e.key === 'Enter') doLogin();
+        });
+    });
+
+    // 이미 로그인된 세션 확인
+    (async () => {
+        const res = await staffCall('/auth/me').catch(() => null);
+        if (res && res.ok) {
+            const me = await res.json();
+            if (me.role === 'nurse') {
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('dashboardSection').style.display = 'block';
+                document.getElementById('headerMeta').textContent = `${me.member_number} · 간호사`;
+                loadDashboard();
+                _refreshTimer = setInterval(loadDashboard, 5 * 60 * 1000);
+            }
+        }
+    })();
+</script>
+</body>
+</html>
