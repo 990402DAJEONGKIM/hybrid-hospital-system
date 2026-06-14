@@ -32,21 +32,6 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
     Version = "2012-10-17"
     Statement = [
       {
-        # Grafana CloudWatch Data Source가 메트릭 읽기에 필요한 최소 권한
-        # 공식문서: https://grafana.com/docs/grafana/latest/datasources/aws-cloudwatch/
-        Sid    = "CloudWatchRead"
-        Effect = "Allow"
-        Action = [
-          "cloudwatch:DescribeAlarmsForMetric",
-          "cloudwatch:DescribeAlarmHistory",
-          "cloudwatch:DescribeAlarms",
-          "cloudwatch:ListMetrics",
-          "cloudwatch:GetMetricData",
-          "cloudwatch:GetInsightRuleReport"
-        ]
-        Resource = "*"
-      },
-      {
         Sid    = "SecretsManagerRead"
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue"]
@@ -80,7 +65,23 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
           }
         }
       },
-
+      {
+        # EC2 재구축 + EBS 분리/부착 - 수정 260614 김강환
+        Sid    = "EC2Recovery"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceStatus",
+          "ec2:DescribeImages",
+          "ec2:DescribeVolumes",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances",
+          "ec2:CreateTags",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume"
+        ]
+        Resource = "*"
+      },
       {
         # grafana/ prefix 읽기 권한
         # user_data 실행 시 초기화 스크립트 + 대시보드 JSON S3에서 가져오기 - 추가 260612 김강환
@@ -304,9 +305,12 @@ resource "aws_iam_role_policy" "aws-monitoring-lambda-recovery-policy" {
           "ec2:DescribeInstances",
           "ec2:DescribeInstanceStatus",
           "ec2:DescribeImages",
+          "ec2:DescribeVolumes",
           "ec2:RunInstances",
           "ec2:TerminateInstances",
-          "ec2:CreateTags"
+          "ec2:CreateTags",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume"
         ]
         Resource = "*"
       },
