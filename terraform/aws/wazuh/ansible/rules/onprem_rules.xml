@@ -339,10 +339,10 @@
   <rule id="100603" level="0">
     <if_sid>100600</if_sid>
     <field name="result_code">^2</field>
+    <field name="method" negate="yes">^DELETE$</field>
     <description>온프레미스 FastAPI 정상 응답 — 무시</description>
     <group>noise</group>
   </rule>
-
 </group>
 
 <!-- =========================================================
@@ -350,15 +350,92 @@
      수집 경로: /var/log/deident/db_audit.log
      ISMS-P 2.9.1 개인정보처리시스템 접근기록
      ========================================================= -->
+  <!-- =========================================================
+       온프레미스 DB 감사로그 탐지 룰
+       수집: /var/log/deident/db_audit.log
+       ISMS-P 2.9.1 개인정보처리시스템 접근기록
+       추가 260612 김강환
+       ========================================================= -->
 <group name="onprem,db_audit,">
-  <!-- DB 감사 로그 베이스 + 2502 억제 - 260611 김강환 -->
+  <!-- 베이스 룰 -->
   <rule id="100650" level="3">
-    <if_sid>2502</if_sid>
+    <decoded_as>json</decoded_as>
     <field name="audit_log_id">\.+</field>
-    <description>DB 감사 로그 - $(action_type) $(target_table)</description>
+    <description>온프레미스 DB 감사 로그 — $(action_type) 사용자: $(user_id) IP: $(source_ip)</description>
     <group>onprem,db_audit,</group>
   </rule>
+
+  <!-- 무조건 탐지 — 밤낮 없이 -->
+  <!-- DELETE/EXPORT/권한변경/계정관리 -->
+  <rule id="100651" level="12">
+    <if_sid>100650</if_sid>
+    <field name="action_type">^DELETE$|^USER_DELETE$|^EXPORT$|^PERMISSION_UPDATE$|^ROLE_UPDATE$|^POLICY_UPDATE$|^USER_CREATE$|^USER_LOCK$|^LOCK_USER$|^USER_RESET_PW$|^USER_UPDATE$</field>
+    <description>온프레미스 DB 위험 이벤트 — $(action_type) 사용자: $(user_id) IP: $(source_ip) 테이블: $(target_table)</description>
+    <group>onprem,db_audit,critical,</group>
+    <mitre><id>T1485</id></mitre>
+  </rule>
+
+  <!-- 평일 업무시간 외 탐지 (UTC 09:00~24:00 = KST 18:00~다음날 09:00) -->
+  <rule id="100652" level="12">
+    <if_sid>100650</if_sid>
+    <field name="action_type">^READ_|^VIEW_|^SEARCH_|^SCHEDULE_VIEW$|^UPDATE$|^CREATE_|^USER_UPDATE$|^USER_CREATE$|^USER_RESET_PW$</field>
+    <weekday>monday,tuesday,wednesday,thursday,friday</weekday>
+    <time>9 am - 12 am</time>
+    <description>평일 업무시간 외 온프레미스 DB 접근 — $(action_type) 사용자: $(user_id) IP: $(source_ip)</description>
+    <group>onprem,db_audit,after_hours,</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
+  <!-- 토요일 진료시간 외 탐지 (UTC 04:00~24:00 = KST 13:00~다음날 09:00) -->
+  <rule id="100653" level="12">
+    <if_sid>100650</if_sid>
+    <field name="action_type">^READ_|^VIEW_|^SEARCH_|^SCHEDULE_VIEW$|^UPDATE$|^CREATE_|^USER_UPDATE$|^USER_CREATE$|^USER_RESET_PW$</field>
+    <weekday>saturday</weekday>
+    <time>4 am - 12 am</time>
+    <description>토요일 진료시간 외 온프레미스 DB 접근 — $(action_type) 사용자: $(user_id) IP: $(source_ip)</description>
+    <group>onprem,db_audit,after_hours,weekend,</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
+  <!-- 일요일 전일 탐지 -->
+  <rule id="100658" level="12">
+    <if_sid>100650</if_sid>
+    <field name="action_type">^READ_|^VIEW_|^SEARCH_|^SCHEDULE_VIEW$|^UPDATE$|^CREATE_|^USER_UPDATE$|^USER_CREATE$|^USER_RESET_PW$</field>
+    <weekday>sunday</weekday>
+    <description>일요일 온프레미스 DB 접근 — $(action_type) 사용자: $(user_id) IP: $(source_ip)</description>
+    <group>onprem,db_audit,after_hours,weekend,</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
+  <!-- 대량 조회 탐지 — 데이터 유출 의심 -->
+  <rule id="100654" level="12" frequency="50" timeframe="60">
+    <if_matched_sid>100650</if_matched_sid>
+    <field name="action_type">^READ_|^VIEW_|^SEARCH_</field>
+    <description>온프레미스 DB 대량 조회 탐지 — 데이터 유출 의심 IP: $(source_ip)</description>
+    <group>onprem,db_audit,data_exfiltration,</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
+  <!-- 로그인 실패/계정 잠금 — 대시보드만 (Slack 안 보냄) -->
+  <rule id="100656" level="5">
+    <if_sid>100650</if_sid>
+    <field name="action_type">^LOGIN_FAIL$|^ACCOUNT_LOCKED$</field>
+    <description>온프레미스 DB 로그인 실패 — 사용자: $(user_id) IP: $(source_ip)</description>
+    <group>onprem,db_audit,auth_failure,</group>
+  </rule>
+
+  <!-- 정상 동작 억제 -->
+  <rule id="100655" level="0">
+    <if_sid>100650</if_sid>
+    <field name="action_type">^LOGIN$|^LOGOUT$|^TOKEN_REFRESH$|^LOGIN_SUCCESS$|^READ_ME$|^READ_MENUS$|^READ_PASSWORD_POLICY$|^VIEW_DASHBOARD$|^CHANGE_PASSWORD$|^PASSWORD_CHANGE$|^SESSION_STATUS$</field>
+    <description>온프레미스 DB 정상 동작 — 무시</description>
+    <group>noise</group>
+  </rule>
+
 </group>
+
+
+
 
 
 
@@ -387,6 +464,33 @@
     <field name="level">^ERROR$</field>
     <description>Ollama EMR 배치 실패 — $(action_type)</description>
     <group>onprem,ollama,error,</group>
+  </rule>
+
+  <!-- 비식별화 API DELETE 탐지 — 무조건 위험 - 추가 260612 김강환 -->
+  <rule id="100670" level="12">
+    <if_sid>100600</if_sid>
+    <field name="method">^DELETE$</field>
+    <description>비식별화 API DELETE 요청 — 사용자: $(user_id) IP: $(source_ip) 경로: $(path)</description>
+    <group>onprem,deident,critical,</group>
+    <mitre><id>T1485</id></mitre>
+  </rule>
+
+  <!-- 비식별화 API 대량 요청 탐지 — 데이터 유출 의심 - 추가 260612 김강환 -->
+  <rule id="100671" level="12" frequency="100" timeframe="60">
+    <if_matched_sid>100600</if_matched_sid>
+    <description>비식별화 API 대량 요청 탐지 — 데이터 유출 의심 IP: $(source_ip)</description>
+    <group>onprem,deident,data_exfiltration,</group>
+    <mitre><id>T1530</id></mitre>
+  </rule>
+
+  <!-- 비식별화 API 외부 IP 접근 시도 - 추가 260612 김강환 -->
+  <rule id="100672" level="12">
+    <if_sid>100601</if_sid>
+    <field name="path" type="pcre2">^/deident|^/sync</field>
+    <field name="source_ip" negate="yes" type="pcre2">^172\.30\.|^10\.</field>
+    <description>비식별화 API 외부 IP 접근 시도 — IP: $(source_ip) 경로: $(path)</description>
+    <group>onprem,deident,critical,</group>
+    <mitre><id>T1190</id></mitre>
   </rule>
 
 

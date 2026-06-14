@@ -1,22 +1,27 @@
 <!-- =========================================================
      lambda_rules.xml
      AWS Lambda 실행 로그 탐지 룰
-     
-     룰 ID 범위: 100800~100819
-     
-     수집 경로: CloudWatch Logs → Wazuh wodle (5분마다)
-     
+
+     룰 ID 범위: 100830~100849
+     수정 260614 김강환: 100800~100810 → 100830~100840
+       (monitoring_rules.xml과 ID 충돌 — analysisd -t에서
+        "Rule ID duplicated" 경고 발생, lambda 룰이 우선
+        적용되어 Grafana/Prometheus 룰이 죽어있던 문제 수정)
+
+     수집 경로: CloudWatch Logs → Wazuh wodle aws-s3 (5분마다)
+
      동작:
        Lambda 실행 실패 → level 12 → Slack
        Bedrock 호출 실패 → level 7 → 대시보드만
-     
+
      ISMS-P 2.9.1 로그 관리
      ========================================================= -->
 
 <group name="lambda,aws,">
 
   <!-- Lambda 실행 에러 탐지 → Slack - 260610 김강환 -->
-  <rule id="100800" level="12">
+  <!-- 수정 260614 김강환: ID 100800 → 100830 (충돌 해결) -->
+  <rule id="100830" level="12">
     <location>Wazuh-AWS</location>
     <match>errorMessage|Task timed out|오류:</match>
     <description>Lambda 실행 실패 탐지 — $(aws.log_group)</description>
@@ -24,7 +29,8 @@
   </rule>
 
   <!-- Lambda 타임아웃 탐지 → Slack - 260610 김강환 -->
-  <rule id="100801" level="12">
+  <!-- 수정 260614 김강환: ID 100801 → 100831 (충돌 해결) -->
+  <rule id="100831" level="12">
     <location>Wazuh-AWS</location>
     <match>Task timed out after</match>
     <description>Lambda 타임아웃 — $(aws.log_group)</description>
@@ -32,8 +38,9 @@
   </rule>
 
   <!-- Bedrock InvokeModel 실패 → 대시보드만 - 260610 김강환 -->
-  <rule id="100810" level="7">
-    <if_sid>100800</if_sid>
+  <!-- 수정 260614 김강환: ID 100810 → 100840 (충돌 해결), if_sid 100830 참조로 변경 -->
+  <rule id="100840" level="7">
+    <if_sid>100830</if_sid>
     <match>ValidationException|ThrottlingException|ServiceUnavailableException</match>
     <description>Bedrock InvokeModel 실패 — 대시보드 기록</description>
     <group>bedrock,error,aws,</group>

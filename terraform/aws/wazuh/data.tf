@@ -42,5 +42,9 @@ output "wazuh_instance_arn" {
   sensitive = true
 }
 
-
-
+# Slack 알림용 SNS ARN output - 추가 260614 김강환
+# 인덱서/모니터링 워크스페이스에서 공용으로 참조
+output "wazuh_cw_alerts_sns_arn" {
+  value     = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+  sensitive = true
+}
