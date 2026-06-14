@@ -795,7 +795,7 @@ def get_my_records(
 
     record_audit(
         db, action_type="EMR_SELF_VIEW", result_code="200",
-        user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+        user_id=uuid_module.UUID(current_user["sub"]), patient_id=pid,
         target_table="sync_encounters",
     )
 
@@ -836,7 +836,7 @@ def get_encounter_detail(
     if enc.patient_id_hash != pid:
         record_audit(
             db, action_type="UNAUTHORIZED_ACCESS", result_code="403",
-            user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+            user_id=uuid_module.UUID(current_user["sub"]), patient_id=pid,
             target_table="sync_encounters",
         )
         db.commit()
@@ -854,7 +854,7 @@ def get_encounter_detail(
 
     record_audit(
         db, action_type="EMR_SELF_VIEW", result_code="200",
-        user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+        user_id=uuid_module.UUID(current_user["sub"]), patient_id=pid,
         target_table="sync_encounters",
     )
     db.commit()
@@ -941,7 +941,7 @@ def get_prescriptions(
 
     record_audit(
         db, action_type="VIEW_PRESCRIPTIONS", result_code="200",
-        user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+        user_id=uuid_module.UUID(current_user["sub"]), patient_id=pid,
         target_table="sync_diagnoses",
     )
 
