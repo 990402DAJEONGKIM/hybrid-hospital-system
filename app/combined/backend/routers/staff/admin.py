@@ -12,9 +12,10 @@ from core.database import get_db
 from core.security import get_current_user, get_client_ip, hash_password, hash_phone, verify_api_key
 from routers.staff.auth import validate_password
 from models.db import (
-    AuditLog, Appointment, AppointmentStatus, LoginHistory, Menu, Notification,
+    AuditLog, Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
+    LoginHistory, Menu, Notification,
     PasswordPolicy, Permission, Role, RoleMenu, RolePermission,
-    Session as SessionModel, SyncDepartment, SyncPatient, User,
+    Session as SessionModel, SyncDepartment, SyncDoctor, SyncPatient, SyncWard, User,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -741,3 +742,188 @@ def get_dashboard(
             for e in recent_events
         ],
     }
+
+
+# ── 입원 예약 관리 — 원무과 병동 배정 (SFR-035) ─────────────────────
+
+class WardAssignRequest(BaseModel):
+    ward_id:   str
+    confirm:   bool = True
+
+
+@router.get("/appointments/inpatient")
+def list_inpatient_appointments(
+    status:       Optional[str] = Query(default="pending", description="pending | confirmed | all"),
+    department:   Optional[str] = Query(default=None),
+    date_from:    Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    date_to:      Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    limit:        int           = Query(default=50, le=200),
+    offset:       int           = Query(default=0),
+    db:           DbSession     = Depends(get_db),
+    current_user: dict          = Depends(require_admin),
+    _:            str           = Depends(verify_api_key),
+):
+    """입원 예약 목록 — 원무과 병동 배정 화면용."""
+    inpatient_type = db.query(AppointmentType).filter(
+        AppointmentType.type_code == "inpatient"
+    ).first()
+    if not inpatient_type:
+        return []
+
+    q = (
+        db.query(Appointment)
+        .filter(Appointment.type_id == inpatient_type.type_id)
+    )
+    if status and status != "all":
+        st = db.query(AppointmentStatus).filter(AppointmentStatus.status_code == status).first()
+        if st:
+            q = q.filter(Appointment.status_id == st.status_id)
+    if department:
+        q = q.filter(Appointment.department_code == department)
+    if date_from:
+        from datetime import date as _date
+        q = q.filter(Appointment.appointment_date >= _date.fromisoformat(date_from))
+    if date_to:
+        from datetime import date as _date
+        q = q.filter(Appointment.appointment_date <= _date.fromisoformat(date_to))
+
+    total = q.count()
+    appts = q.order_by(Appointment.appointment_date.asc(), Appointment.created_at.asc()).offset(offset).limit(limit).all()
+
+    _ROOM_KO = {"single": "1인실", "double": "2인실", "shared": "다인실"}
+
+    result = []
+    for a in appts:
+        ward_name = None
+        if a.ward_id:
+            w = db.query(SyncWard).filter(SyncWard.ward_id == a.ward_id).first()
+            ward_name = w.ward_name if w else None
+        patient_name = None
+        sp = db.query(SyncPatient).filter(SyncPatient.patient_id_hash == a.patient_id_hash).first()
+        if sp:
+            patient_name = sp.patient_name
+        doctor_name = None
+        if a.doctor_id:
+            doc = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == a.doctor_id).first()
+            doctor_name = doc.doctor_name if doc else None
+        result.append({
+            "appointment_id":       str(a.appointment_id),
+            "patient_name":         patient_name,
+            "patient_id_hash":      a.patient_id_hash,
+            "department_code":      a.department_code,
+            "doctor_name":          doctor_name,
+            "appointment_date":     str(a.appointment_date),
+            "room_type_pref":       a.room_type_pref,
+            "has_chronic_condition": a.has_chronic_condition,
+            "ward_id":              str(a.ward_id) if a.ward_id else None,
+            "ward_name":            ward_name,
+            "status_code":          a.appt_status.status_code if a.appt_status else None,
+            "notes":                a.notes,
+            "created_at":           a.created_at.isoformat() if a.created_at else None,
+        })
+
+    return {"total": total, "items": result}
+
+
+@router.patch("/appointments/{appointment_id}/ward")
+def assign_ward(
+    appointment_id: str,
+    body:           WardAssignRequest,
+    db:             DbSession = Depends(get_db),
+    current_user:   dict      = Depends(require_admin),
+    _:              str       = Depends(verify_api_key),
+):
+    """병동 배정 — 입원 예약에 ward_id 지정 및 상태 확정 (SFR-035).
+
+    available_beds 감소 처리 포함.
+    """
+    try:
+        appt_uuid = _uuid.UUID(appointment_id)
+        ward_uuid = _uuid.UUID(body.ward_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 UUID 형식입니다.")
+
+    appt = db.query(Appointment).filter(Appointment.appointment_id == appt_uuid).with_for_update().first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    inpatient_type = db.query(AppointmentType).filter(AppointmentType.type_code == "inpatient").first()
+    if not inpatient_type or appt.type_id != inpatient_type.type_id:
+        raise HTTPException(status_code=400, detail="입원 예약에만 병동을 배정할 수 있습니다.")
+
+    ward = db.query(SyncWard).filter(SyncWard.ward_id == ward_uuid).with_for_update().first()
+    if not ward:
+        raise HTTPException(status_code=404, detail="병동을 찾을 수 없습니다.")
+    if ward.available_beds is not None and ward.available_beds <= 0:
+        raise HTTPException(status_code=409, detail=f"{ward.ward_name}의 가용 병상이 없습니다.")
+
+    # 기존 병동 배정 해제 시 beds 복원
+    if appt.ward_id and appt.ward_id != ward_uuid:
+        old_ward = db.query(SyncWard).filter(SyncWard.ward_id == appt.ward_id).first()
+        if old_ward and old_ward.available_beds is not None:
+            old_ward.available_beds += 1
+
+    appt.ward_id = ward_uuid
+    if ward.available_beds is not None:
+        ward.available_beds -= 1
+
+    now = datetime.now(timezone.utc)
+    if body.confirm:
+        confirmed_status = db.query(AppointmentStatus).filter(
+            AppointmentStatus.status_code == "confirmed"
+        ).first()
+        if confirmed_status and appt.status_id != confirmed_status.status_id:
+            prev_status_id = appt.status_id
+            appt.status_id    = confirmed_status.status_id
+            appt.confirmed_at = now
+            appt.confirmed_by = _uuid.UUID(current_user["sub"])
+            db.add(AppointmentHistory(
+                appointment_id = appt.appointment_id,
+                changed_by     = _uuid.UUID(current_user["sub"]),
+                prev_status_id = prev_status_id,
+                new_status_id  = confirmed_status.status_id,
+                new_date       = appt.appointment_date,
+                new_time       = appt.appointment_time,
+                change_reason  = f"병동 배정: {ward.ward_name}",
+            ))
+
+    _audit(db, current_user["sub"], "WARD_ASSIGN", target_id=appt_uuid)
+    db.commit()
+    db.refresh(appt)
+
+    return {
+        "appointment_id": str(appt.appointment_id),
+        "ward_id":        str(appt.ward_id),
+        "ward_name":      ward.ward_name,
+        "available_beds": ward.available_beds,
+        "status_code":    appt.appt_status.status_code if appt.appt_status else None,
+    }
+
+
+@router.get("/wards")
+def list_wards(
+    room_type:    Optional[str] = Query(default=None, description="single | double | shared"),
+    available_only: bool        = Query(default=False),
+    db:           DbSession     = Depends(get_db),
+    current_user: dict          = Depends(require_admin),
+    _:            str           = Depends(verify_api_key),
+):
+    """병동 목록 — 원무과 병상 현황 조회."""
+    q = db.query(SyncWard)
+    if room_type:
+        q = q.filter(SyncWard.room_type == room_type)
+    if available_only:
+        q = q.filter(SyncWard.available_beds > 0)
+    wards = q.order_by(SyncWard.room_type, SyncWard.ward_name).all()
+    _ROOM_KO = {"single": "1인실", "double": "2인실", "shared": "다인실"}
+    return [
+        {
+            "ward_id":        str(w.ward_id),
+            "ward_name":      w.ward_name,
+            "room_type":      w.room_type,
+            "room_type_ko":   _ROOM_KO.get(w.room_type, w.room_type),
+            "total_beds":     w.total_beds,
+            "available_beds": w.available_beds,
+        }
+        for w in wards
+    ]

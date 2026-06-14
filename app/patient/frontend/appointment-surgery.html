@@ -31,7 +31,13 @@
 <main class="portal-content">
 <div class="appt-form-wrap" style="margin:0;max-width:560px;">
     <h2 style="margin-bottom:8px;">수술 전 예약</h2>
-    <p style="color:#78909c;font-size:14px;margin-bottom:24px;">수술 전 필수 검사 및 일정 확인 예약입니다.</p>
+    <p style="color:#78909c;font-size:14px;margin-bottom:12px;">수술 전 필수 검사 및 일정 확인 예약입니다.</p>
+
+    <!-- 환자 안전 요약 (비식별) — 로드 후 표시 -->
+    <div id="safetySummary" style="display:none;margin-bottom:18px;padding:12px 14px;background:#fff8e1;border-radius:8px;border-left:4px solid #f9a825;font-size:13px;">
+        <div style="font-weight:700;color:#e65100;margin-bottom:6px;"><i class="fas fa-shield-alt" style="margin-right:6px;"></i>환자 안전 요약</div>
+        <div id="safetySummaryBody"></div>
+    </div>
 
     <div class="step-indicator">
         <div class="step-dot active" id="dot1"></div>
@@ -98,6 +104,12 @@
     <div class="step-panel" id="step3">
         <h3 style="margin-bottom:18px;">3. 예약 정보 확인</h3>
         <div class="confirm-box" id="confirmBox"></div>
+        <!-- 사전 검사 항목 -->
+        <div id="preExamBox" style="display:none;margin-top:14px;padding:12px 14px;background:#e3f2fd;border-radius:8px;font-size:13px;">
+            <div style="font-weight:700;color:#1565c0;margin-bottom:6px;"><i class="fas fa-clipboard-list" style="margin-right:6px;"></i>수술 전 필수 사전 검사</div>
+            <ul id="preExamList" style="margin:0;padding-left:18px;color:#263238;line-height:1.8;"></ul>
+            <p style="margin:8px 0 0;font-size:12px;color:#546e7a;">* 예약 확정 후 원무과에서 상세 일정을 안내드립니다.</p>
+        </div>
         <div id="errMsg"></div>
         <div class="btn-row" style="margin-top:20px;">
             <button class="btn-secondary" onclick="goToStep(2)">수정</button>
@@ -110,12 +122,47 @@
 <script src="js/script.js"></script>
 <script>
     let selectedDept = null, selectedDoctor = null;
+    let preSurgeryCtx = null;
+
+    const SEV_LABEL = { HIGH: '높음', MEDIUM: '보통', LOW: '낮음', UNKNOWN: '미분류' };
+    const SEV_COLOR = { HIGH: '#e53935', MEDIUM: '#fb8c00', LOW: '#43a047', UNKNOWN: '#78909c' };
+
+    async function loadSafetyContext(deptCode) {
+        const qs = deptCode ? `?department_code=${deptCode}` : '';
+        const res = await apiCall(`/portal/pre-surgery-context${qs}`);
+        if (!res || !res.ok) return;
+        preSurgeryCtx = await res.json();
+
+        const box  = document.getElementById('safetySummary');
+        const body = document.getElementById('safetySummaryBody');
+        const lines = [];
+
+        const sev = preSurgeryCtx.allergy_severity_summary || {};
+        if (Object.keys(sev).length > 0) {
+            const sevParts = Object.entries(sev).map(([k, v]) =>
+                `<span style="color:${SEV_COLOR[k] || '#263238'};font-weight:700;">${SEV_LABEL[k] || k} ${v}건</span>`
+            ).join(', ');
+            lines.push(`<i class="fas fa-exclamation-circle" style="margin-right:4px;color:#f57c00;"></i>알레르기: ${sevParts}`);
+        } else {
+            lines.push('<i class="fas fa-check-circle" style="margin-right:4px;color:#43a047;"></i>알레르기: 없음');
+        }
+
+        if (preSurgeryCtx.surgery_count > 0) {
+            lines.push(`<i class="fas fa-procedures" style="margin-right:4px;color:#1976d2;"></i>수술 이력: ${preSurgeryCtx.surgery_count}건 (최근: ${preSurgeryCtx.last_surgery_date})`);
+        } else {
+            lines.push('<i class="fas fa-check-circle" style="margin-right:4px;color:#43a047;"></i>수술 이력: 없음');
+        }
+
+        body.innerHTML = lines.join('<br>');
+        box.style.display = 'block';
+    }
 
     async function init() {
         const me = await requireLogin();
         if (!me) return;
 
         document.getElementById('apptDate').min = new Date().toISOString().split('T')[0];
+        loadSafetyContext(null);
 
         const r = await apiCall('/portal/departments?visited_only=true');
         if (!r || !r.ok) return;
@@ -141,6 +188,7 @@
             docSel.innerHTML = '<option value="">담당의 선택 안함 (배정)</option>';
             docSel.disabled = !code;
             if (!code) return;
+            loadSafetyContext(code);
             const dr = await apiCall(`/portal/doctors?department_code=${code}`);
             if (!dr || !dr.ok) return;
             const docs = await dr.json();
@@ -172,6 +220,7 @@
             if (!date) { alert('예약 날짜를 선택해주세요.'); return; }
             const time    = document.getElementById('apptTime').value;
             const deptName = document.getElementById('deptSelect').options[document.getElementById('deptSelect').selectedIndex]?.text || '';
+            const deptCode = document.getElementById('deptSelect').value;
             const docName  = selectedDoctor ? selectedDoctor.doctor_name : '미지정 (배정)';
             document.getElementById('confirmBox').innerHTML =
                 `<strong>예약 유형</strong>: 수술 전<br>
@@ -181,6 +230,28 @@
                  <strong>시간</strong>: ${time}<br>
                  <strong>메모</strong>: ${document.getElementById('apptNote').value || '없음'}`;
             document.getElementById('errMsg').textContent = '';
+
+            // 사전 검사 항목 표시
+            const ctx = preSurgeryCtx;
+            if (ctx && ctx.pre_exam_requirements && ctx.pre_exam_requirements.length > 0) {
+                const list = document.getElementById('preExamList');
+                list.innerHTML = ctx.pre_exam_requirements.map(e => `<li>${e}</li>`).join('');
+                document.getElementById('preExamBox').style.display = 'block';
+            } else {
+                // context가 아직 없으면 진료과 기준으로 다시 조회
+                if (deptCode) {
+                    apiCall(`/portal/pre-surgery-context?department_code=${deptCode}`)
+                        .then(r => r && r.ok ? r.json() : null)
+                        .then(data => {
+                            if (data && data.pre_exam_requirements && data.pre_exam_requirements.length > 0) {
+                                preSurgeryCtx = data;
+                                const list = document.getElementById('preExamList');
+                                list.innerHTML = data.pre_exam_requirements.map(e => `<li>${e}</li>`).join('');
+                                document.getElementById('preExamBox').style.display = 'block';
+                            }
+                        });
+                }
+            }
         }
         [1, 2, 3].forEach(i => {
             document.getElementById(`step${i}`).classList.toggle('active', i === step);

@@ -416,6 +416,21 @@ def create_appointment(
     if body.type_code.lower() in ("initial", "first_visit", "outpatient_new"):
         raise HTTPException(status_code=400, detail="초진 예약은 온라인으로 신청할 수 없습니다.")
 
+    # 입원 예약: 희망 병실 유형의 가용 병상 확인 (SFR-035)
+    if body.type_code.lower() == "inpatient" and body.room_type_pref:
+        _ROOM_TYPE_MAP = {"1인실": "single", "2인실": "double", "다인실": "shared"}
+        rt = _ROOM_TYPE_MAP.get(body.room_type_pref)
+        if rt:
+            avail = db.query(SyncWard).filter(
+                SyncWard.room_type == rt,
+                SyncWard.available_beds > 0,
+            ).first()
+            if not avail:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"현재 {body.room_type_pref} 가용 병상이 없습니다. 다른 병실 유형을 선택하거나 원무과에 문의하세요.",
+                )
+
     # 예약 유형 검증
     appt_type = db.query(AppointmentType).filter(
         AppointmentType.type_code == body.type_code,
@@ -921,6 +936,62 @@ def get_surgery_histories(
         }
         for s in surgeries
     ]
+
+
+# ── 수술 전 예약 맥락 조회 (비식별: 중증도 코드 + 카운트만) ────────────
+_PRE_EXAM_BY_DEPT: dict = {
+    "CARDIO":  ["심전도 (EKG)", "흉부 X-ray", "심장 초음파", "혈액 검사 (CBC·생화학)"],
+    "ORTHO":   ["X-ray", "MRI/CT", "혈액 응고 검사", "혈액 검사 (CBC·생화학)"],
+    "NEURO":   ["뇌 MRI", "신경전도 검사", "뇌파 검사 (EEG)", "혈액 검사 (CBC·생화학)"],
+    "GASTRO":  ["위내시경", "혈액 검사 (CBC·생화학)", "복부 초음파"],
+    "PULMO":   ["폐 기능 검사", "흉부 CT", "혈액 가스 분석", "혈액 검사 (CBC·생화학)"],
+    "_default": ["혈액 검사 (CBC·생화학)", "소변 검사", "흉부 X-ray", "심전도 (EKG)"],
+}
+
+
+@router.get("/pre-surgery-context")
+def get_pre_surgery_context(
+    department_code: Optional[str] = Query(default=None),
+    current_user:    dict          = Depends(get_current_user),
+    db:              DbSession     = Depends(get_read_db),
+):
+    """수술 전 예약 맥락 — 환자 안전 요약(비식별) + 진료과별 사전검사 목록 반환.
+
+    알레르기는 severity_code(HIGH/MEDIUM/LOW)만, 수술 이력은 건수+최근일만 반환.
+    환자명·알레르기명·수술명은 미포함 (SFR-035 최소 범위 원칙).
+    """
+    pid = _require_patient(current_user)
+
+    allergies = (
+        db.query(SyncAllergy.severity_code)
+        .filter(SyncAllergy.patient_id_hash == pid)
+        .all()
+    )
+    severity_summary: dict = {}
+    for (sev,) in allergies:
+        key = (sev or "UNKNOWN").upper()
+        severity_summary[key] = severity_summary.get(key, 0) + 1
+
+    surgeries = (
+        db.query(SyncSurgery.surgery_date)
+        .filter(SyncSurgery.patient_id_hash == pid)
+        .order_by(SyncSurgery.surgery_date.desc())
+        .all()
+    )
+    surgery_count = len(surgeries)
+    last_surgery_date = str(surgeries[0][0]) if surgeries else None
+
+    pre_exams = (
+        _PRE_EXAM_BY_DEPT.get(department_code or "", None)
+        or _PRE_EXAM_BY_DEPT["_default"]
+    )
+
+    return {
+        "allergy_severity_summary": severity_summary,
+        "surgery_count":            surgery_count,
+        "last_surgery_date":        last_surgery_date,
+        "pre_exam_requirements":    pre_exams,
+    }
 
 
 # ── 처방전 조회 (비식별: ICD 코드만 반환) ──────────────────────────
