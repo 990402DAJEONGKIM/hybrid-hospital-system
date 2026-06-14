@@ -495,16 +495,13 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>noise</group>
   </rule>
 
-
-  <!-- FIM 파일 변조 상세 표시 - 추가 260611 김강환 -->
-  <rule id="550" level="7" overwrite="yes">
-    <if_sid>500</if_sid>
-    <match>Integrity checksum changed</match>
-    <description>파일 무결성 변조 감지 — 경로: $(file) 변경 항목: $(changed_fields)</description>
-    <group>ossec,syscheck,syscheck_entry_modified,syscheck_file,</group>
+  <!-- SSM Inventory 자동 호출 억제 - 추가 260613 김강환 -->
+  <rule id="100548" level="0">
+    <if_sid>80202</if_sid>
+    <field name="aws.userIdentity.sessionContext.sessionIssuer.userName">AWSServiceRoleForAmazonSSM</field>
+    <description>SSM Inventory 정상 동작 — 무시</description>
+    <group>noise</group>
   </rule>
-
-
 
   <!-- Web server 500 에러 상세 탐지 - 추가 260611 김강환 -->
   <!-- srcip, url 필드 포함해서 대시보드에 상세 표시 -->
@@ -515,8 +512,6 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>system_error,</group>
   </rule>
 
-
-
   <!-- AWS ALB WAF 차단 한글 표시 - 추가 260612 김강환 -->
   <rule id="80328" level="5" overwrite="yes">
     <if_sid>80325</if_sid>
@@ -526,6 +521,85 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>aws_alb,</group>
   </rule>
 
+  <!-- AWS CloudTrail 이벤트 한글 표시 - 추가 260613 김강환 -->
+  <rule id="80202" level="3" overwrite="yes">
+    <if_sid>80200</if_sid>
+    <field name="aws.source">cloudtrail</field>
+    <list field="aws.eventName" lookup="match_key">etc/lists/amazon/aws-eventnames</list>
+    <options>no_full_log</options>
+    <description>AWS CloudTrail 이벤트 — 서비스: $(aws.eventSource) 작업: $(aws.eventName)</description>
+  </rule>
 
+  <!-- AWS GuardDuty 탐지 룰 한글 overwrite - 추가 260613 김강환 -->
+  <!-- GuardDuty는 EventBridge → Slack 즉각 대응, Wazuh는 대시보드 기록용 -->
+  <rule id="80301" level="3" overwrite="yes">
+    <if_sid>80300</if_sid>
+    <field name="aws.severity">0|1|2|3</field>
+    <description>GuardDuty 낮은 위험 — 유형: $(aws.type) 설명: $(aws.description)</description>
+    <group>aws,guardduty,</group>
+  </rule>
+
+  <rule id="80302" level="6" overwrite="yes">
+    <if_sid>80300</if_sid>
+    <field name="aws.severity">4|5|6</field>
+    <description>GuardDuty 중간 위험 — 유형: $(aws.type) 설명: $(aws.description)</description>
+    <group>aws,guardduty,</group>
+  </rule>
+
+  <rule id="80303" level="8" overwrite="yes">
+    <if_sid>80300</if_sid>
+    <field name="aws.severity">7|8|9</field>
+    <description>GuardDuty 높은 위험 — 유형: $(aws.type) 설명: $(aws.description)</description>
+    <group>aws,guardduty,</group>
+  </rule>
+
+  <rule id="80305" level="3" overwrite="yes">
+    <if_sid>80301</if_sid>
+    <field name="aws.service.action.actionType">PORT_PROBE</field>
+    <description>GuardDuty 낮은 위험 포트 스캔 — IP: $(aws.service.action.portProbeAction.portProbeDetails.remoteIpDetails.ipAddressV4) 포트: $(aws.service.action.portProbeAction.portProbeDetails.localPortDetails.port) 유형: $(aws.type)</description>
+    <group>aws,guardduty,</group>
+  </rule>
+
+  <rule id="80306" level="6" overwrite="yes">
+    <if_sid>80302</if_sid>
+    <field name="aws.service.action.actionType">PORT_PROBE</field>
+    <description>GuardDuty 중간 위험 포트 스캔 — IP: $(aws.service.action.portProbeAction.portProbeDetails.remoteIpDetails.ipAddressV4) 포트: $(aws.service.action.portProbeAction.portProbeDetails.localPortDetails.port) 유형: $(aws.type)</description>
+    <group>aws,guardduty,</group>
+  </rule>
+
+  <rule id="80307" level="8" overwrite="yes">
+    <if_sid>80303</if_sid>
+    <field name="aws.service.action.actionType">PORT_PROBE</field>
+    <description>GuardDuty 높은 위험 포트 스캔 — IP: $(aws.service.action.portProbeAction.portProbeDetails.remoteIpDetails.ipAddressV4) 포트: $(aws.service.action.portProbeAction.portProbeDetails.localPortDetails.port) 유형: $(aws.type)</description>
+    <group>aws,guardduty,</group>
+  </rule>
+
+  <!-- AWS ALB 에러 한글 표시 - 추가 260613 김강환 -->
+  <rule id="80326" level="3" overwrite="yes">
+    <if_sid>80325</if_sid>
+    <field name="aws.elb_status_code">500</field>
+    <options>no_full_log</options>
+    <description>AWS ALB 500 서버 에러 — 출발지: $(aws.client_ip) 요청: $(aws.request)</description>
+    <group>aws_alb,</group>
+  </rule>
+
+  <rule id="80327" level="3" overwrite="yes">
+    <if_sid>80325</if_sid>
+    <field name="aws.elb_status_code">503</field>
+    <options>no_full_log</options>
+    <description>AWS ALB 503 서비스 불가 — 출발지: $(aws.client_ip) 요청: $(aws.request)</description>
+    <group>aws_alb,</group>
+  </rule>
+
+
+
+
+  <!-- FIM 파일 변조 상세 표시 - 추가 260611 김강환 -->
+  <rule id="550" level="7" overwrite="yes">
+    <if_sid>500</if_sid>
+    <match>Integrity checksum changed</match>
+    <description>파일 무결성 변조 감지 — 경로: $(file) 변경 항목: $(changed_fields)</description>
+    <group>ossec,syscheck,syscheck_entry_modified,syscheck_file,</group>
+  </rule>
 </group>
 

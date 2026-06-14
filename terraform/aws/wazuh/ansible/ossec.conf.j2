@@ -41,6 +41,7 @@
   <!-- ======================================= -->
   <ruleset>
     <decoder_dir>ruleset/decoders</decoder_dir>
+    <decoder_dir>etc/decoders</decoder_dir> 
     <rule_dir>ruleset/rules</rule_dir>
     <rule_dir>etc/rules</rule_dir> 
     <rule_exclude>0215-policy_rules.xml</rule_exclude>
@@ -275,17 +276,11 @@
       <name>aws-k2p-storage-01</name>
       <path>guardduty</path>
     </bucket>
-    <!-- VPC Flow Logs -->
-    <bucket type="vpcflow">
-      <name>aws-k2p-storage-01</name>
-      <path>flowlogs</path>
-    </bucket>
     <!-- WAF BLOCK 이벤트 -->
-    <bucket type="custom">
+    <bucket type="waf">
       <name>aws-k2p-storage-01</name>
-      <path>waf/</path>
+      <path>waf/hospital/</path>
       <only_logs_after>2026-JUN-01</only_logs_after>
-      <regions>{{ aws_region }}</regions>
     </bucket>
      <!-- ALB  -->
     <bucket type="alb">

@@ -28,6 +28,7 @@
   <rule id="100303" level="0">
     <decoded_as>json</decoded_as>
     <field name="ike_phase1_state">^established$</field>
+    <field name="details" negate="yes">DPD timed out</field>
     <description>VPN 터널 수립 완료 로그 기록</description>
     <group>vpn,tunnel_up,</group>
   </rule>

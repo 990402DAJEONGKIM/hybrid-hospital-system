@@ -1,14 +1,15 @@
 <group name="cloudsql,audit,gcp,">
-    <!-- Cloud SQL 감사 로그 베이스 룰 -->
-    <!-- if_sid>2502 + location으로 cloudsql-audit.log 식별 -->
-    <!-- 추가 260611 김강환 -->
+
+
+    <!-- Cloud SQL 감사 로그 베이스 룰 - 수정 260614 김강환 -->
+    <!-- location 조건 제거 — logtest/analysisd에서 location 매칭 불안정 확인 -->
+    <!-- decoded_as json + action_type 필드 존재로 cloudsql 로그 식별 -->
     <rule id="100199" level="0">
-        <if_sid>2502</if_sid>
-        <location>/var/log/cloudsql-audit.log</location>
+        <decoded_as>json</decoded_as>
+        <field name="action_type">^LOGIN$|^LOGOUT$|^ADMIN_|^UNKNOWN$</field>
         <description>Cloud SQL 감사 로그 수신 — 베이스</description>
         <group>cloudsql,</group>
     </rule>
-
     <!-- Cloud SQL DB 접속 탐지 (ISMS-P 2.9.1) -->
     <!-- 수정 260611 김강환: decoded_as 단독 → if_sid>100199 -->
     <rule id="100200" level="3">
