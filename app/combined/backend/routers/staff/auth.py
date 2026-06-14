@@ -23,7 +23,7 @@ from core.ses import send_lockout_alert
 import os
 
 from models.db import (
-    AuditLog, LoginHistory, Menu,
+    AuditLog, Appointment, LoginHistory, Menu,
     # OnpremDepartment, OnpremDoctor,  # 불필요, by 김다정, 2026-06-13
     Role, RoleMenu, Session as SessionModel,
     SyncDepartment, SyncDoctor, User,
@@ -216,6 +216,19 @@ def login(
     history.result = "success"
     db.add(history)
     _record_audit(db, user.user_id, "LOGIN", "200", request)
+
+    # patient_id_hash가 NULL이면 appointments를 통해 sync_patients에서 자동 조회 후 저장
+    if not user.patient_id_hash and user.role_ref and user.role_ref.role_code == "patient":
+        appt = (
+            db.query(Appointment.patient_id_hash)
+            .filter(
+                Appointment.patient_user_id == user.user_id,
+                Appointment.patient_id_hash.isnot(None),
+            )
+            .first()
+        )
+        if appt and appt.patient_id_hash:
+            user.patient_id_hash = appt.patient_id_hash
 
     access_token  = create_access_token(_build_token_payload(user), ACCESS_TOKEN_EXPIRE_SECONDS)
     refresh_token = generate_refresh_token()
