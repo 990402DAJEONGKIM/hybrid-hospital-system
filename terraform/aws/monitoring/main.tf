@@ -214,6 +214,35 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-prometheus-down-01" {
 }
 
 
+# ─────────────────────────────────────────────────────────
+# 모니터링 데이터 전용 EBS - 추가 260614 김강환
+# Prometheus TSDB + Grafana DB 보존용
+# EC2 재생성 시 데이터 유지 — 인덱서(aws-wazuh-indexer-data-01)와 동일한 패턴
+# ─────────────────────────────────────────────────────────
+resource "aws_ebs_volume" "aws-monitoring-data-01" {
+  availability_zone = data.aws_subnet.aws-app-sub-2b.availability_zone
+  size              = 50
+  type              = "gp3"
+  encrypted         = true
+
+  tags = {
+    Name = "aws-monitoring-data-01"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# EBS 부착 - 추가 260614 김강환
+resource "aws_volume_attachment" "aws-monitoring-data-att-01" {
+  device_name  = "/dev/sdf"
+  volume_id    = aws_ebs_volume.aws-monitoring-data-01.id
+  instance_id  = aws_instance.aws-monitoring-01.id
+  skip_destroy = true
+}
+
+
 
 # ─────────────────────────────────────────────────────────
 # DLM — 1시간마다 스냅샷 자동 생성
