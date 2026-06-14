@@ -86,6 +86,12 @@
                     style="display:none; background:#b91c1c;">
                     <i class="fas fa-shield-virus mr-2"></i>Wazuh 보안 모니터링
                 </a>
+                <!-- 간호사 전용 대시보드 링크 -->
+                <a id="nurseDashBtn" href="nurse-dashboard.html"
+                    class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
+                    style="display:none; background:#1565c0;">
+                    <i class="fas fa-user-nurse mr-2"></i>간호사 대시보드
+                </a>
             </div>
         </div>
 
@@ -147,17 +153,16 @@
                     pwExpired  = meData.password_expired     || false;
                 }
 
-                if (role === 'nurse') {
-                    // 간호사: AWS 전용 대시보드로 이동
-                    window.location.href = 'nurse-dashboard.html';
-                } else if (STAFF_ROLES.has(role)) {
-                    // 의사/관리자: 관리자 전용 Wazuh 링크
+                if (STAFF_ROLES.has(role)) {
+                    // 의사/간호사/관리자: 내부 DB 버튼 표시
                     if (role === 'admin') {
                         const wazuhBtn = document.getElementById('wazuhLinkBtn');
                         wazuhBtn.href = 'https://wazuh.mzclinic.cloud';
                         wazuhBtn.style.display = 'block';
                     }
-                    // 온프레미스 로그인 페이지로 이동 (토큰 없음 — 온프레미스에서 별도 로그인)
+                    if (role === 'nurse') {
+                        document.getElementById('nurseDashBtn').style.display = 'block';
+                    }
                     document.getElementById('internalLinkBtn').href = `${ONPREM_URL}/login.html`;
                     document.getElementById('internalLinkBox').style.display = 'block';
                     document.getElementById('loginForm').style.display = 'none';
