@@ -147,8 +147,11 @@
                     pwExpired  = meData.password_expired     || false;
                 }
 
-                if (STAFF_ROLES.has(role)) {
-                    // 직원: 관리자 전용 Wazuh 링크
+                if (role === 'nurse') {
+                    // 간호사: AWS 전용 대시보드로 이동
+                    window.location.href = 'nurse-dashboard.html';
+                } else if (STAFF_ROLES.has(role)) {
+                    // 의사/관리자: 관리자 전용 Wazuh 링크
                     if (role === 'admin') {
                         const wazuhBtn = document.getElementById('wazuhLinkBtn');
                         wazuhBtn.href = 'https://wazuh.mzclinic.cloud';
