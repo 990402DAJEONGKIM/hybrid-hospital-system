@@ -131,14 +131,6 @@
 <script src="js/config.js"></script>
 <script src="js/script.js"></script>
 <script>
-    const ENC_TYPE = {
-        outpatient:        '외래',
-        outpatient_new:    '외래(초진)',
-        outpatient_return: '외래(재진)',
-        inpatient:         '입원',
-        surgery:           '수술',
-    };
-    function encTypeLabel(v) { return ENC_TYPE[v] || v || '-'; }
     const SEV_CLASS = { high: 'severity-high', medium: 'severity-medium', low: 'severity-low' };
 
     function sevLabel(code) {
@@ -176,8 +168,7 @@
         if (!data.length) { empty.style.display = 'block'; return; }
 
         list.innerHTML = data.map(r => {
-            const deptName  = r.department_name || r.department_code;
-            const encType   = encTypeLabel(r.encounter_type);
+            const deptName   = r.department_name || r.department_code;
             const diagBadges = (r.diagnoses || []).map(code =>
                 `<span class="diag-badge">${code}</span>`
             ).join('');
@@ -185,7 +176,6 @@
             <div class="enc-item" onclick="showDetail('${r.encounter_id}')">
                 <div class="enc-header">
                     <span class="enc-date"><i class="fas fa-calendar-alt" style="margin-right:4px;"></i>${r.visit_date || '-'}</span>
-                    <span class="enc-type-badge">${encType}</span>
                 </div>
                 <div class="enc-dept">${deptName}</div>
                 ${r.doctor_name ? `<div class="enc-doctor"><i class="fas fa-user-md" style="margin-right:4px;"></i>${r.doctor_name}</div>` : ''}
@@ -246,7 +236,6 @@
             return;
         }
         const d = await res.json();
-        const encType = encTypeLabel(d.encounter_type);
         const diagHtml = (d.diagnoses || []).length
             ? d.diagnoses.map(dx =>
                 `<span class="diag-badge" style="margin-right:4px;">${dx.diagnosis_code}${dx.is_primary ? ' (주진단)' : ''}</span>`
@@ -261,10 +250,6 @@
             <div class="detail-row">
                 <div class="detail-label">진료과</div>
                 <div class="detail-val">${d.department_name || d.department_code || '-'}</div>
-            </div>
-            <div class="detail-row">
-                <div class="detail-label">진료 유형</div>
-                <div class="detail-val">${encType}</div>
             </div>
             ${d.doctor_name ? `<div class="detail-row">
                 <div class="detail-label">담당 의사</div>
