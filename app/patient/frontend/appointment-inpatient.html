@@ -87,10 +87,6 @@
             <label for="apptDate">입원 희망일 *</label>
             <input type="date" id="apptDate">
         </div>
-        <div class="form-group">
-            <label for="apptNote">메모 (선택)</label>
-            <input type="text" id="apptNote" placeholder="특이사항이나 요청 사항을 간단히 적어주세요">
-        </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="goToStep(1)">뒤로</button>
             <button class="btn-primary" onclick="goToStep(3)">다음</button>
@@ -213,8 +209,7 @@
                  <strong>담당의</strong>: ${docName}<br>
                  <strong>입원 희망일</strong>: ${date}<br>
                  <strong>희망 병실</strong>: ${roomPref}${availNote}<br>
-                 <strong>기저질환</strong>: ${chronic}<br>
-                 <strong>메모</strong>: ${document.getElementById('apptNote').value || '없음'}`;
+                 <strong>기저질환</strong>: ${chronic}`;
             document.getElementById('errMsg').textContent = '';
         }
         [1, 2, 3].forEach(i => {
@@ -235,7 +230,6 @@
             appointment_date:      document.getElementById('apptDate').value,
             appointment_time:      '14:00',
             has_chronic_condition: document.getElementById('c_yes').checked,
-            notes:                 document.getElementById('apptNote').value || null,
         };
         if (roomPref) body.room_type_pref = roomPref;
         if (selectedDoctor) body.doctor_id = selectedDoctor.doctor_id;

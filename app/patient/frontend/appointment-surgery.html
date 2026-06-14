@@ -90,10 +90,6 @@
                 <option value="16:00">16:00</option>
             </select>
         </div>
-        <div class="form-group">
-            <label for="apptNote">메모 (선택)</label>
-            <input type="text" id="apptNote" placeholder="수술 관련 특이사항이나 요청 사항을 적어주세요">
-        </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="goToStep(1)">뒤로</button>
             <button class="btn-primary" onclick="goToStep(3)">다음</button>
@@ -227,8 +223,7 @@
                  <strong>진료과</strong>: ${deptName}<br>
                  <strong>담당의</strong>: ${docName}<br>
                  <strong>날짜</strong>: ${date}<br>
-                 <strong>시간</strong>: ${time}<br>
-                 <strong>메모</strong>: ${document.getElementById('apptNote').value || '없음'}`;
+                 <strong>시간</strong>: ${time}`;
             document.getElementById('errMsg').textContent = '';
 
             // 사전 검사 항목 표시
@@ -269,7 +264,6 @@
             department_code:  document.getElementById('deptSelect').value,
             appointment_date: document.getElementById('apptDate').value,
             appointment_time: document.getElementById('apptTime').value,
-            notes:            document.getElementById('apptNote').value || null,
         };
         if (selectedDoctor) body.doctor_id = selectedDoctor.doctor_id;
 
