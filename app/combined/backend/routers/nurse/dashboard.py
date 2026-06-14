@@ -1,10 +1,10 @@
 from datetime import date, datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session as DbSession
 
-from core.database import get_read_db, get_db
-from core.security import get_current_user, record_audit
+from core.database import get_read_db
+from core.security import get_current_user
 from models.db import SyncEncounter, SyncDepartment, SyncAllergy
 
 router = APIRouter(prefix="/nurse", tags=["nurse"])
@@ -18,10 +18,8 @@ def _require_nurse(current_user: dict) -> str:
 
 @router.get("/dashboard")
 def get_dashboard(
-    request:      Request,
     current_user: dict     = Depends(get_current_user),
     read_db:      DbSession = Depends(get_read_db),
-    write_db:     DbSession = Depends(get_db),
 ):
     user_id = _require_nurse(current_user)
     today   = date.today()
@@ -71,22 +69,6 @@ def get_dashboard(
         {"allergy_name": r.allergy_name, "count": r.cnt}
         for r in allergy_rows
     ]
-
-    # audit_logs 기록 (ISMS-P 접근 이력)
-    import uuid as uuid_module
-    try:
-        uid = uuid_module.UUID(user_id)
-    except Exception:
-        uid = None
-    record_audit(
-        write_db,
-        action_type  = "NURSE_DASHBOARD_VIEW",
-        result_code  = "200",
-        user_id      = uid,
-        patient_id   = None,
-        target_table = "sync_encounters,sync_allergies",
-        source_ip    = request.headers.get("x-forwarded-for", request.client.host if request.client else None),
-    )
 
     return {
         "as_of":           datetime.now(timezone.utc).isoformat(),

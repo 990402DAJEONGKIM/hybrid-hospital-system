@@ -70,6 +70,8 @@ ACTION_MAP = [
     ("GET",    r"^/staff/auth/me/menus$",          "READ_MENUS"),
     ("GET",    r"^/staff/auth/me$",                "READ_ME"),
     ("GET",    r"^/staff/auth/session-status$",    "SESSION_STATUS"),
+    # ── 간호사 대시보드 (/staff/nurse/...) ───────────────────────
+    ("GET",    r"^/staff/nurse/dashboard$",          "NURSE_DASHBOARD_VIEW"),
     # ── 환자 포털 인증 (/patient/auth/...) ───────────────────────
     ("POST",   r"^/patient/auth/login$",           "LOGIN"),
     ("POST",   r"^/patient/auth/logout$",          "LOGOUT"),
