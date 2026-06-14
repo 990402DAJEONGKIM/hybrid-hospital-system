@@ -90,10 +90,6 @@
                 <option value="16:00">16:00</option>
             </select>
         </div>
-        <div class="form-group">
-            <label for="apptNote">메모 (선택)</label>
-            <input type="text" id="apptNote" placeholder="수술 관련 특이사항이나 요청 사항을 적어주세요">
-        </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="goToStep(1)">뒤로</button>
             <button class="btn-primary" onclick="goToStep(3)">다음</button>
@@ -137,12 +133,12 @@
         const body = document.getElementById('safetySummaryBody');
         const lines = [];
 
-        const sev = preSurgeryCtx.allergy_severity_summary || {};
-        if (Object.keys(sev).length > 0) {
-            const sevParts = Object.entries(sev).map(([k, v]) =>
-                `<span style="color:${SEV_COLOR[k] || '#263238'};font-weight:700;">${SEV_LABEL[k] || k} ${v}건</span>`
+        const allergyList = preSurgeryCtx.allergy_list || [];
+        if (allergyList.length > 0) {
+            const parts = allergyList.map(a =>
+                `<span style="color:${SEV_COLOR[a.severity] || '#263238'};">${a.name || a.severity}</span>`
             ).join(', ');
-            lines.push(`<i class="fas fa-exclamation-circle" style="margin-right:4px;color:#f57c00;"></i>알레르기: ${sevParts}`);
+            lines.push(`<i class="fas fa-exclamation-circle" style="margin-right:4px;color:#f57c00;"></i>알레르기: ${parts}`);
         } else {
             lines.push('<i class="fas fa-check-circle" style="margin-right:4px;color:#43a047;"></i>알레르기: 없음');
         }
@@ -227,8 +223,7 @@
                  <strong>진료과</strong>: ${deptName}<br>
                  <strong>담당의</strong>: ${docName}<br>
                  <strong>날짜</strong>: ${date}<br>
-                 <strong>시간</strong>: ${time}<br>
-                 <strong>메모</strong>: ${document.getElementById('apptNote').value || '없음'}`;
+                 <strong>시간</strong>: ${time}`;
             document.getElementById('errMsg').textContent = '';
 
             // 사전 검사 항목 표시
@@ -261,7 +256,7 @@
 
     async function submitAppointment() {
         const btn = document.getElementById('submitBtn');
-        btn.disabled = true;
+        _setBtnLoading(btn, true);
         document.getElementById('errMsg').textContent = '';
 
         const body = {
@@ -269,7 +264,6 @@
             department_code:  document.getElementById('deptSelect').value,
             appointment_date: document.getElementById('apptDate').value,
             appointment_time: document.getElementById('apptTime').value,
-            notes:            document.getElementById('apptNote').value || null,
         };
         if (selectedDoctor) body.doctor_id = selectedDoctor.doctor_id;
 
@@ -284,7 +278,7 @@
         } else {
             const err = await res?.json().catch(() => ({}));
             document.getElementById('errMsg').textContent = err.detail || '예약 처리 중 오류가 발생했습니다.';
-            btn.disabled = false;
+            _setBtnLoading(btn, false, '예약 확정');
         }
     }
 

@@ -185,12 +185,15 @@
         const warn = document.getElementById('cancelWarn');
         if (!memberNumber) { warn.textContent='회원번호를 입력해주세요.'; return; }
         const btn = document.getElementById('confirmCancelBtn');
-        btn.disabled = true; warn.textContent = '';
+        _setBtnLoading(btn, true); warn.textContent = '';
         const params = new URLSearchParams({ member_number: memberNumber });
         const res = await apiCall(`/portal/appointments/${_cancelTargetId}?${params}`, { method: 'DELETE' });
-        btn.disabled = false;
         if (res&&res.ok) { closeCancelModal(); alert('예약이 취소되었습니다.'); loadAppointments(); }
-        else { const err=await res?.json().catch(()=>({})); warn.textContent=err.detail||'취소 처리 중 오류가 발생했습니다.'; }
+        else {
+            const err=await res?.json().catch(()=>({}));
+            warn.textContent=err.detail||'취소 처리 중 오류가 발생했습니다.';
+            _setBtnLoading(btn, false, '예약 취소');
+        }
     }
 
     async function loadAppointments() {
