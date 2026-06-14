@@ -25,6 +25,9 @@ resource "aws_lambda_function" "aws-monitoring-lambda-recovery" {
       INSTANCE_TYPE    = "t3.medium"
       PRIVATE_IP       = var.monitoring_private_ip
       INSTANCE_NAME    = "aws-monitoring-01"
+      DATA_VOLUME_NAME = "aws-monitoring-data-01"
+      DATA_DEVICE      = "/dev/nvme1n1"
+      MOUNT_POINT      = "/mnt/monitoring-data"
       AMI_NAME_PREFIX  = "aws-monitoring-"
       ACCOUNT_ID       = data.aws_caller_identity.current.account_id
     }
