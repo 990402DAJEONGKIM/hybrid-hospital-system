@@ -156,7 +156,7 @@
         <!-- 기능 1: 진료과별 대기 현황 -->
         <div class="nd-card">
             <div class="nd-card-title">
-                <i class="fas fa-clock" style="color:#1976d2;"></i>오늘 진료과별 대기 현황
+                <i class="fas fa-clock" style="color:#1976d2;"></i>최근 1년 진료과별 현황
             </div>
             <div id="waitingSection"><div class="nd-loading"><i class="fas fa-spinner fa-spin"></i> 불러오는 중...</div></div>
         </div>
@@ -164,8 +164,7 @@
         <!-- 기능 2: 중증 알레르기 현황 -->
         <div class="nd-card">
             <div class="nd-card-title">
-                <i class="fas fa-exclamation-triangle" style="color:#e53935;"></i>오늘 중증 알레르기 현황
-                <span style="font-size:11px;font-weight:400;color:#90a4ae;margin-left:4px;">(severity: severe)</span>
+                <i class="fas fa-exclamation-triangle" style="color:#e53935;"></i>최근 1년 중증(HIGH) 알레르기 내원 현황
             </div>
             <div id="allergySection"><div class="nd-loading"><i class="fas fa-spinner fa-spin"></i> 불러오는 중...</div></div>
         </div>
@@ -237,8 +236,9 @@
 
         // 마지막 업데이트 시각
         const now = new Date();
+        const period = data.period || '';
         document.getElementById('lastUpdated').textContent =
-            `마지막 업데이트: ${now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} (5분마다 자동 갱신)`;
+            `조회 기간: ${period} | 업데이트: ${now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} (5분 자동 갱신)`;
 
         renderWaiting(data.waiting_by_dept || []);
         renderAllergies(data.severe_allergies || []);
@@ -255,9 +255,8 @@
             <thead>
                 <tr>
                     <th>진료과</th>
-                    <th>대기</th>
-                    <th>진행 중</th>
-                    <th>완료</th>
+                    <th>진행 중(OPEN)</th>
+                    <th>완료(CLOSED)</th>
                     <th>합계</th>
                 </tr>
             </thead>
@@ -265,8 +264,7 @@
                 ${list.map(r => `
                 <tr>
                     <td>${r.department_name}</td>
-                    <td><span class="badge badge-wait">${r.waiting}</span></td>
-                    <td><span class="badge badge-progress">${r.in_progress}</span></td>
+                    <td><span class="badge badge-progress">${r.active}</span></td>
                     <td><span class="badge badge-done">${r.completed}</span></td>
                     <td><span class="badge badge-total">${r.total}</span></td>
                 </tr>`).join('')}
