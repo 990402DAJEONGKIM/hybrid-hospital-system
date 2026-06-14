@@ -226,10 +226,7 @@
     async function doLogout() {
         await staffCall('/auth/logout', { method: 'POST' }).catch(() => {});
         clearInterval(_refreshTimer);
-        document.getElementById('dashboardSection').style.display = 'none';
-        document.getElementById('loginSection').style.display = 'flex';
-        document.getElementById('memberPw').value = '';
-        document.getElementById('loginErr').textContent = '';
+        window.location.href = 'login.html';
     }
 
     function resetToToday() {
