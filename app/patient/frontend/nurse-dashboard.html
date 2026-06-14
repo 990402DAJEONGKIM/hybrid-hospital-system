@@ -149,7 +149,13 @@
     <div class="nd-content">
 
         <div class="nd-refresh-bar">
-            <span id="lastUpdated"></span>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <label style="font-size:12px;color:#546e7a;font-weight:600;">조회 날짜</label>
+                <input type="date" id="dateFilter"
+                    style="padding:4px 8px;border:1px solid #cfd8dc;border-radius:6px;font-size:13px;"
+                    onchange="loadDashboard()">
+                <button onclick="resetToToday()" style="font-size:12px;color:#1976d2;background:none;border:none;cursor:pointer;">오늘</button>
+            </div>
             <button onclick="loadDashboard()"><i class="fas fa-sync-alt"></i> 새로고침</button>
         </div>
 
@@ -208,6 +214,7 @@
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('dashboardSection').style.display = 'block';
             document.getElementById('headerMeta').textContent = `${data.member_number} · 간호사`;
+            _initDateFilter();
             loadDashboard();
             _refreshTimer = setInterval(loadDashboard, 5 * 60 * 1000);
         } else {
@@ -225,8 +232,16 @@
         document.getElementById('loginErr').textContent = '';
     }
 
+    function resetToToday() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('dateFilter').value = today;
+        loadDashboard();
+    }
+
     async function loadDashboard() {
-        const res = await staffCall('/nurse/dashboard');
+        const dateVal = document.getElementById('dateFilter').value;
+        const qs = dateVal ? `?target_date=${dateVal}` : '';
+        const res = await staffCall(`/nurse/dashboard${qs}`);
         if (!res.ok) {
             document.getElementById('waitingSection').innerHTML  = '<div class="nd-error"><i class="fas fa-exclamation-circle"></i> 데이터를 불러올 수 없습니다.</div>';
             document.getElementById('allergySection').innerHTML = '<div class="nd-error"><i class="fas fa-exclamation-circle"></i> 데이터를 불러올 수 없습니다.</div>';
@@ -284,6 +299,15 @@
         </div>`).join('');
     }
 
+    function _initDateFilter() {
+        const today = new Date().toISOString().split('T')[0];
+        const yearAgo = new Date(Date.now() - 365*24*60*60*1000).toISOString().split('T')[0];
+        const el = document.getElementById('dateFilter');
+        el.value = today;
+        el.max   = today;
+        el.min   = yearAgo;
+    }
+
     // 엔터키 로그인
     ['memberId', 'memberPw'].forEach(id => {
         document.getElementById(id).addEventListener('keydown', e => {
@@ -300,6 +324,7 @@
                 document.getElementById('loginSection').style.display = 'none';
                 document.getElementById('dashboardSection').style.display = 'block';
                 document.getElementById('headerMeta').textContent = `${me.member_number} · 간호사`;
+                _initDateFilter();
                 loadDashboard();
                 _refreshTimer = setInterval(loadDashboard, 5 * 60 * 1000);
             }

@@ -1,5 +1,5 @@
-from datetime import date, datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, datetime, timedelta, timezone
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session as DbSession
 
@@ -9,13 +9,9 @@ from models.db import SyncEncounter, SyncDepartment, SyncAllergy
 
 router = APIRouter(prefix="/nurse", tags=["nurse"])
 
-# 온프레미스 status_code 매핑: OPEN → 진행 중, CLOSED → 완료
 _OPEN_CODES   = ("OPEN",   "waiting",   "in_progress")
 _CLOSED_CODES = ("CLOSED", "completed")
-
-# 온프레미스 severity_code: HIGH = 중증
-_SEVERE_CODES = ("HIGH", "severe")
-
+_SEVERE_CODES = ("HIGH",   "severe")
 
 
 def _require_nurse(current_user: dict) -> str:
@@ -26,13 +22,26 @@ def _require_nurse(current_user: dict) -> str:
 
 @router.get("/dashboard")
 def get_dashboard(
+    target_date:  str       = Query(default=None, description="조회 날짜 (YYYY-MM-DD), 기본값: 오늘"),
     current_user: dict      = Depends(get_current_user),
     read_db:      DbSession = Depends(get_read_db),
 ):
     _require_nurse(current_user)
     today = date.today()
 
-    # 기능 1 — 오늘 진료과별 현황
+    if target_date:
+        try:
+            query_date = date.fromisoformat(target_date)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+        if query_date > today:
+            raise HTTPException(status_code=400, detail="미래 날짜는 조회할 수 없습니다.")
+        if query_date < today - timedelta(days=365):
+            raise HTTPException(status_code=400, detail="최근 1년 이내 날짜만 조회 가능합니다.")
+    else:
+        query_date = today
+
+    # 기능 1 — 진료과별 현황
     rows = (
         read_db.query(
             SyncDepartment.department_name,
@@ -41,7 +50,7 @@ def get_dashboard(
             func.count(SyncEncounter.encounter_id).label("total"),
         )
         .join(SyncDepartment, SyncEncounter.department_code == SyncDepartment.department_code)
-        .filter(SyncEncounter.visit_date == today)
+        .filter(SyncEncounter.visit_date == query_date)
         .group_by(SyncDepartment.department_name)
         .order_by(func.count(SyncEncounter.encounter_id).desc())
         .all()
@@ -56,7 +65,7 @@ def get_dashboard(
         for r in rows
     ]
 
-    # 기능 2 — 오늘 내원 환자 중 중증(HIGH) 알레르기 현황
+    # 기능 2 — 해당일 내원 환자 중 중증(HIGH) 알레르기 현황
     allergy_rows = (
         read_db.query(
             SyncAllergy.allergy_name,
@@ -65,7 +74,7 @@ def get_dashboard(
         .join(SyncEncounter, SyncAllergy.patient_id_hash == SyncEncounter.patient_id_hash)
         .filter(
             SyncAllergy.severity_code.in_(_SEVERE_CODES),
-            SyncEncounter.visit_date == today,
+            SyncEncounter.visit_date == query_date,
         )
         .group_by(SyncAllergy.allergy_name)
         .order_by(func.count().desc())
@@ -78,7 +87,7 @@ def get_dashboard(
 
     return {
         "as_of":            datetime.now(timezone.utc).isoformat(),
-        "date":             today.isoformat(),
+        "date":             query_date.isoformat(),
         "waiting_by_dept":  waiting_by_dept,
         "severe_allergies": severe_allergies,
     }
