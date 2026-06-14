@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session as DbSession
@@ -16,8 +16,6 @@ _CLOSED_CODES = ("CLOSED", "completed")
 # 온프레미스 severity_code: HIGH = 중증
 _SEVERE_CODES = ("HIGH", "severe")
 
-# 최근 365일 데이터 사용
-_DAYS = 365
 
 
 def _require_nurse(current_user: dict) -> str:
@@ -32,10 +30,9 @@ def get_dashboard(
     read_db:      DbSession = Depends(get_read_db),
 ):
     _require_nurse(current_user)
-    today     = date.today()
-    date_from = today - timedelta(days=_DAYS)
+    today = date.today()
 
-    # 기능 1 — 진료과별 현황 (최근 30일)
+    # 기능 1 — 오늘 진료과별 현황
     rows = (
         read_db.query(
             SyncDepartment.department_name,
@@ -44,7 +41,7 @@ def get_dashboard(
             func.count(SyncEncounter.encounter_id).label("total"),
         )
         .join(SyncDepartment, SyncEncounter.department_code == SyncDepartment.department_code)
-        .filter(SyncEncounter.visit_date >= date_from)
+        .filter(SyncEncounter.visit_date == today)
         .group_by(SyncDepartment.department_name)
         .order_by(func.count(SyncEncounter.encounter_id).desc())
         .all()
@@ -59,7 +56,7 @@ def get_dashboard(
         for r in rows
     ]
 
-    # 기능 2 — 중증(HIGH) 알레르기 보유 환자 최근 30일 내원 현황
+    # 기능 2 — 오늘 내원 환자 중 중증(HIGH) 알레르기 현황
     allergy_rows = (
         read_db.query(
             SyncAllergy.allergy_name,
@@ -68,7 +65,7 @@ def get_dashboard(
         .join(SyncEncounter, SyncAllergy.patient_id_hash == SyncEncounter.patient_id_hash)
         .filter(
             SyncAllergy.severity_code.in_(_SEVERE_CODES),
-            SyncEncounter.visit_date >= date_from,
+            SyncEncounter.visit_date == today,
         )
         .group_by(SyncAllergy.allergy_name)
         .order_by(func.count().desc())
@@ -81,7 +78,7 @@ def get_dashboard(
 
     return {
         "as_of":            datetime.now(timezone.utc).isoformat(),
-        "period":           f"{date_from.isoformat()} ~ {today.isoformat()}",
+        "date":             today.isoformat(),
         "waiting_by_dept":  waiting_by_dept,
         "severe_allergies": severe_allergies,
     }

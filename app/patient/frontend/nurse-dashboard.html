@@ -156,7 +156,7 @@
         <!-- 기능 1: 진료과별 대기 현황 -->
         <div class="nd-card">
             <div class="nd-card-title">
-                <i class="fas fa-clock" style="color:#1976d2;"></i>최근 1년 진료과별 현황
+                <i class="fas fa-clock" style="color:#1976d2;"></i>오늘 진료과별 현황
             </div>
             <div id="waitingSection"><div class="nd-loading"><i class="fas fa-spinner fa-spin"></i> 불러오는 중...</div></div>
         </div>
@@ -164,7 +164,7 @@
         <!-- 기능 2: 중증 알레르기 현황 -->
         <div class="nd-card">
             <div class="nd-card-title">
-                <i class="fas fa-exclamation-triangle" style="color:#e53935;"></i>최근 1년 중증(HIGH) 알레르기 내원 현황
+                <i class="fas fa-exclamation-triangle" style="color:#e53935;"></i>오늘 중증(HIGH) 알레르기 내원 현황
             </div>
             <div id="allergySection"><div class="nd-loading"><i class="fas fa-spinner fa-spin"></i> 불러오는 중...</div></div>
         </div>
@@ -236,9 +236,8 @@
 
         // 마지막 업데이트 시각
         const now = new Date();
-        const period = data.period || '';
         document.getElementById('lastUpdated').textContent =
-            `조회 기간: ${period} | 업데이트: ${now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} (5분 자동 갱신)`;
+            `기준일: ${data.date} | 업데이트: ${now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} (5분 자동 갱신)`;
 
         renderWaiting(data.waiting_by_dept || []);
         renderAllergies(data.severe_allergies || []);
