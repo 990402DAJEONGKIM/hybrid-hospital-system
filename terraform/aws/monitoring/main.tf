@@ -332,3 +332,47 @@ resource "aws_security_group_rule" "monitoring_443_from_wazuh" {
 
 
 # #260609 박경수 end
+
+
+
+# Grafana 프로세스 다운 감지 - 추가 260614 김강환
+# systemctl is-active grafana-server → CloudWatch 커스텀 메트릭
+# Wazuh 매니저 헬스체크(aws-wazuh-cw-manager-01)와 동일한 패턴
+resource "aws_cloudwatch_metric_alarm" "aws-cw-grafana-down-01" {
+  alarm_name          = "aws-cw-grafana-down-01"
+  alarm_description   = "Grafana 프로세스 다운 감지 - 즉시 확인 필요"
+  namespace           = "Custom/Monitoring"
+  metric_name         = "grafana_running"
+  dimensions = {
+    InstanceId = aws_instance.aws-monitoring-01.id
+  }
+  period              = 60
+  evaluation_periods  = 2
+  statistic           = "Minimum"
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  tags = { Name = "aws-cw-grafana-down-01" }
+}
+
+# Prometheus 프로세스 다운 감지 - 추가 260614 김강환
+resource "aws_cloudwatch_metric_alarm" "aws-cw-prometheus-down-01" {
+  alarm_name          = "aws-cw-prometheus-down-01"
+  alarm_description   = "Prometheus 프로세스 다운 감지 - 즉시 확인 필요"
+  namespace           = "Custom/Monitoring"
+  metric_name         = "prometheus_running"
+  dimensions = {
+    InstanceId = aws_instance.aws-monitoring-01.id
+  }
+  period              = 60
+  evaluation_periods  = 2
+  statistic           = "Minimum"
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
+  tags = { Name = "aws-cw-prometheus-down-01" }
+}

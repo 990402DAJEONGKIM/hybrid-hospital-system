@@ -110,6 +110,23 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
           "arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter/wazuh/*"
         ]
       },
+      # monitoring/iam.tf
+      # CloudWatch 읽기 + 커스텀 메트릭 쓰기 - 수정 260614 김강환
+      # PutMetricData 추가: grafana-health.sh, prometheus-health.sh 크론 스크립트용
+      {
+        Sid    = "CloudWatchRead"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:DescribeAlarmsForMetric",
+          "cloudwatch:DescribeAlarmHistory",
+          "cloudwatch:DescribeAlarms",
+          "cloudwatch:ListMetrics",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetInsightRuleReport",
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+      },
 
       {
         Sid    = "ResourceRead"
