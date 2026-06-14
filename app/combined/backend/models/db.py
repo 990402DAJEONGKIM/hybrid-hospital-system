@@ -315,6 +315,7 @@ class SyncPatient(Base):
     birth_year      = Column(SmallInteger)
     gender_code     = Column(String(1))
     phone_hash      = Column(String(64))
+    patient_hash    = Column(String(64))
     created_at      = Column(DateTime(timezone=True))
     synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
