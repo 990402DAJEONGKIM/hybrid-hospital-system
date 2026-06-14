@@ -439,8 +439,9 @@ def create_appointment(
     if not appt_type:
         raise HTTPException(status_code=400, detail="유효하지 않은 예약 유형입니다.")
 
-    # 재진·입원·수술: 해당 진료과 이전 내원 이력 필수
-    if appt_type.requires_previous_visit:
+    # 입원·수술 전: 해당 진료과 이전 내원 이력 필수 (외래는 미적용)
+    _OUTPATIENT_CODES = {"outpatient_new", "outpatient_return"}
+    if appt_type.requires_previous_visit and body.type_code not in _OUTPATIENT_CODES:
         has_visit = db.query(SyncEncounter).filter(
             SyncEncounter.patient_id_hash == pid,
             SyncEncounter.department_code == body.department_code,
