@@ -133,12 +133,12 @@
         const body = document.getElementById('safetySummaryBody');
         const lines = [];
 
-        const sev = preSurgeryCtx.allergy_severity_summary || {};
-        if (Object.keys(sev).length > 0) {
-            const sevParts = Object.entries(sev).map(([k, v]) =>
-                `<span style="color:${SEV_COLOR[k] || '#263238'};font-weight:700;">${SEV_LABEL[k] || k} ${v}건</span>`
+        const allergyList = preSurgeryCtx.allergy_list || [];
+        if (allergyList.length > 0) {
+            const parts = allergyList.map(a =>
+                `<span style="color:${SEV_COLOR[a.severity] || '#263238'};">${a.name || a.severity}</span>`
             ).join(', ');
-            lines.push(`<i class="fas fa-exclamation-circle" style="margin-right:4px;color:#f57c00;"></i>알레르기: ${sevParts}`);
+            lines.push(`<i class="fas fa-exclamation-circle" style="margin-right:4px;color:#f57c00;"></i>알레르기: ${parts}`);
         } else {
             lines.push('<i class="fas fa-check-circle" style="margin-right:4px;color:#43a047;"></i>알레르기: 없음');
         }

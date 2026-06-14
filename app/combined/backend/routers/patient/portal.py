@@ -985,14 +985,16 @@ def get_pre_surgery_context(
     pid = _require_patient(current_user)
 
     allergies = (
-        db.query(SyncAllergy.severity_code)
+        db.query(SyncAllergy.allergy_name, SyncAllergy.severity_code)
         .filter(SyncAllergy.patient_id_hash == pid)
         .all()
     )
     severity_summary: dict = {}
-    for (sev,) in allergies:
+    allergy_list: list = []
+    for (name, sev) in allergies:
         key = (sev or "UNKNOWN").upper()
         severity_summary[key] = severity_summary.get(key, 0) + 1
+        allergy_list.append({"name": name or "", "severity": key})
 
     surgeries = (
         db.query(SyncSurgery.surgery_date)
@@ -1010,6 +1012,7 @@ def get_pre_surgery_context(
 
     return {
         "allergy_severity_summary": severity_summary,
+        "allergy_list":             allergy_list,
         "surgery_count":            surgery_count,
         "last_surgery_date":        last_surgery_date,
         "pre_exam_requirements":    pre_exams,
