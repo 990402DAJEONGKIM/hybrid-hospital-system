@@ -87,25 +87,53 @@ async function extendSession() {
     }
 }
 
+const _API_TIMEOUT_MS = 10000;
+const _TIMEOUT_RESPONSE = () => new Response(
+    JSON.stringify({ detail: '요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.' }),
+    { status: 408, headers: { 'Content-Type': 'application/json' } }
+);
+
+async function _fetchWithTimeout(url, opts) {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), _API_TIMEOUT_MS);
+    try {
+        const res = await fetch(url, { ...opts, signal: ctrl.signal });
+        clearTimeout(tid);
+        return res;
+    } catch (e) {
+        clearTimeout(tid);
+        if (e.name === 'AbortError') return _TIMEOUT_RESPONSE();
+        throw e;
+    }
+}
+
 async function apiCall(path, options = {}) {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const merged = {
         ..._fetchDefaults,
         ...options,
         headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
-    });
+    };
+    const res = await _fetchWithTimeout(`${BASE_URL}${path}`, merged);
     if (res && res.headers.get('X-Session-Expiring-Soon') === 'true') {
         _showSessionWarning(parseInt(res.headers.get('X-Session-Remaining-Seconds') || '300'));
     }
     if (res.status === 401) {
         const ok = await _refreshTokens();
         if (!ok) { logout(); return null; }
-        return fetch(`${BASE_URL}${path}`, {
-            ..._fetchDefaults,
-            ...options,
-            headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
-        });
+        return _fetchWithTimeout(`${BASE_URL}${path}`, merged);
     }
     return res;
+}
+
+function _setBtnLoading(btn, isLoading, originalText) {
+    if (isLoading) {
+        btn.disabled   = true;
+        btn._origText  = btn.innerHTML;
+        btn.innerHTML  = '<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>처리 중...';
+    } else {
+        btn.disabled  = false;
+        btn.innerHTML = originalText !== undefined ? originalText : (btn._origText || btn.innerHTML);
+    }
 }
 
 async function logout() {

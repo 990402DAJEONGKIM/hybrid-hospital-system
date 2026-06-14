@@ -286,7 +286,7 @@
 
     async function submitAppointment() {
         const btn = document.getElementById('submitBtn');
-        btn.disabled = true;
+        _setBtnLoading(btn, true);
         document.getElementById('errMsg').textContent = '';
 
         const body = {
@@ -309,7 +309,7 @@
         } else {
             const err = await res?.json().catch(() => ({}));
             document.getElementById('errMsg').textContent = err.detail || '예약 처리 중 오류가 발생했습니다.';
-            btn.disabled = false;
+            _setBtnLoading(btn, false, '예약 확정');
         }
     }
 
