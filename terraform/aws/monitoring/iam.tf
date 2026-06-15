@@ -87,10 +87,10 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
         # user_data 실행 시 초기화 스크립트 + 대시보드 JSON S3에서 가져오기 - 추가 260612 김강환
         Sid    = "GrafanaS3Read"
         Effect = "Allow"
-        Action = ["s3:GetObject", "s3:ListBucket"]
+        Action = ["s3:GetObject", "s3:ListBucket","s3:PutObject"]
         Resource = [
           "arn:aws:s3:::aws-k2p-storage-01",
-          "arn:aws:s3:::aws-k2p-storage-01/grafana/*"
+          "arn:aws:s3:::aws-k2p-storage-01/monitoring/*"
         ]
       },
       {
