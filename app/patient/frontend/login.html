@@ -86,11 +86,11 @@
                     style="display:none; background:#b91c1c;">
                     <i class="fas fa-shield-virus mr-2"></i>Wazuh 보안 모니터링
                 </a>
-                <!-- 간호사 전용 대시보드 링크 -->
+                <!-- 간호사/의사 당일 진료 현황 대시보드 링크 -->
                 <a id="nurseDashBtn" href="nurse-dashboard.html"
                     class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
                     style="display:none; background:#1565c0;">
-                    <i class="fas fa-user-nurse mr-2"></i>간호사 대시보드
+                    <i class="fas fa-hospital-user mr-2"></i>당일 진료 현황 대시보드
                 </a>
             </div>
         </div>
@@ -160,7 +160,7 @@
                         wazuhBtn.href = 'https://wazuh.mzclinic.cloud';
                         wazuhBtn.style.display = 'block';
                     }
-                    if (role === 'nurse') {
+                    if (role === 'nurse' || role === 'doctor') {
                         document.getElementById('nurseDashBtn').style.display = 'block';
                     }
                     document.getElementById('internalLinkBtn').href = `${ONPREM_URL}/login.html`;
