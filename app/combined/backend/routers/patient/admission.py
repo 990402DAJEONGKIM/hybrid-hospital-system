@@ -12,7 +12,7 @@ from models.db import Admission, Appointment, Bed, SyncWard
 
 router = APIRouter(prefix="/portal", tags=["admissions"])
 
-_INPATIENT_TYPE_CODES = ("INPATIENT", "INPATIENT_SURGERY")
+_INPATIENT_TYPE_CODES = ("INPATIENT", "INPATIENT_SURGERY", "inpatient", "inpatient_surgery")
 _ROOM_TYPES           = ("shared", "double", "single")
 
 
