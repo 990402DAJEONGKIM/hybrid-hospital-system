@@ -267,12 +267,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   }
 
 
-  # Grafana 대시보드 JSON + 초기화 스크립트 보존
-  # 365일 후 삭제, 재업로드로 갱신 가능 - 추가 260612 김강환
+  # monitoring 대시보드 JSON + 초기화 스크립트 보존
+  # 365일 후 삭제, 재업로드로 갱신 가능 - 추가 260615 김강환
   rule {
-    id     = "grafana-lifecycle"
+    id     = "monitoring-lifecycle"
     status = "Enabled"
-    filter { prefix = "grafana/" }
+    filter { prefix = "monitoring/" }
     expiration { days = 365 }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
@@ -499,9 +499,20 @@ resource "aws_s3_bucket_policy" "storage" {
         Action = ["s3:GetObject", "s3:ListBucket"]
         Resource = [
           aws_s3_bucket.storage.arn,
-          "${aws_s3_bucket.storage.arn}/grafana/*"
+          "${aws_s3_bucket.storage.arn}/monitoring/*"
         ]
       },
+      {
+        # monitoring EC2 Vector → S3 keycloak/oauth2-proxy 로그 저장 - 추가 260615 김강환
+        Sid    = "AllowMonitoringEC2VectorWrite"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-monitoring-role"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.storage.arn}/monitoring/*"
+      },
+
       {
         Sid       = "DenyNonSSL"
         Effect    = "Deny"
