@@ -15,8 +15,8 @@ _SEVERE_CODES = ("HIGH",   "severe")
 
 
 def _require_nurse(current_user: dict) -> str:
-    if current_user.get("role") != "nurse":
-        raise HTTPException(status_code=403, detail="간호사 권한이 필요합니다.")
+    if current_user.get("role") not in ("nurse", "doctor"):
+        raise HTTPException(status_code=403, detail="간호사 또는 의사 권한이 필요합니다.")
     return current_user["sub"]
 
 
