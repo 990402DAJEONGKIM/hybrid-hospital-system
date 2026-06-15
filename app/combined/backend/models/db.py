@@ -263,12 +263,54 @@ class AppointmentHistory(Base):
 class SyncWard(Base):
     __tablename__ = "sync_wards"
 
-    ward_id        = Column(Uuid,        primary_key=True)
-    ward_name      = Column(String(100))
-    room_type      = Column(String(20))   # 'shared', 'double', 'single'
-    total_beds     = Column(SmallInteger)
-    available_beds = Column(SmallInteger)
-    synced_at      = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    ward_id         = Column(Uuid,        primary_key=True)
+    ward_name       = Column(String(100))
+    department_code = Column(String(20),  ForeignKey("sync_departments.department_code"))
+    room_type       = Column(String(20))   # 'shared', 'double', 'single'
+    total_beds      = Column(SmallInteger)
+    available_beds  = Column(SmallInteger)
+    synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at      = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    beds = relationship("Bed", back_populates="ward")
+
+
+class Bed(Base):
+    __tablename__ = "beds"
+
+    bed_id      = Column(Uuid,       primary_key=True, default=uuid.uuid4)
+    ward_id     = Column(Uuid,       ForeignKey("sync_wards.ward_id"), nullable=False)
+    room_number = Column(String(20), nullable=False)
+    status      = Column(String(20), nullable=False, default="AVAILABLE")  # AVAILABLE / OCCUPIED / MAINTENANCE
+    created_at  = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at  = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    ward       = relationship("SyncWard",  back_populates="beds")
+    admissions = relationship("Admission", back_populates="bed")
+
+
+class Admission(Base):
+    __tablename__ = "admissions"
+
+    admission_id            = Column(Uuid,       primary_key=True, default=uuid.uuid4)
+    appointment_id          = Column(Uuid,       ForeignKey("appointments.appointment_id"), nullable=False)
+    patient_id_hash         = Column(String(64), ForeignKey("sync_patients.patient_id_hash"), nullable=False)
+    ward_id                 = Column(Uuid,       ForeignKey("sync_wards.ward_id"), nullable=False)
+    bed_id                  = Column(Uuid,       ForeignKey("beds.bed_id"))
+    room_type               = Column(String(20))
+    status                  = Column(String(20), nullable=False, default="PENDING")
+    # PENDING → ADMITTED → DISCHARGE_ORDERED → DISCHARGED
+    admitted_by             = Column(Uuid,       ForeignKey("users.user_id"))
+    discharge_ordered_by    = Column(Uuid,       ForeignKey("users.user_id"))
+    admitted_at             = Column(DateTime(timezone=True))
+    expected_discharge_date = Column(Date)
+    discharged_at           = Column(DateTime(timezone=True))
+    notes                   = Column(Text)
+    created_at              = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at              = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    ward = relationship("SyncWard")
+    bed  = relationship("Bed",         back_populates="admissions")
 
 
 # ============================================================

@@ -21,7 +21,7 @@ from core.database import Base, engine, get_db
 from core.middleware import AuditLogMiddleware, SessionExpiryMiddleware
 from models import db as _models  # noqa: F401 — Base에 모델 등록
 
-from routers.patient import auth as patient_auth, portal as patient_portal
+from routers.patient import auth as patient_auth, portal as patient_portal, admission as patient_admission
 from routers.staff import auth as staff_auth, admin as staff_admin
 from routers.nurse import dashboard as nurse_dashboard
 
@@ -48,8 +48,9 @@ _allowed_hosts = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 
 # ── 환자 포털 (/patient/auth/, /patient/portal/) ────────────
-app.include_router(patient_auth.router,   prefix="/patient")
-app.include_router(patient_portal.router, prefix="/patient")
+app.include_router(patient_auth.router,      prefix="/patient")
+app.include_router(patient_portal.router,    prefix="/patient")
+app.include_router(patient_admission.router, prefix="/patient")
 
 # ── 의료진 인증 / 관리자 (/staff/) ────────────────────────────
 app.include_router(staff_auth.router,  prefix="/staff")
