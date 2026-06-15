@@ -777,9 +777,10 @@ def update_my_profile(
 
 @router.get("/wards/availability")
 def get_wards_availability(
-    room_type:    Optional[str] = Query(default=None, description="single | double | shared"),
-    current_user: dict          = Depends(get_current_user),
-    db:           DbSession     = Depends(get_read_db),
+    room_type:       Optional[str] = Query(default=None, description="single | double | shared"),
+    department_code: Optional[str] = Query(default=None),
+    current_user:    dict          = Depends(get_current_user),
+    db:              DbSession     = Depends(get_read_db),
 ):
     """가용 병상이 있는 병동 목록 조회 — 입원 예약 병동 선택용 (SFR-035)."""
     q = db.query(SyncWard).filter(SyncWard.available_beds > 0)
@@ -787,6 +788,8 @@ def get_wards_availability(
         if room_type not in ("single", "double", "shared"):
             raise HTTPException(status_code=422, detail="room_type은 single | double | shared 중 하나여야 합니다.")
         q = q.filter(SyncWard.room_type == room_type)
+    if department_code:
+        q = q.filter(SyncWard.department_code == department_code)
 
     return [
         {

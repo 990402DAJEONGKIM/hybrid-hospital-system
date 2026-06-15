@@ -111,12 +111,13 @@
     const ROOM_TYPE_MAP = { '1인실': 'single', '2인실': 'double', '다인실': 'shared' };
 
     async function onRoomTypeChange() {
-        const pref = document.getElementById('roomTypePref').value;
-        const box  = document.getElementById('wardAvailBox');
-        if (!pref) { box.style.display = 'none'; return; }
+        const pref     = document.getElementById('roomTypePref').value;
+        const deptCode = document.getElementById('deptSelect').value;
+        const box      = document.getElementById('wardAvailBox');
+        if (!pref || !deptCode) { box.style.display = 'none'; return; }
 
-        const rt = ROOM_TYPE_MAP[pref] || '';
-        const res = await apiCall(`/portal/wards/availability?room_type=${rt}`);
+        const rt  = ROOM_TYPE_MAP[pref] || '';
+        const res = await apiCall(`/portal/wards/availability?room_type=${rt}&department_code=${deptCode}`);
         box.style.display = 'block';
         if (!res || !res.ok) {
             box.style.background = '#fff3e0';
@@ -127,7 +128,7 @@
         const totalAvail = wards.reduce((s, w) => s + (w.available_beds || 0), 0);
         if (totalAvail === 0) {
             box.style.background = '#ffebee';
-            box.innerHTML = `<i class="fas fa-bed" style="color:#e53935;margin-right:6px;"></i><strong>${pref}</strong> 가용 병상 없음 — 다른 유형을 선택하거나 원무과에 문의하세요.`;
+            box.innerHTML = `<i class="fas fa-bed" style="color:#e53935;margin-right:6px;"></i><strong>${pref}</strong> 해당 진료과 가용 병상 없음 — 다른 유형을 선택하거나 원무과에 문의하세요.`;
         } else {
             box.style.background = '#e8f5e9';
             const wardList = wards.map(w => `${w.ward_name} (${w.available_beds}병상)`).join(', ');
@@ -166,6 +167,8 @@
             const docSel = document.getElementById('doctorSelect');
             docSel.innerHTML = '<option value="">담당의 선택 안함 (배정)</option>';
             docSel.disabled = !code;
+            // 진료과 바뀌면 병상 현황 재조회
+            onRoomTypeChange();
             if (!code) return;
             const dr = await apiCall(`/portal/doctors?department_code=${code}`);
             if (!dr || !dr.ok) return;
