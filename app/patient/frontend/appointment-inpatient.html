@@ -224,29 +224,50 @@
         document.getElementById('errMsg').textContent = '';
 
         const roomPref = document.getElementById('roomTypePref').value;
-        const body = {
+        const roomType = ROOM_TYPE_MAP[roomPref] || null;  // 'single'/'double'/'shared' or null
+
+        const apptBody = {
             type_code:             'inpatient',
             department_code:       document.getElementById('deptSelect').value,
             appointment_date:      document.getElementById('apptDate').value,
             appointment_time:      '14:00',
             has_chronic_condition: document.getElementById('c_yes').checked,
         };
-        if (roomPref) body.room_type_pref = roomPref;
-        if (selectedDoctor) body.doctor_id = selectedDoctor.doctor_id;
+        if (roomPref)       apptBody.room_type_pref = roomPref;
+        if (selectedDoctor) apptBody.doctor_id      = selectedDoctor.doctor_id;
 
-        const res = await apiCall('/portal/appointments', {
+        // Step 1: 예약 생성
+        const apptRes = await apiCall('/portal/appointments', {
             method: 'POST',
-            body: JSON.stringify(body),
+            body:   JSON.stringify(apptBody),
         });
-
-        if (res && res.ok) {
-            alert('입원 신청이 접수되었습니다.\n원무과 확정 후 알림을 보내드립니다.');
-            location.href = 'my-appointments.html';
-        } else {
-            const err = await res?.json().catch(() => ({}));
+        if (!apptRes || !apptRes.ok) {
+            const err = await apptRes?.json().catch(() => ({}));
             document.getElementById('errMsg').textContent = err.detail || '예약 처리 중 오류가 발생했습니다.';
             _setBtnLoading(btn, false, '입원 신청');
+            return;
         }
+        const appt = await apptRes.json();
+
+        // Step 2: 병실 유형 선택 시 병상 배정 (admissions INSERT)
+        if (roomType) {
+            const admRes = await apiCall('/portal/admissions/request', {
+                method: 'POST',
+                body:   JSON.stringify({ appointment_id: appt.appointment_id, room_type: roomType }),
+            });
+            if (!admRes || !admRes.ok) {
+                const err = await admRes?.json().catch(() => ({}));
+                document.getElementById('errMsg').textContent =
+                    `예약은 접수됐으나 병상 배정 실패: ${err.detail || '잠시 후 다시 시도해주세요.'}`;
+                _setBtnLoading(btn, false, '입원 신청');
+                return;
+            }
+        }
+
+        alert(roomType
+            ? '입원 신청 및 병상 배정이 완료되었습니다.'
+            : '입원 신청이 접수되었습니다.\n원무과 확정 후 알림을 보내드립니다.');
+        location.href = 'my-appointments.html';
     }
 
     renderSidebar('appointment.html');
