@@ -2,7 +2,7 @@ terraform {
   cloud {
     organization = "k2p"
     workspaces {
-      name = "TC-VPC"
+      name = "TC-aws-VPC"
     }
   }
 }
