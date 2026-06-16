@@ -59,14 +59,6 @@ resource "google_project_iam_member" "billing_reader_job_user" {
   member  = "serviceAccount:${data.google_service_account.billing_reader.email}"
 }
 
-# ── BigQuery 권한: GCP 빌링 내보내기 서비스 계정 ────────────────────────────
-
-resource "google_bigquery_dataset_iam_member" "billing_export_writer" {
-  dataset_id = google_bigquery_dataset.billing.dataset_id
-  role       = "roles/bigquery.dataEditor"
-  member     = "serviceAccount:billing-export@system.gserviceaccount.com"
-}
-
 # ── Cloud Function: GCP Billing Reader ──────────────────────────────────────
 
 resource "google_storage_bucket" "cf_source" {
