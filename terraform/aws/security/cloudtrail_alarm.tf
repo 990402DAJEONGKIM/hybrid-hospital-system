@@ -225,3 +225,67 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-vpc-change" {
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.sns_arn]
 }
+
+
+# ── S3 오브젝트 삭제 탐지 - 추가 260612 김강환 ──────────
+resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-s3-delete-objects" {
+  depends_on     = [aws_cloudtrail.aws-ct-01]
+  name           = "aws-cw-ct-s3-delete-objects"
+  log_group_name = "/aws/cloudtrail/main"
+  pattern        = "{ $.eventName = \"DeleteObjects\" }"
+
+  metric_transformation {
+    name      = "S3DeleteObjectsCount"
+    namespace = "CloudTrailAlarms"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-s3-delete-objects" {
+  alarm_name          = "aws-cw-ct-s3-delete-objects"
+  alarm_description   = "S3 오브젝트 삭제 탐지 - ISMS-P 2.9.1"
+  metric_name         = "S3DeleteObjectsCount"
+  namespace           = "CloudTrailAlarms"
+  period              = 300
+  evaluation_periods  = 1
+  statistic           = "Sum"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [local.sns_arn]
+}
+
+# ── RDS 인스턴스 중지/삭제/재부팅 탐지 - 추가 260616 김강환 ──────────────
+# StopDBInstance  : RDS 인스턴스 중지 (의도적 중단)
+# DeleteDBInstance: RDS 인스턴스 삭제 (데이터 손실 위험)
+# RebootDBInstance: RDS 인스턴스 재부팅 (서비스 중단)
+# StopDBCluster   : Aurora 클러스터 중지
+# DeleteDBCluster : Aurora 클러스터 삭제 (데이터 손실 위험)
+# 주의: 장애로 인한 자연 다운은 CloudTrail에 안 찍힘
+#       → Grafana CloudWatch DatabaseConnections = 0 알람으로 보완
+resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-rds-change" {
+  depends_on     = [aws_cloudtrail.aws-ct-01]
+  name           = "aws-cw-ct-rds-change"
+  log_group_name = "/aws/cloudtrail/main"
+  pattern        = "{ ($.eventName = StopDBInstance) || ($.eventName = DeleteDBInstance) || ($.eventName = RebootDBInstance) || ($.eventName = StopDBCluster) || ($.eventName = DeleteDBCluster) }"
+
+  metric_transformation {
+    name      = "RDSChangeCount"
+    namespace = "CloudTrailAlarms"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-rds-change" {
+  alarm_name          = "aws-cw-ct-rds-change"
+  alarm_description   = "RDS 중지/삭제/재부팅 탐지 — 즉시 확인 필요"
+  metric_name         = "RDSChangeCount"
+  namespace           = "CloudTrailAlarms"
+  period              = 60
+  evaluation_periods  = 1
+  statistic           = "Sum"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [local.sns_arn]
+}
