@@ -199,16 +199,30 @@ resource "aws_wafv2_web_acl" "hospital" {
             statement {
               byte_match_statement {
                 search_string = "wazuh.mzclinic.cloud"
-                field_to_match { single_header { name = "host" } }
-                text_transformation { priority = 0; type = "LOWERCASE" }
+                field_to_match {
+                  single_header {
+                    name = "host"
+                  }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
                 positional_constraint = "EXACTLY"
               }
             }
             statement {
               byte_match_statement {
                 search_string = "monitoring.mzclinic.cloud"
-                field_to_match { single_header { name = "host" } }
-                text_transformation { priority = 0; type = "LOWERCASE" }
+                field_to_match {
+                  single_header {
+                    name = "host"
+                  }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
                 positional_constraint = "EXACTLY"
               }
             }
