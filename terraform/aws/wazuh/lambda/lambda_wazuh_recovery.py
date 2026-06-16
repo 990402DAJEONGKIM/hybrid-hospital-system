@@ -31,63 +31,27 @@ def _get_instance_id_by_private_ip(private_ip):
 def lambda_handler(event, context):
     print(f"[INFO] 트리거 수신: {event}")
 
-    # SNS 메시지에서 알람 이름 파악
-    import json
-    alarm_name = ""
-    try:
-        # EventBridge 이벤트 형식
-        detail     = event.get('detail', {})
-        alarm_name = detail.get('alarmName', '')
-        new_state  = detail.get('state', {}).get('value', '')
-        print(f"[INFO] 알람: {alarm_name}, 상태: {new_state}")
+    # EventBridge EC2 상태변화 이벤트 파싱
+    detail = event.get('detail', {})
+    instance_id = detail.get('instance-id', '')
+    state = detail.get('state', '')
 
-        if new_state != 'ALARM':
-            print("[INFO] ALARM 상태 아님. 종료.")
-            return {"status": "SKIPPED"}
-    except Exception as e:
-        print(f"[WARN] 이벤트 파싱 실패: {e}")
-    # EC2 상태 확인
+    print(f"[INFO] EC2 상태변화: {instance_id} → {state}")
+
+    if state not in ['stopped', 'terminated']:
+        print("[INFO] stopped/terminated 아님. 종료.")
+        return {"status": "SKIPPED"}
+
+    # EC2 중지/종료 → 무조건 재구축
     target_id = _get_instance_id_by_private_ip(PRIVATE_IP)
-    print(f"[INFO] 조회된 인스턴스 ID: {target_id}")
 
     if target_id is None:
-        print("[ACTION] 인스턴스 없음 → 시나리오 1 바로 진입")
+        print("[ACTION] 인스턴스 없음 → 재구축 진입")
         _scenario1_rebuild(None)
         return {"status": "SUCCESS"}
-    try:
-        resp = ec2.describe_instance_status(
-            InstanceIds=[target_id],
-            IncludeAllInstances=True
-        )
-        if not resp['InstanceStatuses']:
-            instance_state = 'terminated'
-            system_health  = 'impaired'
-            inst_health    = 'impaired'
-        else:
-            s = resp['InstanceStatuses'][0]
-            instance_state = s['InstanceState']['Name']
-            system_health  = s['SystemStatus']['Status']
-            inst_health    = s['InstanceStatus']['Status']
 
-        print(f"[INFO] EC2 상태: {instance_state} | System: {system_health} | Instance: {inst_health}")
-    except ClientError as e:
-        print(f"[ERROR] EC2 상태 조회 실패: {e}")
-        raise
-
-    # 시나리오 판별
-    ec2_dead = (
-        instance_state in ['stopped', 'terminated', 'shutting-down']
-        or system_health == 'impaired'
-        or inst_health == 'impaired'
-    )
-
-    if ec2_dead:
-        print("[ACTION] 시나리오 1 - EC2 재생성")
-        _scenario1_rebuild(target_id)
-    else:
-        print("[ACTION] 시나리오 2 - 서비스 재시작")
-        _scenario2_restart_service(target_id)
-
+    print("[ACTION] EC2 중지/종료 감지 → 재구축")
+    _scenario1_rebuild(target_id)
     return {"status": "SUCCESS"}
 
 

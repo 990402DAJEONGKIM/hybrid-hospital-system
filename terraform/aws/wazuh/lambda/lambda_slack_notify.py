@@ -20,37 +20,59 @@ def lambda_handler(event, context):
     for record in event.get("Records", []):
         try:
             sns = record["Sns"]
-            alarm = json.loads(sns["Message"])
+            raw_message = sns["Message"]
 
-            alarm_name = alarm.get("AlarmName", "Unknown")
-            region     = alarm.get("Region", "Unknown")
-            state      = alarm.get("NewStateValue", "Unknown")
-            reason     = alarm.get("NewStateReason", "Unknown")
-            timestamp  = alarm.get("StateChangeTime", "Unknown")
+            try:
+                msg = json.loads(raw_message)
+            except json.JSONDecodeError:
+                msg = {}
 
-            dimensions = alarm.get("Trigger", {}).get("Dimensions", [])
-            dim_str = ", ".join(
-                f"{d.get('name')}={d.get('value')}"
-                for d in dimensions
-            ) if dimensions else "Unknown"
+            # EventBridge EC2 상태변화 이벤트
+            if msg.get("source") == "aws.ec2":
+                detail = msg.get("detail", {})
+                instance_id = detail.get("instance-id", "Unknown")
+                state = detail.get("state", "Unknown")
+                emoji = "🚨" if state in ["stopped", "terminated"] else "ℹ️"
+                message = {
+                    "text": (
+                        f"{emoji} EC2 상태 변화\n"
+                        f"인스턴스: {instance_id}\n"
+                        f"상태: {state}\n"
+                        f"시간: {msg.get('time', 'Unknown')}"
+                    )
+                }
 
-            emoji = (
-                "🚨" if state == "ALARM"
-                else "✅" if state == "OK"
-                else "ℹ️"
-            )
+            # CloudWatch Alarm 이벤트
+            else:
+                alarm_name = msg.get("AlarmName", "Unknown")
+                region     = msg.get("Region", "Unknown")
+                state      = msg.get("NewStateValue", "Unknown")
+                reason     = msg.get("NewStateReason", "Unknown")
+                timestamp  = msg.get("StateChangeTime", "Unknown")
 
-            message = {
-                "text": (
-                    f"{emoji} CloudWatch 알람\n"
-                    f"알람: {alarm_name}\n"
-                    f"대상: {dim_str}\n"
-                    f"Region: {region}\n"
-                    f"상태: {state}\n"
-                    f"사유: {reason}\n"
-                    f"시간: {timestamp}"
+                dimensions = msg.get("Trigger", {}).get("Dimensions", [])
+                dim_str = ", ".join(
+                    f"{d.get('name')}={d.get('value')}"
+                    for d in dimensions
+                ) if dimensions else "Unknown"
+
+                emoji = (
+                    "🚨" if state == "ALARM"
+                    else "✅" if state == "OK"
+                    else "ℹ️"
                 )
-            }
+
+                message = {
+                    "text": (
+                        f"{emoji} CloudWatch 알람\n"
+                        f"알람: {alarm_name}\n"
+                        f"대상: {dim_str}\n"
+                        f"Region: {region}\n"
+                        f"상태: {state}\n"
+                        f"사유: {reason}\n"
+                        f"시간: {timestamp}"
+                    )
+                }
 
             data = json.dumps(message).encode("utf-8")
             req = urllib.request.Request(
@@ -62,7 +84,7 @@ def lambda_handler(event, context):
             with urllib.request.urlopen(req, timeout=5) as response:
                 response.read()
 
-            logger.info(f"Slack sent: {alarm_name}")
+            logger.info(f"Slack sent")
 
         except urllib.error.HTTPError as e:
             logger.error(f"Slack HTTP error: {e.code} {e.reason}")

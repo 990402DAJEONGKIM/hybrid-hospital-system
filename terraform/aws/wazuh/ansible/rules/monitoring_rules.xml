@@ -21,22 +21,8 @@
        수집: journald grafana-server.service
        ========================================================= -->
 
-  <!-- Grafana 서비스 오류 베이스 룰 -->
-  <rule id="100800" level="7">
-    <if_sid>1002</if_sid>
-    <program_name>grafana</program_name>
-    <match>level=error</match>
-    <description>Grafana 서비스 오류 발생 — 즉시 확인 필요</description>
-    <group>monitoring,grafana,error,</group>
-  </rule>
 
-  <!-- Grafana 서비스 다운 탐지 -->
-  <rule id="100801" level="12">
-    <if_sid>2101</if_sid>
-    <match>grafana</match>
-    <description>Grafana 서비스 중단 — 대시보드 접근 불가 상태</description>
-    <group>monitoring,grafana,down,</group>
-  </rule>
+
 
   <!-- Grafana 로그인 실패 탐지 -->
   <rule id="100802" level="5">
@@ -47,13 +33,7 @@
     <group>monitoring,grafana,authentication_failed,</group>
   </rule>
 
-  <!-- Grafana 로그인 실패 억제 — 세션 만료 정상 동작 -->
-  <rule id="100803" level="0">
-    <if_sid>100802</if_sid>
-    <match>user token not found</match>
-    <description>Grafana 세션 만료 — 무시</description>
-    <group>noise</group>
-  </rule>
+
 
   <!-- Grafana 브루트포스 탐지 — 2분 내 동일 IP 8회 인증 실패 -->
   <rule id="100804" level="10" frequency="8" timeframe="120">
@@ -63,36 +43,6 @@
     <mitre><id>T1110</id></mitre>
   </rule>
 
-  <!-- =========================================================
-       Prometheus 탐지
-       수집: journald prometheus.service
-       ========================================================= -->
-
-  <!-- Prometheus 서비스 오류 베이스 룰 -->
-  <rule id="100810" level="7">
-    <if_sid>1002</if_sid>
-    <program_name>prometheus</program_name>
-    <match>level=error</match>
-    <description>Prometheus 서비스 오류 발생 — 메트릭 수집 이상 가능성</description>
-    <group>monitoring,prometheus,error,</group>
-  </rule>
-
-  <!-- Prometheus 서비스 다운 탐지 -->
-  <rule id="100811" level="12">
-    <if_sid>2101</if_sid>
-    <match>prometheus</match>
-    <description>Prometheus 서비스 중단 — 전체 메트릭 수집 불가 상태</description>
-    <group>monitoring,prometheus,down,</group>
-  </rule>
-
-  <!-- Prometheus scrape 실패 탐지 -->
-  <rule id="100812" level="8">
-    <if_sid>1002</if_sid>
-    <program_name>prometheus</program_name>
-    <match>scrape failed\|msg="Error scraping</match>
-    <description>Prometheus 메트릭 수집 실패 — 대상 서버 응답 없음</description>
-    <group>monitoring,prometheus,scrape_failed,</group>
-  </rule>
 
   <!-- =========================================================
        Nginx(Keycloak) 탐지
@@ -110,7 +60,6 @@
   <!-- Nginx 400 에러 탐지 -->
   <rule id="100821" level="5">
     <if_sid>31101</if_sid>
-    <agent_list>050</agent_list>
     <description>모니터링 서버 Nginx 400 에러 — IP: $(srcip) URL: $(url)</description>
     <group>monitoring,nginx,web_error,</group>
   </rule>
@@ -123,5 +72,74 @@
     <group>monitoring,nginx,brute_force,</group>
     <mitre><id>T1110</id></mitre>
   </rule>
+
+  <!-- =========================================================
+       Keycloak 탐지
+       수집: /var/log/keycloak-audit.log (Vector → Docker)
+       ========================================================= -->
+
+  <!-- Keycloak 정상동작 억제 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
+  <rule id="100850" level="0">
+    <field name="container_name">keycloak</field>
+    <field name="kc_type">REFRESH_TOKEN_ERROR|USER_INFO_REQUEST_ERROR</field>
+    <description>Keycloak 정상 토큰 갱신 오류 억제</description>
+  </rule>
+
+  <!-- Keycloak 베이스룰 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
+  <rule id="100851" level="3">
+    <field name="container_name">keycloak</field>
+    <field name="kc_type">\.+</field>
+    <description>Keycloak 감사 로그 — $(kc_type) IP: $(kc_ip)</description>
+    <group>keycloak,audit,</group>
+  </rule>
+
+  <!-- Keycloak 로그인 실패 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
+  <rule id="100852" level="5">
+    <if_sid>100851</if_sid>
+    <field name="kc_type">LOGIN_ERROR</field>
+    <description>Keycloak 로그인 실패 — IP: $(kc_ip)</description>
+    <group>keycloak,authentication_failed,</group>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <!-- Keycloak 브루트포스 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
+  <rule id="100853" level="12" frequency="5" timeframe="60" ignore="60">
+    <if_matched_sid>100852</if_matched_sid>
+    <same_field>kc_ip</same_field>
+    <description>Keycloak 브루트포스 의심 — 공격 IP: $(kc_ip)</description>
+    <group>keycloak,brute_force,</group>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <!-- =========================================================
+       OAuth2-Proxy 탐지
+       수집: /var/log/oauth2-proxy-audit.log (Vector → Docker)
+       ========================================================= -->
+
+  <!-- ELB 헬스체크 억제 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
+  <rule id="100860" level="0">
+    <field name="container_name">monitoring-portal-oauth2-proxy</field>
+    <field name="message">ELB-HealthChecker</field>
+    <description>OAuth2-Proxy ELB 헬스체크 억제</description>
+  </rule>
+
+  <!-- OAuth2-Proxy 베이스룰 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
+  <rule id="100861" level="3">
+    <field name="container_name">monitoring-portal-oauth2-proxy</field>
+    <field name="message">401</field>
+    <description>OAuth2-Proxy 인증 실패 — $(message)</description>
+    <group>oauth2_proxy,authentication_failed,</group>
+  </rule>
+
+  <!-- OAuth2-Proxy 브루트포스 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
+  <rule id="100862" level="12" frequency="8" timeframe="120" ignore="60">
+    <if_matched_sid>100861</if_matched_sid>
+    <description>OAuth2-Proxy 브루트포스 의심 — 반복 인증 실패</description>
+    <group>oauth2_proxy,brute_force,</group>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+
+
 
 </group>

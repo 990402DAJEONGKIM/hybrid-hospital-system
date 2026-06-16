@@ -129,14 +129,13 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-manager-01" {
   statistic           = "Minimum"
   comparison_operator = "LessThanThreshold"
   threshold           = 1
-  treat_missing_data  = "breaching"
+  # notBreaching: EC2 소실 시 메트릭 안 와도 알람 발동 안 함
+  # EC2 소실은 EventBridge가 처리
+  # 프로세스만 죽었을 때만 Slack 발동
+  treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
   ok_actions          = [aws_sns_topic.aws-wazuh-cw-alerts-01.arn]
   tags = { Name = "aws-wazuh-cw-manager-01", Owner = "st2" }
-}
-
-resource "aws_sns_topic" "aws-wazuh-cw-alerts-01" {
-  name = "aws-wazuh-cw-alerts-01"
 }
 
 

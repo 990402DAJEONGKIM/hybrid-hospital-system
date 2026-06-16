@@ -42,33 +42,17 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
   <!-- 기본 sudo 실행 -->
   <!-- sudo 명령어 실행 탐지 - 수정 260611 김강환 -->
   <!-- if_sid>5400 + dstuser=root로 직접 탐지 -->
-  <rule id="100001" level="6">
+  <!-- 개발 단계 나중에 12로 올릴 예정 -->
+  <rule id="100001" level="8">
     <if_sid>5400</if_sid>
     <match>USER=root</match>
     <description>sudo root 권한 전환 — 사용자: $(srcuser) 실행 명령: $(command)</description>
     <group>sudo_usage,privilege_escalation</group>
   </rule>
 
-  <!-- 업무 시간 외 sudo -->
-  <!-- 주말 sudo (24시간 전부) -->
-  <rule id="100043" level="8">
-    <if_sid>100001</if_sid>
-    <weekday>saturday,sunday</weekday>
-    <description>주말 sudo 사용 탐지 - 사용자: $(srcuser)</description>
-    <group>after_hours,sudo_usage,weekend,</group>
-  </rule>
-
-  <!-- 평일 야간 sudo -->
-  <rule id="100002" level="8">
-    <if_sid>100001</if_sid>
-    <time>9 am - 12 am</time>
-    <description>업무 시간 외 sudo 사용 탐지 - 사용자: $(srcuser)</description>
-    <group>after_hours,sudo_usage,</group>
-  </rule>
-
   <!-- root 권한 획득 -->
   <!-- dstuser는 static field라 안됨 → match로 변경 -->
-  <rule id="100003" level="10">
+  <rule id="100003" level="12">
     <if_sid>5402</if_sid>
     <match>USER=root</match>
     <description>root 권한 전환 탐지 - 사용자: $(srcuser)</description>
@@ -80,7 +64,7 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
   <!-- if_group>syscheck 대신 if_sid 사용, field name 대신 match 사용 -->
   <!-- ───────────────────────────────────── -->
 
-  <rule id="100004" level="8">
+  <rule id="100004" level="0">
     <if_sid>550</if_sid>
     <field name="changed_fields">^permission$</field>
     <description>파일 권한 변경 탐지</description>
@@ -121,7 +105,7 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
   </rule>
 
   <!-- SSH 설정 변경 -->
-  <rule id="100008" level="10">
+  <rule id="100008" level="12">
     <if_sid>550,554,553</if_sid>
     <field name="file">/etc/ssh/sshd_config</field>
     <description>SSH 설정 변경 탐지</description>
@@ -181,12 +165,12 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
 
   <rule id="100014" level="9">
     <if_sid>550</if_sid>
-    <match>/usr/bin/</match>
+    <field name="file" type="pcre2">^/usr/bin/</field>
     <description>시스템 실행 파일 변조 탐지 (/usr/bin) - 백도어 의심</description>
     <group>fim,rootkit,persistence</group>
   </rule>
 
-  <rule id="100015" level="10">
+  <rule id="100015" level="12">
     <if_sid>550</if_sid>
     <field name="file" type="pcre2">\/authorized_keys$</field>
     <description>SSH authorized_keys 수정 탐지 - 파일: $(file)</description>
@@ -199,7 +183,7 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
 
   <rule id="100016" level="9">
     <if_sid>550</if_sid>
-    <match>/usr/sbin/</match>
+    <field name="file" type="pcre2">^/usr/sbin/</field>
     <description>관리자 실행 파일 변조 탐지 (/usr/sbin) - 백도어 의심</description>
     <group>fim,rootkit,persistence</group>
   </rule>
@@ -210,10 +194,34 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
   <!-- 신규 계정 생성 -->
   <!-- ───────────────────────────────────── -->
 
-  <rule id="100018" level="12">
+  <!-- 신규 계정 생성 — 계정명/UID/GID/홈/셸 전부 표시 -->
+  <!-- 5901(그룹생성)은 100018에 정보 포함되므로 대시보드 노출 불필요 → level 0 -->
+  <rule id="100018" level="12" overwrite="yes">
     <if_sid>5902</if_sid>
-    <description>새로운 사용자 계정 생성 탐지 - persistence 의심</description>
-    <group>account_management,privilege_escalation,persistence</group>
+    <description>새로운 사용자 계정 생성 탐지 — $(full_log)</description>
+    <group>account_management,privilege_escalation,persistence,</group>
+  </rule>
+
+
+  <rule id="5901" level="0" overwrite="yes">
+    <if_sid>5900</if_sid>
+    <match>new group:</match>
+    <description>신규 그룹 생성 — 100018에 정보 포함, 대시보드 비노출</description>
+    <group>noise,</group>
+  </rule>
+
+  <!-- 553/554 일반 파일 추가/삭제 한글화 -->
+  <rule id="554" level="5" overwrite="yes">
+    <category>ossec</category>
+    <decoded_as>syscheck_new_entry</decoded_as>
+    <description>파일 추가 탐지 — 경로: $(file)</description>
+    <group>ossec,syscheck,syscheck_entry_added,syscheck_file,</group>
+  </rule>
+  <rule id="553" level="7" overwrite="yes">
+    <category>ossec</category>
+    <decoded_as>syscheck_deleted</decoded_as>
+    <description>파일 삭제 탐지 — 경로: $(file)</description>
+    <group>ossec,syscheck,syscheck_entry_deleted,syscheck_file,</group>
   </rule>
 
   <!-- ───────────────────────────────────── -->
@@ -310,13 +318,6 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>fim,ssh_attack,persistence</group>
   </rule>
 
-  <rule id="100039" level="0">
-      <if_sid>100003</if_sid>
-      <match>ssm-user</match>
-      <description>SSM root 전환 — 노이즈 제거</description>
-      <group>noise</group>
-  </rule>
-
 
   <!-- NTP 동기화 실패 탐지 -->
   <rule id="100040" level="7">
@@ -327,6 +328,20 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>ntp,availability</group>
   </rule>
 
+
+  <!-- .claude 작업 디렉토리 FIM 노이즈 억제 -->
+  <rule id="100065" level="0">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">/\.claude/</field>
+    <description>Claude 작업 디렉토리 변경 — 무시</description>
+    <group>noise,</group>
+  </rule>
+
+  <rule id="100121" level="0">
+    <if_sid>5503</if_sid>
+    <match>ssm-user</match>
+    <description>SSM Agent PAM 실패 — 노이즈 제거</description>
+  </rule>
 
 
 </group>
@@ -362,19 +377,16 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>guardduty,aws,</group>
   </rule>
 
-  <!-- 550, 554를 하나의 그룹으로 묶는 중간 룰 -->
-  <rule id="100507" level="0">
-    <if_sid>550,554</if_sid>
-    <field name="syscheck.path" type="pcre2">/home/mspadmin/test_ransomware</field>
-    <description>FIM 파일 변경/추가 — 랜섬웨어 카운터</description>
-    <group>ransomware_counter,</group>
-  </rule>
 
-  <!-- 100507이 60초 안에 100번 발화하면 랜섬웨어 탐지 -->
+
+  
+  <!-- 경로 제한 제거: FIM 감시 대상(/etc, /home/mspadmin) 전체에서 -->
+  <!-- 60초 내 100회 이상 파일 추가 = 대량 암호화 패턴으로 판단 -->
+  <!-- 대량 파일 암호화 — 랜섬웨어 핵심 패턴 - 수정 260616 김강환 -->
   <rule id="100508" level="15" frequency="100" timeframe="60">
-    <if_matched_sid>100507</if_matched_sid>
-    <description>랜섬웨어 의심 — 짧은 시간 내 대량 파일 변조</description>
-    <group>ransomware,malware,critical</group>
+    <if_matched_sid>550</if_matched_sid>
+    <description>랜섬웨어 의심 — 대량 파일 암호화/변조 탐지</description>
+    <group>ransomware,malware,critical,</group>
     <mitre><id>T1486</id></mitre>
   </rule>
 
@@ -459,6 +471,15 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>noise</group>
   </rule>
 
+  <!-- 대량 파일 삭제 — 랜섬웨어 원본삭제 패턴 - 추가 260616 김강환 -->
+  <rule id="100516" level="15" frequency="100" timeframe="60">
+    <if_matched_sid>553</if_matched_sid>
+    <description>랜섬웨어 의심 — 대량 파일 삭제 탐지</description>
+    <group>ransomware,malware,critical,</group>
+    <mitre><id>T1486</id></mitre>
+  </rule>
+
+
   <!-- CRON PAM 세션 억제 - 추가 260611 김강환 -->
   <!-- cron 정기 작업 PAM 세션 열림/닫힘 — 정상 동작 노이즈 -->
   <rule id="100539" level="0">
@@ -503,14 +524,14 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>noise</group>
   </rule>
 
-  <!-- Web server 500 에러 상세 탐지 - 추가 260611 김강환 -->
-  <!-- srcip, url 필드 포함해서 대시보드에 상세 표시 -->
-  <rule id="31122" level="5" overwrite="yes">
-    <if_sid>31120</if_sid>
-    <id>^500</id>
-    <description>Web server 500 에러 - ip: $(srcip) url: $(url)</description>
-    <group>system_error,</group>
+  <!-- GCP OS Login 캐시 파일 갱신 억제 - 추가 260614 김강환 -->
+  <rule id="100549" level="0">
+    <if_sid>553,554</if_sid>
+    <field name="file">/etc/oslogin_passwd.cache</field>
+    <description>GCP OS Login 캐시 파일 정상 갱신 — 무시</description>
+    <group>noise</group>
   </rule>
+
 
   <!-- AWS ALB WAF 차단 한글 표시 - 추가 260612 김강환 -->
   <rule id="80328" level="5" overwrite="yes">
@@ -592,6 +613,25 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
   </rule>
 
 
+  <!-- AWS WAF 차단 한글 표시 - 추가 260614 김강환 -->
+  <rule id="80442" level="3" overwrite="yes">
+    <if_sid>80440</if_sid>
+    <field name="aws.action">BLOCK</field>
+    <options>no_full_log</options>
+    <description>WAF 차단 — IP: $(aws.httpRequest.clientIp) 국가: $(aws.httpRequest.country) 메서드: $(aws.httpRequest.httpMethod) URI: $(aws.httpRequest.uri) 룰: $(aws.terminatingRuleId)</description>
+    <group>aws_waf,aws_waf_block,</group>
+  </rule>
+
+  <!-- AWS WAF 동일 IP 반복 차단 한글 표시 - 추가 260614 김강환 -->
+  <rule id="80443" level="12" frequency="8" timeframe="120" ignore="60" overwrite="yes">
+    <if_matched_sid>80442</if_matched_sid>
+    <same_field>aws.httpRequest.clientIp</same_field>
+    <options>no_full_log</options>
+    <description>WAF 동일 IP 반복 차단 — 공격 IP: $(aws.httpRequest.clientIp) 국가: $(aws.httpRequest.country) 룰: $(aws.terminatingRuleId)</description>
+    <group>aws_waf,aws_waf_block,</group>
+  </rule>
+
+
 
 
   <!-- FIM 파일 변조 상세 표시 - 추가 260611 김강환 -->
@@ -600,6 +640,14 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <match>Integrity checksum changed</match>
     <description>파일 무결성 변조 감지 — 경로: $(file) 변경 항목: $(changed_fields)</description>
     <group>ossec,syscheck,syscheck_entry_modified,syscheck_file,</group>
+  </rule>
+
+<!-- Wazuh 서버 시작 한글 표시 - 추가 260612 김강환 -->
+  <rule id="502" level="3" overwrite="yes">
+    <if_sid>500</if_sid>
+    <match>Manager started</match>
+    <description>Wazuh 매니저 시작</description>
+    <group>pci_dss_10.6.1,gpg13_10.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 </group>
 

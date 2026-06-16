@@ -5,7 +5,7 @@
   <!-- if_sid>2502 → decoded_as windows-date-format으로 변경 -->
   <!-- 이유: cloudwatchlogs로 들어오는 postgres 로그가 2502가 아닌 -->
   <!-- windows-date-format 디코더로 처리되어 100100 계열 전체 미발화 -->
-  <rule id="100100" level="3">
+  <rule id="100100" level="0">
     <decoded_as>windows-date-format</decoded_as>
     <match>AUDIT: SESSION</match>
     <description>RDS pgaudit 감사 로그</description>
@@ -19,7 +19,7 @@
     <group>ddl,database_change</group>
   </rule>
 
-  <rule id="100102" level="2">
+  <rule id="100102" level="0">
     <if_sid>100100</if_sid>
     <match>,WRITE,</match>
     <description>RDS WRITE 쿼리 탐지 - 데이터 변경</description>
@@ -27,12 +27,11 @@
     <options>no_log</options>
   </rule>
 
-  <rule id="100103" level="2">
+  <rule id="100103" level="0">
    <if_sid>100100</if_sid>
     <match>,READ,</match>
     <description>RDS SELECT 쿼리 탐지 - 데이터 조회</description>
     <group>read</group>
-    <options>no_log</options>
   </rule>
   <!-- rdsproxyadmin 헬스체크 필터링 -->
   <rule id="100104" level="0">
@@ -61,25 +60,12 @@
     <group>privilege_escalation,role_change</group>
   </rule>
 
-
-
-
-
   <!-- CREATE ROLE 단독 탐지 (신규 DB 계정 생성) -->
   <rule id="100110" level="12">
     <if_sid>100108</if_sid>
     <match>CREATE ROLE</match>
     <description>RDS 신규 DB 계정 생성 탐지 - persistence 의심</description>
     <group>account_management,persistence</group>
-  </rule>
-
-
-  <!-- 슬로우 쿼리 탐지 - 수정 260611 김강환 -->
-  <rule id="100112" level="6">
-    <decoded_as>windows-date-format</decoded_as>
-    <match>duration: </match>
-    <description>RDS 슬로우 쿼리 탐지</description>
-    <group>rds,performance,slow_query,</group>
   </rule>
 
   <!-- 접속 기록 탐지 - 수정 260611 김강환 -->
@@ -105,14 +91,6 @@
     <if_sid>100103</if_sid>
     <field name="data.audit.rows" type="pcre2">^[1-9][0-9]{4,}</field>
     <description>내부자 위협 의심 — 대용량 SELECT (10000건 이상)</description>
-    <group>rds,insider_threat,data_exfiltration</group>
-    <mitre><id>T1530</id></mitre>
-  </rule>
-
-  <!-- 1분 내 SELECT 반복 — 대량 데이터 추출 의심 -->
-  <rule id="100116" level="12" frequency="100" timeframe="60">
-    <if_matched_sid>100103</if_matched_sid>
-    <description>내부자 위협 의심 — 1분 내 SELECT 100회 이상</description>
     <group>rds,insider_threat,data_exfiltration</group>
     <mitre><id>T1530</id></mitre>
   </rule>
@@ -148,13 +126,6 @@
       <if_sid>100108</if_sid>
       <match>v-approle-api-role</match>
       <description>Vault 동적 역할 ROLE 변경 - 무시</description>
-      <group>noise</group>
-  </rule>
-
-  <rule id="100121" level="0">
-      <if_sid>5503</if_sid>
-      <match>ssm-user</match>
-      <description>SSM Agent PAM 실패 — 노이즈 제거</description>
       <group>noise</group>
   </rule>
 
@@ -211,14 +182,7 @@
     <group>noise</group>
   </rule>
 
-  <!-- Aurora 내부 rdsadmin 프로세스 로그 -->
-  <!-- 기존: if_sid>2502 → if_sid>100100으로 변경-260614 김강환-->
-  <rule id="100133" level="0">
-    <if_sid>100100</if_sid>
-    <match>rdsadmin</match>
-    <description>RDS rdsadmin 내부 프로세스 로그 — 무시</description>
-    <group>noise</group>
-  </rule>
+
 
   <!-- RDS Proxy 내부 헬스체크 로그 억제 - 수정 260614 김강환 -->
   <!-- 기존: if_sid>2502 → if_sid>100100으로 변경 -->
@@ -309,9 +273,6 @@
   </rule>
 
 
-
-
-
   <!-- RDS DELETE 쿼리 탐지 - 추가 260614 김강환 -->
   <!-- 시간 상관없이 DELETE는 무조건 탐지 -->
   <rule id="100150" level="12">
@@ -334,5 +295,26 @@
     <mitre><id>T1078</id></mitre>
   </rule>
 
+  <!-- sync_encounters 배치 정리 DELETE 억제 - 추가 260616 김강환 -->
+  <!-- Vault AppRole이 오래된 sync 데이터를 주기적으로 정리하는 정상 배치 동작 -->
+  <rule id="100152" level="0">
+    <if_sid>100150</if_sid>
+    <regex type="pcre2">v-approle-api-role.+sync_encounters</regex>
+    <description>Vault AppRole sync_encounters 배치 DELETE — 무시</description>
+    <group>noise</group>
+  </rule>
+
+
+  <!-- DB 구조 정찰 탐지 - 추가 260616 김강환 -->
+  <!-- information_schema 조회 = 테이블/컬럼 구조 파악 시도 -->
+  <!-- 정상 운영 중 어떤 계정도 information_schema 조회 안 함 확인됨 -->
+  <!-- 조회 시 공격자 정찰 행위 의심 -->
+  <rule id="100156" level="12">
+    <if_sid>100103</if_sid>
+    <match>information_schema</match>
+    <description>DB 구조 정찰 의심 — information_schema 조회 탐지</description>
+    <group>rds,reconnaissance,insider_threat</group>
+    <mitre><id>T1082</id></mitre>
+  </rule>
 
 </group>
