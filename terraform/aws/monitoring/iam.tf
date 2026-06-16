@@ -93,6 +93,13 @@ resource "aws_iam_role_policy" "aws-monitoring-cloudwatch" {
           "arn:aws:s3:::aws-k2p-storage-01/monitoring/*"
         ]
       },
+
+      {
+        Sid    = "KMSDecryptSSM"
+        Effect = "Allow"
+        Action = ["kms:Decrypt"]
+        Resource = "arn:aws:kms:ap-south-2:476293896981:key/852d441e-9d83-4a2b-9c95-c7a903fe5ee3"
+      },     
       {
         # S3 grafana/ prefix KMS 복호화 권한 - 추가 260612 김강환
         Sid    = "S3KMSDecrypt"
