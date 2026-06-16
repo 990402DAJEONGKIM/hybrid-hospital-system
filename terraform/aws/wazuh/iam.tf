@@ -122,7 +122,7 @@ resource "aws_iam_role_policy" "aws-wazuh-s3-policy" {
           "cloudwatch:PutMetricData"
         ]
         Resource = "*"
-      },
+      },   
       # DescribeLogGroups는 AWS API 구조상 Resource * 필수
       {
         Sid    = "CloudWatchLogsDescribe"
@@ -307,7 +307,8 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-recovery-policy" {
           "ec2:DescribeInstanceStatus",
           "ec2:TerminateInstances",
           "ec2:RunInstances",
-          "ec2:CreateTags"
+          "ec2:CreateTags",
+          "ec2:DescribeImages"
         ]
         Resource = "*"
       },
