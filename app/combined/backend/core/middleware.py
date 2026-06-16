@@ -64,7 +64,8 @@ ACTION_MAP = [
     ("POST",   r"^/staff/auth/login$",             "LOGIN"),
     ("POST",   r"^/staff/auth/logout$",            "LOGOUT"),
     ("POST",   r"^/staff/auth/refresh$",           "TOKEN_REFRESH"),
-    ("POST",   r"^/staff/auth/set-token$",         "SET_TOKEN"),
+    # 웹 구조 변경 이후 잔재가 남아있는 것으로 삭제 진행 (2026-06-16) — by 김다정
+    # ("POST",   r"^/staff/auth/set-token$",         "SET_TOKEN"),
     ("POST",   r"^/staff/auth/change-password$",   "CHANGE_PASSWORD"),
     ("GET",    r"^/staff/auth/me/permissions$",    "READ_PERMISSIONS"),
     ("GET",    r"^/staff/auth/me/menus$",          "READ_MENUS"),
