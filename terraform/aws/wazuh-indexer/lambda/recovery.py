@@ -121,16 +121,11 @@ def _mount_and_start(iid):
 
 
 def handler(event, context):
-    inst = _find_instance()
     vol = _find_data_volume()
 
-    # OS는 살아있고 서비스만 죽은 경우 → 재시작만 (재구축 안 함)
-    if inst and inst["State"]["Name"] == "running":
-        _wait_ssm(inst["InstanceId"])
-        _mount_and_start(inst["InstanceId"])
-        return {"action": "restart", "instance": inst["InstanceId"]}
+    # EventBridge stopped/terminated 트리거 → 무조건 재구축
+    inst = _find_instance()
 
-    # 인스턴스 소실/정지 → 재구축 + 데이터 EBS 재부착
     _detach_if_attached(vol)
     if inst:
         _terminate(inst["InstanceId"])

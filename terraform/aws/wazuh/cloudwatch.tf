@@ -138,6 +138,15 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-cw-manager-01" {
   tags = { Name = "aws-wazuh-cw-manager-01", Owner = "st2" }
 }
 
+# Wazuh CloudWatch 알람 → Slack SNS 토픽 - 추가 260616 김강환
+resource "aws_sns_topic" "aws-wazuh-cw-alerts-01" {
+  name = "aws-wazuh-cw-alerts-01"
+  tags = {
+    Name  = "aws-wazuh-cw-alerts-01"
+    Owner = "st2"
+  }
+}
+
 
 
 
