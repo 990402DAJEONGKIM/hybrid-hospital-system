@@ -140,30 +140,8 @@ resource "aws_cloudwatch_metric_alarm" "aws-monitoring-recover" {
 
 
 
-# ─────────────────────────────────────────────────────────
-# 모니터링 복구 Lambda 전용 SNS - 추가 260614 김강환
-# 인덱서(aws-wazuh-indexer-recovery)와 동일한 패턴
-# ─────────────────────────────────────────────────────────
-resource "aws_sns_topic" "aws-monitoring-recovery" {
-  name = "aws-monitoring-recovery"
-}
 
-resource "aws_lambda_permission" "aws-monitoring-recovery-sns" {
-  statement_id  = "AllowSNSMonitoringRecovery"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.aws-monitoring-lambda-recovery.function_name
-  principal     = "sns.amazonaws.com"
-  source_arn    = aws_sns_topic.aws-monitoring-recovery.arn
-}
-
-resource "aws_sns_topic_subscription" "aws-monitoring-recovery-sub" {
-  topic_arn  = aws_sns_topic.aws-monitoring-recovery.arn
-  protocol   = "lambda"
-  endpoint   = aws_lambda_function.aws-monitoring-lambda-recovery.arn
-  depends_on = [aws_lambda_permission.aws-monitoring-recovery-sns]
-}
-
-# Grafana 프로세스 다운 감지 - 추가 260614 김강환
+# Grafana 다운 → Slack 알람만 (Lambda 트리거 없음)
 resource "aws_cloudwatch_metric_alarm" "aws-cw-grafana-down-01" {
   alarm_name          = "aws-cw-grafana-down-01"
   alarm_description   = "Grafana 프로세스 다운 감지 - 즉시 확인 필요"
@@ -177,9 +155,11 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-grafana-down-01" {
   statistic           = "Minimum"
   comparison_operator = "LessThanThreshold"
   threshold           = 1
-  treat_missing_data  = "breaching"
+  # notBreaching: EC2 소실 시 메트릭 안 와도 알람 발동 안 함
+  # EC2 소실은 EventBridge가 처리
+  # 프로세스만 죽었을 때만 Slack 발동
+  treat_missing_data  = "notBreaching"
   alarm_actions = [
-    aws_sns_topic.aws-monitoring-recovery.arn,
     data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
   ]
   ok_actions = [
@@ -188,7 +168,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-grafana-down-01" {
   tags = { Name = "aws-cw-grafana-down-01" }
 }
 
-# Prometheus 프로세스 다운 감지 - 추가 260614 김강환
+# Prometheus 다운 → Slack 알람만 (Lambda 트리거 없음)
 resource "aws_cloudwatch_metric_alarm" "aws-cw-prometheus-down-01" {
   alarm_name          = "aws-cw-prometheus-down-01"
   alarm_description   = "Prometheus 프로세스 다운 감지 - 즉시 확인 필요"
@@ -202,9 +182,11 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-prometheus-down-01" {
   statistic           = "Minimum"
   comparison_operator = "LessThanThreshold"
   threshold           = 1
-  treat_missing_data  = "breaching"
+  # notBreaching: EC2 소실 시 메트릭 안 와도 알람 발동 안 함
+  # EC2 소실은 EventBridge가 처리
+  # 프로세스만 죽었을 때만 Slack 발동
+  treat_missing_data  = "notBreaching"
   alarm_actions = [
-    aws_sns_topic.aws-monitoring-recovery.arn,
     data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
   ]
   ok_actions = [
@@ -212,6 +194,34 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-prometheus-down-01" {
   ]
   tags = { Name = "aws-cw-prometheus-down-01" }
 }
+
+
+# EC2 중지/종료 즉시 감지 → Lambda + Slack - 추가 260616 김강환
+# EventBridge로 EC2 상태 변화 실시간 감지
+# stopped/terminated만 잡음 → Reboot(rebooting 상태)은 트리거 안 됨
+resource "aws_cloudwatch_event_rule" "aws-monitoring-ec2-stop" {
+  name        = "aws-monitoring-ec2-stop"
+  description = "Monitoring EC2 중지/종료 즉시 감지 — Lambda 재구축 트리거"
+
+  event_pattern = jsonencode({
+    source      = ["aws.ec2"]
+    detail-type = ["EC2 Instance State-change Notification"]
+    detail = {
+      state       = ["stopped", "terminated"]
+      instance-id = [aws_instance.aws-monitoring-01.id]
+    }
+  })
+
+  tags = { Name = "aws-monitoring-ec2-stop" }
+}
+
+# Slack 알림
+resource "aws_cloudwatch_event_target" "aws-monitoring-ec2-stop-slack" {
+  rule = aws_cloudwatch_event_rule.aws-monitoring-ec2-stop.name
+  arn  = data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
+}
+
+
 
 
 # ─────────────────────────────────────────────────────────
@@ -242,6 +252,20 @@ resource "aws_volume_attachment" "aws-monitoring-data-att-01" {
   skip_destroy = true
 }
 
+
+# EventBridge → Lambda 직접 - 수정 260616 김강환
+resource "aws_cloudwatch_event_target" "aws-monitoring-ec2-stop-lambda" {
+  rule = aws_cloudwatch_event_rule.aws-monitoring-ec2-stop.name
+  arn  = aws_lambda_function.aws-monitoring-lambda-recovery.arn
+}
+
+resource "aws_lambda_permission" "aws-monitoring-ec2-stop-eventbridge" {
+  statement_id  = "AllowEventBridgeMonitoringRecovery"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.aws-monitoring-lambda-recovery.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.aws-monitoring-ec2-stop.arn
+}
 
 
 # ─────────────────────────────────────────────────────────
