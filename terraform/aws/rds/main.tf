@@ -228,6 +228,19 @@ resource "aws_rds_cluster_parameter_group" "pglogical" {
   value        = "1000"  # 1초 이상 쿼리 기록
   apply_method = "immediate"
   }
+
+  # pgaudit rows 기록 활성화 - 추가 260616 김강환
+  # 각 쿼리가 반환/영향받은 행 수를 로그에 기록
+  # 대용량 SELECT 탐지(100115)를 위해 필요
+  # <not logged> → 실제 rows 수로 변경됨
+  parameter {
+    name         = "pgaudit.log_rows"
+    value        = "on"
+    apply_method = "pending-reboot"
+  }
+
+
+
   parameter {
   name         = "log_min_error_statement"
   value        = "error"
