@@ -4,22 +4,21 @@
 # ok_actions 추가: 인덱서 복구 완료 시 Slack 알림
 resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-cw-status" {
   alarm_name          = "aws-wazuh-indexer-cw-status"
-  namespace           = "AWS/EC2"
-  metric_name         = "StatusCheckFailed"
-  dimensions = {
-    InstanceId = aws_instance.aws-wazuh-indexer.id
-  }
+  namespace           = "Custom/Wazuh"
+  metric_name         = "wazuh_indexer_up"
+  dimensions          = { Role = "wazuh-indexer" }
+  statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 2
-  statistic           = "Maximum"
-  comparison_operator = "GreaterThanThreshold"
-  threshold           = 0
-  alarm_actions       = [data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn]
-  ok_actions          = [data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn]
-  tags = {
-    Name  = "aws-wazuh-indexer-cw-status"
-    Owner = "st2"
-  }
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  # notBreaching: EC2 소실 시 메트릭 안 와도 알람 발동 안 함
+  # EC2 소실은 EventBridge가 처리
+  # 프로세스만 죽었을 때만 Slack 발동
+  treat_missing_data  = "notBreaching"
+  alarm_actions = [data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn]
+  ok_actions    = [data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn]
+  tags = { Name = "aws-wazuh-indexer-cw-status", Owner = "st2" }
 }
 
 
@@ -69,41 +68,47 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-recover" {
 
 
 
-# ── 자동복구 2단: 서비스 다운/인스턴스 소실 트리거 ──
-# 추가 260610 김강환
-# 커스텀 메트릭이 0이거나 누락(인스턴스 사망)되면 발화
-resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-service-down" {
-  alarm_name          = "aws-wazuh-indexer-service-down"
-  namespace           = "Custom/Wazuh"
-  metric_name         = "wazuh_indexer_up"
-  dimensions          = { Role = "wazuh-indexer" }
-  statistic           = "Maximum"
-  period              = 60
-  evaluation_periods  = 3            # 3분 연속 죽어야 발화(정상 재부팅 오발화 방지)
-  comparison_operator = "LessThanThreshold"
-  threshold           = 1
-  treat_missing_data  = "breaching"  # 메트릭 누락 = 인스턴스 소실 → 발화
-  alarm_actions       = [aws_sns_topic.aws-wazuh-indexer-recovery.arn]
+# EC2 중지/종료 즉시 감지 → Lambda + Slack - 수정 260616 김강환
+# EventBridge로 EC2 상태 변화 실시간 감지
+# stopped/terminated만 잡음 → Reboot은 트리거 안 됨
+resource "aws_cloudwatch_event_rule" "aws-wazuh-indexer-ec2-stop" {
+  name        = "aws-wazuh-indexer-ec2-stop"
+  description = "Wazuh Indexer EC2 중지/종료 즉시 감지 — Lambda 재구축 트리거"
 
-  tags = { Name = "aws-wazuh-indexer-service-down", Owner = "st2" }
+  event_pattern = jsonencode({
+    source      = ["aws.ec2"]
+    detail-type = ["EC2 Instance State-change Notification"]
+    detail = {
+      state       = ["stopped", "terminated"]
+      instance-id = [aws_instance.aws-wazuh-indexer.id]
+    }
+  })
+
+  tags = { Name = "aws-wazuh-indexer-ec2-stop", Owner = "st2" }
 }
 
-# 재구축 Lambda 전용 SNS
-resource "aws_sns_topic" "aws-wazuh-indexer-recovery" {
-  name = "aws-wazuh-indexer-recovery"
+# Lambda 트리거
+resource "aws_cloudwatch_event_target" "aws-wazuh-indexer-ec2-stop-lambda" {
+  rule = aws_cloudwatch_event_rule.aws-wazuh-indexer-ec2-stop.name
+  arn  = aws_sns_topic.aws-wazuh-indexer-recovery.arn
 }
 
-resource "aws_lambda_permission" "aws-wazuh-indexer-recovery-sns" {
-  statement_id  = "AllowSNSIndexerRecovery"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.aws-wazuh-indexer-recovery.function_name
-  principal     = "sns.amazonaws.com"
-  source_arn    = aws_sns_topic.aws-wazuh-indexer-recovery.arn
+# Slack 알림
+resource "aws_cloudwatch_event_target" "aws-wazuh-indexer-ec2-stop-slack" {
+  rule = aws_cloudwatch_event_rule.aws-wazuh-indexer-ec2-stop.name
+  arn  = data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
 }
 
-resource "aws_sns_topic_subscription" "aws-wazuh-indexer-recovery-sub" {
-  topic_arn  = aws_sns_topic.aws-wazuh-indexer-recovery.arn
-  protocol   = "lambda"
-  endpoint   = aws_lambda_function.aws-wazuh-indexer-recovery.arn
-  depends_on = [aws_lambda_permission.aws-wazuh-indexer-recovery-sns]
+# EventBridge → SNS 권한
+resource "aws_sns_topic_policy" "aws-wazuh-indexer-recovery-policy" {
+  arn = aws_sns_topic.aws-wazuh-indexer-recovery.arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action    = "SNS:Publish"
+      Resource  = aws_sns_topic.aws-wazuh-indexer-recovery.arn
+    }]
+  })
 }

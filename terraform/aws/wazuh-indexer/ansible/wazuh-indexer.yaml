@@ -652,14 +652,33 @@
           DATE=$(date +%Y%m%d-%H%M)
           INDEXER_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
           ADMIN_PW=$(cat /etc/wazuh-indexer/.admin_password)
+
+          # 새 스냅샷 생성 (동기 완료 대기)
           curl -sk -u admin:${ADMIN_PW} \
-            -X PUT "https://${INDEXER_IP}:9200/_snapshot/aws-wazuh-indexer-snapshot-repo/snapshot-${DATE}?wait_for_completion=false" \
+            -X PUT "https://${INDEXER_IP}:9200/_snapshot/aws-wazuh-indexer-snapshot-repo/snapshot-${DATE}?wait_for_completion=true" \
             -H "Content-Type: application/json" \
             -d '{
               "indices": "wazuh-alerts-*,wazuh-archives-*",
               "ignore_unavailable": true,
               "include_global_state": false
-            }'
+            }' >> /var/log/wazuh-snapshot.log 2>&1
+
+          # 완료된 스냅샷만 5개 유지, 초과분 삭제
+          curl -sk -u admin:${ADMIN_PW} \
+            "https://${INDEXER_IP}:9200/_snapshot/aws-wazuh-indexer-snapshot-repo/_all" \
+            | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          snapshots = [s for s in data['snapshots'] if s['state'] == 'SUCCESS']
+          snapshots = sorted(snapshots, key=lambda x: x['start_time_in_millis'])
+          to_delete = snapshots[:-5] if len(snapshots) > 5 else []
+          for s in to_delete:
+              print(s['snapshot'])
+          " | while read snap; do
+            curl -sk -u admin:${ADMIN_PW} \
+              -X DELETE "https://${INDEXER_IP}:9200/_snapshot/aws-wazuh-indexer-snapshot-repo/${snap}"
+            echo "$(date) Deleted: ${snap}" >> /var/log/wazuh-snapshot.log
+          done
       tags: snapshot
 
     - name: 스냅샷 크론 등록 (1시간마다)
