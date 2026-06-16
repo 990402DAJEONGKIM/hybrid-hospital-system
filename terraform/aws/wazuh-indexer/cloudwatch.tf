@@ -27,14 +27,8 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-cw-status" {
 
 data "aws_caller_identity" "current" {}
 
-# 인덱서 자동복구 전용 SNS 토픽 - 추가 260616 김강환
-resource "aws_sns_topic" "aws-wazuh-indexer-recovery" {
-  name = "aws-wazuh-indexer-recovery"
-  tags = {
-    Name  = "aws-wazuh-indexer-recovery"
-    Owner = "st2"
-  }
-}
+
+
 
 
 resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-reboot" {
@@ -106,16 +100,16 @@ resource "aws_cloudwatch_event_target" "aws-wazuh-indexer-ec2-stop-slack" {
   arn  = data.terraform_remote_state.wazuh.outputs.wazuh_cw_alerts_sns_arn
 }
 
-# EventBridge → SNS 권한
-resource "aws_sns_topic_policy" "aws-wazuh-indexer-recovery-policy" {
-  arn = aws_sns_topic.aws-wazuh-indexer-recovery.arn
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "events.amazonaws.com" }
-      Action    = "SNS:Publish"
-      Resource  = aws_sns_topic.aws-wazuh-indexer-recovery.arn
-    }]
-  })
+
+resource "aws_cloudwatch_event_target" "aws-wazuh-indexer-ec2-stop-lambda" {
+  rule = aws_cloudwatch_event_rule.aws-wazuh-indexer-ec2-stop.name
+  arn  = aws_lambda_function.aws-wazuh-indexer-recovery.arn
+}
+
+resource "aws_lambda_permission" "aws-wazuh-indexer-ec2-stop-eventbridge" {
+  statement_id  = "AllowEventBridgeIndexerRecovery"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.aws-wazuh-indexer-recovery.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.aws-wazuh-indexer-ec2-stop.arn
 }
