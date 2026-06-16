@@ -27,7 +27,14 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-cw-status" {
 
 data "aws_caller_identity" "current" {}
 
-
+# 인덱서 자동복구 전용 SNS 토픽 - 추가 260616 김강환
+resource "aws_sns_topic" "aws-wazuh-indexer-recovery" {
+  name = "aws-wazuh-indexer-recovery"
+  tags = {
+    Name  = "aws-wazuh-indexer-recovery"
+    Owner = "st2"
+  }
+}
 
 
 resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-reboot" {
