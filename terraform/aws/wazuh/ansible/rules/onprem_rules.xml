@@ -32,59 +32,6 @@
      ========================================================= -->
 <group name="onprem,fim,critical_file,">
 
-  <!-- /etc/passwd 변조 — 계정 추가/삭제/변조 의심 -->
-  <!-- ISMS-P 2.5.1 접근통제, MITRE T1136 계정 생성 -->
-  <rule id="100031" level="12">
-    <if_sid>550,554,553</if_sid>
-    <field name="file">/etc/passwd</field>
-    <description>온프레미스 /etc/passwd 변조 탐지</description>
-    <group>fim,critical_file,onprem</group>
-  </rule>
-
-  <!-- /etc/shadow 변조 — 패스워드 해시 조작 의심 -->
-  <!-- ISMS-P 2.5.1 접근통제, MITRE T1003.008 크리덴셜 덤프 -->
-  <rule id="100032" level="12">
-    <if_sid>550,554,553</if_sid>
-    <field name="file">/etc/shadow</field>
-    <description>온프레미스 /etc/shadow 변조 탐지</description>
-    <group>fim,critical_file,onprem</group>
-  </rule>
-
-  <!-- /etc/ssh/sshd_config 변경 — SSH 백도어 설정 의심 -->
-  <!-- ISMS-P 2.5.1 접근통제, MITRE T1098.004 SSH 키 추가 -->
-  <rule id="100033" level="10">
-    <if_sid>550,554,553</if_sid>
-    <field name="file">/etc/ssh/sshd_config</field>
-    <description>온프레미스 SSH 설정 변경 탐지</description>
-    <group>fim,ssh,onprem</group>
-  </rule>
-
-  <!-- /etc/sudoers 변경 — 권한 상승 설정 조작 의심 -->
-  <!-- ISMS-P 2.5.1 접근통제, MITRE T1548.003 sudo 권한 남용 -->
-  <rule id="100034" level="12">
-    <if_sid>550,554,553</if_sid>
-    <field name="file">/etc/sudoers</field>
-    <description>온프레미스 sudoers 변경 탐지</description>
-    <group>fim,privilege_escalation,onprem</group>
-  </rule>
-
-  <!-- hospital-db docker-compose.yml 변조 — DB 컨테이너 설정 조작 의심 -->
-  <!-- ISMS-P 2.8.1 정보자산 접근통제, MITRE T1610 컨테이너 배포 -->
-  <rule id="100035" level="12">
-    <if_sid>550,554,553</if_sid>
-    <field name="file">/home/mspadmin/hospital-db/docker-compose.yml</field>
-    <description>온프레미스 hospital-db docker-compose.yml 변조 탐지</description>
-    <group>fim,critical_file,onprem</group>
-  </rule>
-
-  <!-- deidentification-api docker-compose.yml 변조 — API 컨테이너 설정 조작 의심 -->
-  <!-- ISMS-P 2.8.1 정보자산 접근통제, MITRE T1610 컨테이너 배포 -->
-  <rule id="100036" level="12">
-    <if_sid>550,554,553</if_sid>
-    <field name="file">/home/mspadmin/deidentification-api/docker-compose.yml</field>
-    <description>온프레미스 deidentification-api docker-compose.yml 변조 탐지</description>
-    <group>fim,critical_file,onprem</group>
-  </rule>
 
   <!-- =========================================================
        USB 저장장치 연결 탐지
@@ -96,7 +43,7 @@
   <!-- MITRE T1091 이동식 매체를 통한 복제 -->
   <!-- 수정 260611 김강환: 100044 → 100037 (Vault 베이스 룰 ID 확보) -->
   <rule id="100058" level="12">
-    <if_sid>1002</if_sid>
+    <if_sid>81100</if_sid>
     <match>USB Mass Storage</match>
     <description>온프레미스 USB 저장장치 연결 — 데이터 유출 의심</description>
     <group>onprem,usb,insider_threat</group>
@@ -128,7 +75,7 @@
   <!-- 운영 환경에서 root 토큰 사용은 비정상 — 즉시 확인 필요 -->
   <!-- MITRE T1078.004 클라우드 계정 탈취 -->
   <!-- 수정 260611 김강환: decoded_as 단독 → if_sid>100044 -->
-  <rule id="100045" level="10">
+  <rule id="100045" level="12">
     <if_sid>100044</if_sid>
     <field name="auth.display_name">^root$</field>
     <description>Vault root 토큰 사용 탐지 — 비정상 접근 의심</description>
@@ -308,15 +255,15 @@
 
   <!-- 온프레미스 FastAPI 감사 로그 베이스 룰 - 수정 260612 김강환 -->
   <!-- 86600(Suricata) overwrite → source_type 없는 fastapi_audit는 온프레미스로 처리 -->
-  <rule id="100600" level="3">
+  <rule id="100600" level="0">
     <if_sid>86600</if_sid>
     <field name="event_type">^fastapi_audit$</field>
     <description>온프레미스 FastAPI 감사 로그 - $(action_type) $(method) $(path) $(result_code)</description>
     <group>onprem,fastapi,audit_archive,</group>
-  </rule>
+  </rule> 
   <!-- level=5 — 단일 실패는 기록만, 반복 시 100602로 escalate -->
   <!-- MITRE T1110 브루트포스 -->
-  <rule id="100601" level="5">
+  <rule id="100601" level="0">
     <if_sid>100600</if_sid>
     <field name="result_code">^401$|^403$</field>
     <description>온프레미스 FastAPI 로그인 실패 — IP: $(source_ip) 경로: $(path)</description>
@@ -324,26 +271,48 @@
     <mitre><id>T1110</id></mitre>
   </rule>
 
-  <!-- 브루트포스 탐지: 2분 내 동일 IP에서 8회 이상 인증 실패 -->
-  <!-- level=10 — Slack #wazuh-alarm 알림 발송 -->
-  <!-- MITRE T1110.001 패스워드 추측 -->
-  <rule id="100602" level="10" frequency="8" timeframe="120">
-    <if_matched_sid>100601</if_matched_sid>
-    <same_field>source_ip</same_field>
-    <description>온프레미스 FastAPI 브루트포스 의심 — 공격 IP: $(source_ip)</description>
-    <group>onprem,fastapi,brute_force,</group>
-    <mitre><id>T1110.001</id></mitre>
-  </rule>
-
   <!-- 온프레미스 FastAPI 정상 2xx 응답 억제 - 추가 260612 김강환 -->
   <rule id="100603" level="0">
     <if_sid>100600</if_sid>
     <field name="result_code">^2</field>
     <field name="method" negate="yes">^DELETE$</field>
+    <field name="action_type" negate="yes" type="pcre2">^READ_PATIENT_DETAIL$|^READ_ENCOUNTERS$|^READ_ALLERGIES$|^READ_PRESCRIPTIONS$|^READ_SURGERY_HISTORIES$|^NURSE_DASHBOARD_VIEW$</field>
     <description>온프레미스 FastAPI 정상 응답 — 무시</description>
     <group>noise</group>
   </rule>
+
+  <!-- 관리자 환자기록 조회 — 대량조회 카운터 - 추가 260615 김강환 -->
+  <rule id="100604" level="0">
+    <if_sid>100600</if_sid>
+    <field name="action_type" type="pcre2">^READ_PATIENT_DETAIL$|^READ_ENCOUNTERS$|^READ_ALLERGIES$|^READ_PRESCRIPTIONS$|^READ_SURGERY_HISTORIES$|^NURSE_DASHBOARD_VIEW$</field>
+    <description>관리자 환자기록 조회 — 사용자: $(user_id) 경로: $(path)</description>
+    <group>onprem,fastapi,data_access,</group>
+  </rule>
+
+  <!-- 관리자 대량 환자기록 조회 — 인사이더 위협 의심 - 추가 260615 김강환 -->
+  <rule id="100605" level="13" frequency="50" timeframe="60">
+    <if_matched_sid>100604</if_matched_sid>
+    <same_field>user_id</same_field>
+    <description>관리자 대량 환자기록 조회 의심 — 사용자: $(user_id) 짧은 시간 내 다건 접근</description>
+    <group>onprem,fastapi,data_exfiltration,insider_threat,</group>
+    <mitre><id>T1213</id></mitre>
+  </rule>
+
+
+  <!-- FastAPI 500 에러 탐지 — 서버 오류/컨테이너 이상 의심 - 추가 260616 김강환 -->
+  <rule id="100608" level="12">
+    <if_sid>100600</if_sid>
+    <field name="result_code">^5</field>
+    <description>온프레미스 FastAPI 서버 오류 — $(action_type) IP: $(source_ip) 경로: $(path) 응답: $(result_code)</description>
+    <group>onprem,fastapi,error,availability,</group>
+  </rule>
+
 </group>
+
+
+
+
+
 
 <!-- =========================================================
      DB 감사 로그 탐지
@@ -358,7 +327,7 @@
        ========================================================= -->
 <group name="onprem,db_audit,">
   <!-- 베이스 룰 -->
-  <rule id="100650" level="3">
+  <rule id="100650" level="0">
     <decoded_as>json</decoded_as>
     <field name="audit_log_id">\.+</field>
     <description>온프레미스 DB 감사 로그 — $(action_type) 사용자: $(user_id) IP: $(source_ip)</description>
@@ -408,7 +377,8 @@
   </rule>
 
   <!-- 대량 조회 탐지 — 데이터 유출 의심 -->
-  <rule id="100654" level="12" frequency="50" timeframe="60">
+  <rule id="100654" level="12" frequency="50" timeframe="60" ignore="60">
+    <same_field>user_id</same_field>
     <if_matched_sid>100650</if_matched_sid>
     <field name="action_type">^READ_|^VIEW_|^SEARCH_</field>
     <description>온프레미스 DB 대량 조회 탐지 — 데이터 유출 의심 IP: $(source_ip)</description>
@@ -417,7 +387,7 @@
   </rule>
 
   <!-- 로그인 실패/계정 잠금 — 대시보드만 (Slack 안 보냄) -->
-  <rule id="100656" level="5">
+  <rule id="100656" level="0">
     <if_sid>100650</if_sid>
     <field name="action_type">^LOGIN_FAIL$|^ACCOUNT_LOCKED$</field>
     <description>온프레미스 DB 로그인 실패 — 사용자: $(user_id) IP: $(source_ip)</description>
@@ -427,20 +397,13 @@
   <!-- 정상 동작 억제 -->
   <rule id="100655" level="0">
     <if_sid>100650</if_sid>
-    <field name="action_type">^LOGIN$|^LOGOUT$|^TOKEN_REFRESH$|^LOGIN_SUCCESS$|^READ_ME$|^READ_MENUS$|^READ_PASSWORD_POLICY$|^VIEW_DASHBOARD$|^CHANGE_PASSWORD$|^PASSWORD_CHANGE$|^SESSION_STATUS$</field>
+    <field name="action_type">^LOGIN$|^LOGOUT$|^TOKEN_REFRESH$|^LOGIN_SUCCESS$|^READ_ME$|^READ_MENUS$|^READ_PASSWORD_POLICY$|^VIEW_DASHBOARD$|^CHANGE_PASSWORD$|^PASSWORD_CHANGE$|^SESSION_STATUS$|^UNKNOWN$</field>
     <description>온프레미스 DB 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
 
+
 </group>
-
-
-
-
-
-
-
-
 
 
 <!-- =========================================================
@@ -451,7 +414,7 @@
 <group name="onprem,ollama,">
 
   <!-- Ollama 배치 로그 베이스 룰 - 260611 김강환 -->
-  <rule id="100659" level="3">
+  <rule id="100659" level="0">
     <if_sid>2502</if_sid>
     <field name="service">^ollama-emr-batch$</field>
     <description>Ollama EMR 배치 로그 - $(action_type)</description>
@@ -459,7 +422,7 @@
   </rule>
 
   <!-- Ollama 배치 실패 탐지 - 260611 김강환 -->
-  <rule id="100660" level="10">
+  <rule id="100660" level="12">
     <if_sid>100659</if_sid>
     <field name="level">^ERROR$</field>
     <description>Ollama EMR 배치 실패 — $(action_type)</description>
@@ -485,7 +448,7 @@
 
   <!-- 비식별화 API 외부 IP 접근 시도 - 추가 260612 김강환 -->
   <rule id="100672" level="12">
-    <if_sid>100601</if_sid>
+    <if_sid>100600</if_sid>
     <field name="path" type="pcre2">^/deident|^/sync</field>
     <field name="source_ip" negate="yes" type="pcre2">^172\.30\.|^10\.</field>
     <description>비식별화 API 외부 IP 접근 시도 — IP: $(source_ip) 경로: $(path)</description>

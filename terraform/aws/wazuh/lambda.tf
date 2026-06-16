@@ -143,30 +143,42 @@ resource "aws_lambda_function" "aws-wazuh-lambda-recovery" {
 }
 
 
-# recovery Lambda는 Manager 중단 알람에만 트리거 - 수정 260612 김강환
-resource "aws_cloudwatch_event_rule" "aws-wazuh-lambda-recovery" {
-  name        = "aws-wazuh-lambda-recovery"
-  description = "Wazuh Manager 중단 시 복구 Lambda 트리거"
+# Wazuh 매니저 EC2 중지/종료 즉시 감지 → Lambda + Slack - 수정 260616 김강환
+# stopped/terminated만 잡음 → Reboot은 트리거 안 됨
+resource "aws_cloudwatch_event_rule" "aws-wazuh-manager-ec2-stop" {
+  name        = "aws-wazuh-manager-ec2-stop"
+  description = "Wazuh Manager EC2 중지/종료 즉시 감지 — Lambda 재구축 트리거"
+
   event_pattern = jsonencode({
-    source      = ["aws.cloudwatch"]
-    detail-type = ["CloudWatch Alarm State Change"]
+    source      = ["aws.ec2"]
+    detail-type = ["EC2 Instance State-change Notification"]
     detail = {
-      alarmName = ["aws-wazuh-cw-manager-01"]
-      state     = { value = ["ALARM"] }
+      state       = ["stopped", "terminated"]
+      instance-id = [aws_instance.aws-wazuh-01.id]
     }
   })
+
+  tags = { Name = "aws-wazuh-manager-ec2-stop", Owner = "st2" }
 }
 
-resource "aws_cloudwatch_event_target" "aws-wazuh-lambda-recovery" {
-  rule = aws_cloudwatch_event_rule.aws-wazuh-lambda-recovery.name
+# Lambda 트리거
+resource "aws_cloudwatch_event_target" "aws-wazuh-manager-ec2-stop-lambda" {
+  rule = aws_cloudwatch_event_rule.aws-wazuh-manager-ec2-stop.name
   arn  = aws_lambda_function.aws-wazuh-lambda-recovery.arn
 }
 
-resource "aws_lambda_permission" "aws-wazuh-lambda-recovery-eventbridge" {
-  statement_id  = "AllowEventBridgeRecovery"
+# Slack 알림
+resource "aws_cloudwatch_event_target" "aws-wazuh-manager-ec2-stop-slack" {
+  rule = aws_cloudwatch_event_rule.aws-wazuh-manager-ec2-stop.name
+  arn  = aws_sns_topic.aws-wazuh-cw-alerts-01.arn
+}
+
+# EventBridge → Lambda 권한
+resource "aws_lambda_permission" "aws-wazuh-manager-ec2-stop-eventbridge" {
+  statement_id  = "AllowEventBridgeManagerRecovery"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.aws-wazuh-lambda-recovery.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.aws-wazuh-lambda-recovery.arn
+  source_arn    = aws_cloudwatch_event_rule.aws-wazuh-manager-ec2-stop.arn
 }
 

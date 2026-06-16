@@ -7,6 +7,7 @@
     <rule id="100199" level="0">
         <decoded_as>json</decoded_as>
         <field name="action_type">^LOGIN$|^LOGOUT$|^ADMIN_|^UNKNOWN$</field>
+        <field name="audit_log_id" negate="yes">\.+</field>
         <description>Cloud SQL 감사 로그 수신 — 베이스</description>
         <group>cloudsql,</group>
     </rule>
