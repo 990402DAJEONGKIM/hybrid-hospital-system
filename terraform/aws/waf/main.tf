@@ -29,20 +29,6 @@
 
 
 # ─────────────────────────────────────────────────────────
-# IP Set — Wazuh/운영 모니터링 접근 허용 IP (ops_admin 전용)
-# by 김다정, 2026-06-17.
-# ─────────────────────────────────────────────────────────
-resource "aws_wafv2_ip_set" "ops_admin_allowed" {
-  name               = "ops-admin-allowed"
-  scope              = "REGIONAL"
-  ip_address_version = "IPV4"
-  addresses          = var.ops_admin_allowed_ips
-
-  tags = { Name = "ops-admin-allowed" }
-}
-
-
-# ─────────────────────────────────────────────────────────
 # Web ACL — 통합 병원 WAF
 # 수정 260612 김강환: staff → hospital
 # ─────────────────────────────────────────────────────────
@@ -178,71 +164,6 @@ resource "aws_wafv2_web_acl" "hospital" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "SQLiRuleSet"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # ── Rule 5: Wazuh/운영 모니터링 — ops_admin IP 외 차단 ──────────
-  # ISMS-P 2.6.1 최소 허용 원칙 — by 김다정, 2026-06-17
-  rule {
-    name     = "RestrictWazuhAndMonitoring"
-    priority = 5
-
-    action {
-      block {}
-    }
-
-    statement {
-      and_statement {
-        statement {
-          or_statement {
-            statement {
-              byte_match_statement {
-                search_string = "wazuh.mzclinic.cloud"
-                field_to_match {
-                  single_header {
-                    name = "host"
-                  }
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "LOWERCASE"
-                }
-                positional_constraint = "EXACTLY"
-              }
-            }
-            statement {
-              byte_match_statement {
-                search_string = "monitoring.mzclinic.cloud"
-                field_to_match {
-                  single_header {
-                    name = "host"
-                  }
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "LOWERCASE"
-                }
-                positional_constraint = "EXACTLY"
-              }
-            }
-          }
-        }
-        statement {
-          not_statement {
-            statement {
-              ip_set_reference_statement {
-                arn = aws_wafv2_ip_set.ops_admin_allowed.arn
-              }
-            }
-          }
-        }
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "RestrictWazuhAndMonitoring"
       sampled_requests_enabled   = true
     }
   }

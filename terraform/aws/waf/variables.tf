@@ -41,10 +41,3 @@ variable "staff_allowed_ips" {
   type        = list(string)
   default     = ["218.235.89.82/32", "221.164.19.186/32",  "175.199.193.165/32"] #집에서 접속해보려고  "175.199.193.165/32" 추가했습니다. 260601 박경수.
 }
-
-# Wazuh/운영 모니터링 접근 제한용 허용 IP — by 김다정, 2026-06-17
-variable "ops_admin_allowed_ips" {
-  description = "Wazuh/운영 모니터링 접근 허용 IP 목록 (CIDR) — ops_admin(admin-2) PC 전용"
-  type        = list(string)
-  default     = ["175.199.193.165/32"]
-}
