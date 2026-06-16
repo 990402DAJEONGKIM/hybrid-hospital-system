@@ -20,6 +20,18 @@ RAW_PREFIX = "cost/cost-raw"
 CHUNKS_PREFIX = "cost/cost-chunks"
 ANNUAL_BUDGET_KRW = int(os.environ.get("ANNUAL_BUDGET_KRW", "30000000"))
 SSM_EXIM_API_KEY = os.environ.get("SSM_EXIM_API_KEY", "")
+SSM_MSP_FEE = os.environ.get("SSM_MSP_FEE", "")
+
+
+def _get_msp_fee() -> int:
+    """SSM에서 MSP 월 계약금 조회. 미설정 시 0 반환."""
+    if not SSM_MSP_FEE:
+        return 0
+    try:
+        return int(SSM.get_parameter(Name=SSM_MSP_FEE)["Parameter"]["Value"])
+    except Exception as e:
+        print(f"MSP 월 계약금 조회 실패: {e}")
+        return 0
 
 
 def _get_usd_krw_rate(year: str, month: str, as_of: date | None = None) -> float:
@@ -87,8 +99,12 @@ def _load_aws_cost(year: str, month: str, usd_to_krw: float) -> dict:
         body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read().decode("utf-8")
         reader = csv.DictReader(io.StringIO(body))
         rows = list(reader)
-        total_usd = sum(float(r.get("UnblendedCost", 0)) for r in rows)
-        services_usd = {r["ProductName"]: float(r.get("UnblendedCost", 0)) for r in rows if r.get("ProductName")}
+        services_usd: dict[str, float] = {}
+        for r in rows:
+            name = r.get("ProductName", "")
+            if name:
+                services_usd[name] = services_usd.get(name, 0) + float(r.get("UnblendedCost", 0))
+        total_usd = sum(services_usd.values())
         return {
             "total": total_usd * usd_to_krw,
             "services": {svc: cost * usd_to_krw for svc, cost in services_usd.items()},
@@ -105,11 +121,16 @@ def _load_gcp_cost(year: str, month: str, usd_to_krw: float) -> dict:
         body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read().decode("utf-8")
         reader = csv.DictReader(io.StringIO(body))
         rows = list(reader)
-        total_usd = sum(float(r.get("total_cost", 0)) for r in rows)
-        services_usd = {r["service"]: float(r.get("total_cost", 0)) for r in rows if r.get("service")}
+
+        def to_krw(r: dict) -> float:
+            cost = float(r.get("total_cost", 0))
+            return cost if r.get("currency") == "KRW" else cost * usd_to_krw
+
+        total_krw = sum(to_krw(r) for r in rows)
+        services_krw = {r["service"]: to_krw(r) for r in rows if r.get("service")}
         return {
-            "total": total_usd * usd_to_krw,
-            "services": {svc: cost * usd_to_krw for svc, cost in services_usd.items()},
+            "total": total_krw,
+            "services": services_krw,
             "usd_rate": usd_to_krw,
         }
     except Exception as e:
@@ -154,13 +175,14 @@ def _build_chunks(
     is_partial: bool = False,
     as_of: date | None = None,
     complete_months: int | None = None,
+    msp_fee: int = 0,
 ) -> list[tuple[str, str]]:
     """(s3_key, text) 튜플 목록 반환.
     is_partial=True이면 당월 집계 중 레이블을 붙이고 일별 소진율 및 월말 예상 금액을 추가한다.
     """
     chunks = []
     today = as_of or date.today()
-    total = aws["total"] + gcp["total"] + onprem["total_krw"]
+    total = aws["total"] + gcp["total"] + onprem["total_krw"] + msp_fee
 
     partial_suffix = f" - 집계 중 (~{today} 기준)" if is_partial else ""
 
@@ -175,8 +197,7 @@ def _build_chunks(
     if prev_aws and prev_aws["total"] > 0:
         aws_lines.append(f"전월 대비: {_pct_change(aws['total'], prev_aws['total'])}")
     for svc, cost in sorted(aws["services"].items(), key=lambda x: -x[1]):
-        if cost > 0:
-            line = f"- {svc}: {_format_krw(cost)}"
+        line = f"- {svc}: {_format_krw(cost)}" if cost > 0 else f"- {svc}: 0원 (미청구)"
             prev_cost = (prev_aws or {}).get("services", {}).get(svc, 0)
             if prev_cost > 0:
                 line += f" (전월 대비 {_pct_change(cost, prev_cost)})"
@@ -194,12 +215,11 @@ def _build_chunks(
     if prev_gcp and prev_gcp["total"] > 0:
         gcp_lines.append(f"전월 대비: {_pct_change(gcp['total'], prev_gcp['total'])}")
     for svc, cost in sorted(gcp["services"].items(), key=lambda x: -x[1]):
-        if cost > 0:
-            line = f"- {svc}: {_format_krw(cost)}"
-            prev_cost = (prev_gcp or {}).get("services", {}).get(svc, 0)
-            if prev_cost > 0:
-                line += f" (전월 대비 {_pct_change(cost, prev_cost)})"
-            gcp_lines.append(line)
+        line = f"- {svc}: {_format_krw(cost)}" if cost > 0 else f"- {svc}: 0원 (무료 티어 이내)"
+        prev_cost = (prev_gcp or {}).get("services", {}).get(svc, 0)
+        if prev_cost > 0:
+            line += f" (전월 대비 {_pct_change(cost, prev_cost)})"
+        gcp_lines.append(line)
     chunks.append((f"gcp/{year}/{month}/gcp_cost.txt", "\n".join(gcp_lines)))
 
     # 온프레미스 청크
@@ -229,6 +249,7 @@ def _build_chunks(
         (prev_aws["total"] if prev_aws else 0)
         + (prev_gcp["total"] if prev_gcp else 0)
         + (prev_onprem.get("total_krw", 0) if prev_onprem else 0)
+        + msp_fee
     )
 
     # 예산 집행률: 당월은 완료 월수(complete_months)만 사용 (부분 데이터 제외)
@@ -243,6 +264,7 @@ def _build_chunks(
         f"AWS: {_format_krw(aws['total'])}",
         f"GCP: {_format_krw(gcp['total'])}",
         f"온프레미스: {_format_krw(onprem['total_krw'])}",
+        f"MSP 운영비: {_format_krw(msp_fee)}" if msp_fee > 0 else "",
         f"합계: {_format_krw(total)}",
         f"USD/KRW 적용 환율: {int(aws.get('usd_rate', 0)):,}원" if aws.get("usd_rate") else "",
     ]
@@ -356,6 +378,8 @@ def _process_dated_gcp_chunks() -> int:
 
 def lambda_handler(event, context):
     today = date.today()
+    msp_fee = _get_msp_fee()
+    print(f"MSP 월 계약금: {msp_fee:,}원")
 
     # 이벤트로 year/month 직접 지정 가능 (테스트 및 재처리용)
     if event.get("year") and event.get("month"):
@@ -379,6 +403,7 @@ def lambda_handler(event, context):
             prev_aws, prev_gcp, prev_onprem,
             is_partial=is_partial,
             as_of=today if is_partial else None,
+            msp_fee=msp_fee,
         )
         for s3_key, text in chunks:
             full_key = f"{CHUNKS_PREFIX}/{s3_key}"
@@ -409,7 +434,7 @@ def lambda_handler(event, context):
     this_onprem = _load_onprem_cost(this_year, this_month)
 
     # 전월 청크 생성 (완료)
-    chunks = _build_chunks(year, month, aws, gcp, onprem, prev_aws, prev_gcp, prev_onprem)
+    chunks = _build_chunks(year, month, aws, gcp, onprem, prev_aws, prev_gcp, prev_onprem, msp_fee=msp_fee)
 
     # 당월 청크 생성 (집계 중)
     chunks += _build_chunks(
@@ -419,6 +444,7 @@ def lambda_handler(event, context):
         is_partial=True,
         as_of=today,
         complete_months=int(month),  # 완료된 월수
+        msp_fee=msp_fee,
     )
 
     for s3_key, text in chunks:

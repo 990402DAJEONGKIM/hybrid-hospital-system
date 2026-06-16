@@ -78,12 +78,13 @@ resource "aws_iam_role_policy" "lambda_exec" {
         Action   = ["ses:SendEmail", "ses:SendRawEmail"]
         Resource = "*"
       },
-      {
-        Sid      = "CostExplorer"
-        Effect   = "Allow"
-        Action   = ["ce:GetCostAndUsage"]
-        Resource = "*"
-      },
+      # Cost Explorer 비활성화 — AWS 비용은 담당자 수동 S3 업로드 방식으로 전환
+      # {
+      #   Sid      = "CostExplorer"
+      #   Effect   = "Allow"
+      #   Action   = ["ce:GetCostAndUsage"]
+      #   Resource = "*"
+      # },
       {
         Sid      = "SelfInvoke"
         Effect   = "Allow"
@@ -257,6 +258,7 @@ resource "aws_lambda_function" "cost_to_kb" {
       CHUNKS_BUCKET     = data.terraform_remote_state.s3.outputs.storage_bucket_name
       ANNUAL_BUDGET_KRW = tostring(var.annual_budget_krw)
       SSM_EXIM_API_KEY  = "/mzclinic/cost/exim/api-key"
+      SSM_MSP_FEE       = aws_ssm_parameter.msp_monthly_fee.name
     }
   }
 
@@ -371,8 +373,8 @@ resource "aws_lambda_function" "anomaly_detector" {
       ALERT_EMAIL        = var.alert_email
       FROM_EMAIL         = "no-reply@mzclinic.cloud"
       SES_REGION         = var.aws_region
-      # TC-17 Step 4 테스트용 — 운영 시 0.30으로 원복
       ANOMALY_THRESHOLD  = var.anomaly_threshold
+      SSM_EXIM_API_KEY   = "/mzclinic/cost/exim/api-key"
     }
   }
 
@@ -409,6 +411,8 @@ resource "aws_lambda_function" "cost_dashboard" {
     variables = {
       RAW_BUCKET        = data.terraform_remote_state.s3.outputs.storage_bucket_name
       ANNUAL_BUDGET_KRW = var.annual_budget_krw
+      SSM_EXIM_API_KEY  = "/mzclinic/cost/exim/api-key"
+      SSM_MSP_FEE       = aws_ssm_parameter.msp_monthly_fee.name
     }
   }
 
