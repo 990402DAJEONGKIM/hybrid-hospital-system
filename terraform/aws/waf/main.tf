@@ -36,7 +36,7 @@ resource "aws_wafv2_web_acl" "hospital" {
   name  = "aws-hospital-waf"
   scope = "REGIONAL"
 
-  # 기본 동작: 허용 (patient는 공개 접근)
+  # 기본 동작: 허용 (patient는 공개 접근).
   default_action {
     allow {}
   }
