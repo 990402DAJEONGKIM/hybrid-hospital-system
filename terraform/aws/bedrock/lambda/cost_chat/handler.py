@@ -5,6 +5,7 @@ S3 chunks를 직접 읽어 Claude에게 컨텍스트로 전달
 """
 import json
 import os
+from datetime import date, timedelta
 
 import boto3
 
@@ -64,8 +65,15 @@ def lambda_handler(event, context):
     try:
         cost_context, sources = _load_chunks()
 
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        this_month = today.strftime("%Y년 %m월")
+        last_month = (today.replace(day=1) - timedelta(days=1)).strftime("%Y년 %m월")
+
         prompt = f"""당신은 IT 인프라 비용 분석 전문가입니다.
-아래 비용 데이터를 바탕으로 질문에 답변하세요.
+오늘 날짜는 {today.strftime("%Y년 %m월 %d일")}입니다.
+
+아래 비용 데이터를 바탕으로 질문에 정확하게 답변하세요.
 
 [비용 데이터]
 {cost_context}
@@ -73,14 +81,28 @@ def lambda_handler(event, context):
 [질문]
 {question}
 
-구체적인 금액(원)과 증감률을 포함해 답변하고, AWS·GCP·온프레미스를 구분해 설명하세요.
-CAPEX/OPEX 분류가 관련된 경우 명시하고, 데이터가 없으면 솔직하게 알려주세요."""
+[답변 지침]
+날짜 해석:
+- "오늘"={today.strftime("%m월 %d일")}, "어제"={yesterday.strftime("%m월 %d일")}, "이번 달"={this_month}, "지난달"={last_month}
+- "지난주"=오늘 기준 7일 전, "이번 분기"=올해 {((today.month - 1) // 3) * 3 + 1}~{((today.month - 1) // 3) * 3 + 3}월
+- 일별 GCP 데이터가 있으면 날짜를 정확히 특정해 답변하세요.
+
+금액 표기:
+- 반드시 원(KRW) 단위로 쉼표 포함 표기 (예: 78,325원)
+- 증감은 +/- 기호와 % 함께 표기 (예: +15.2%)
+
+답변 범위:
+- AWS·GCP·온프레미스를 구분해 설명하세요.
+- CAPEX/OPEX가 관련되면 명시하세요.
+- 비용 절감 방안을 물으면 비용이 높은 서비스 위주로 구체적으로 제안하세요.
+- 예산 초과 위험이 있으면 명확히 경고하세요.
+- 특정 월·날짜 데이터가 없으면 솔직히 알리고, 가장 근접한 데이터를 대신 제시하세요."""
 
         resp = BEDROCK.invoke_model(
             modelId=MODEL_ID,
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1024,
+                "max_tokens": 2048,
                 "messages": [{"role": "user", "content": prompt}],
             }),
         )

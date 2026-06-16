@@ -272,6 +272,88 @@ def _build_chunks(
     return chunks
 
 
+def _build_metadata_chunk() -> str:
+    """보유 데이터 기간 인덱스 청크 생성 — Claude가 답할 수 있는 범위를 파악하는 데 사용"""
+    paginator = S3.get_paginator("list_objects_v2")
+    monthly, dated = set(), []
+
+    for page in paginator.paginate(Bucket=RAW_BUCKET, Prefix=f"{RAW_PREFIX}/gcp/"):
+        for obj in page.get("Contents", []):
+            parts = obj["Key"].replace(f"{RAW_PREFIX}/gcp/", "").split("/")
+            if len(parts) == 2 and parts[-1] == "gcp_cost.csv":
+                monthly.add(f"{parts[0]}-{parts[1]}")
+            elif len(parts) == 3 and parts[-1] == "gcp_cost.csv":
+                dated.append(f"{parts[0]}-{parts[1]}-{parts[2]}")
+
+    aws_months = set()
+    for page in paginator.paginate(Bucket=RAW_BUCKET, Prefix=f"{RAW_PREFIX}/aws/"):
+        for obj in page.get("Contents", []):
+            parts = obj["Key"].replace(f"{RAW_PREFIX}/aws/", "").split("/")
+            if len(parts) == 2 and parts[-1] == "aws_cost.csv":
+                aws_months.add(f"{parts[0]}-{parts[1]}")
+
+    today = date.today()
+    lines = [
+        f"[비용 데이터 보유 현황 - {today} 기준]",
+        f"AWS 월별 데이터: {', '.join(sorted(aws_months)) or '없음'}",
+        f"GCP 월별 데이터: {', '.join(sorted(monthly)) or '없음'}",
+        f"GCP 일별 스냅샷: {', '.join(sorted(dated)) or '없음'}",
+        "온프레미스: AWS·GCP와 동일 월 보유",
+        "※ 일별 GCP 데이터는 해당 날짜 기준 월 누적 비용입니다.",
+    ]
+    return "\n".join(lines)
+
+
+def _build_dated_gcp_chunk(year: str, month: str, day: str) -> str:
+    """날짜별 GCP raw CSV를 읽어 자연어 청크 반환"""
+    key = f"{RAW_PREFIX}/gcp/{year}/{month}/{day}/gcp_cost.csv"
+    try:
+        body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read().decode("utf-8")
+        rows = list(csv.DictReader(io.StringIO(body)))
+        if not rows:
+            return ""
+        def to_krw(r: dict) -> float:
+            cost = float(r.get("total_cost", 0))
+            return cost if r.get("currency") == "KRW" else round(cost * 1400)
+        total = sum(to_krw(r) for r in rows)
+        lines = [
+            f"[{year}년 {int(month)}월 {int(day)}일 기준 GCP 비용 현황 - {int(month)}월 누적]",
+            f"총 비용: {int(total):,}원",
+        ]
+        for r in sorted(rows, key=lambda x: -float(x.get("total_cost", 0))):
+            cost = to_krw(r)
+            if cost > 0:
+                lines.append(f"- {r['service']}: {int(cost):,}원")
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"날짜별 GCP 청크 생성 실패 ({key}): {e}")
+        return ""
+
+
+def _process_dated_gcp_chunks() -> int:
+    """날짜별 GCP raw 파일을 모두 청크로 변환해 저장"""
+    paginator = S3.get_paginator("list_objects_v2")
+    count = 0
+    prefix = f"{RAW_PREFIX}/gcp/"
+    for page in paginator.paginate(Bucket=RAW_BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            # cost/cost-raw/gcp/2026/06/15/gcp_cost.csv → ['gcp','2026','06','15','gcp_cost.csv']
+            parts = obj["Key"].replace(prefix, "").split("/")
+            if len(parts) != 4 or parts[-1] != "gcp_cost.csv":
+                continue
+            year, month, day, _ = parts
+            if not (year.isdigit() and month.isdigit() and day.isdigit()):
+                continue
+            text = _build_dated_gcp_chunk(year, month, day)
+            if not text:
+                continue
+            chunk_key = f"{CHUNKS_PREFIX}/gcp/{year}/{month}/{day}/gcp_cost.txt"
+            S3.put_object(Bucket=CHUNKS_BUCKET, Key=chunk_key, Body=text.encode("utf-8"), ContentType="text/plain")
+            print(f"날짜별 GCP 청크 저장: {chunk_key}")
+            count += 1
+    return count
+
+
 def lambda_handler(event, context):
     today = date.today()
 
@@ -344,4 +426,10 @@ def lambda_handler(event, context):
         S3.put_object(Bucket=CHUNKS_BUCKET, Key=full_key, Body=text.encode("utf-8"), ContentType="text/plain")
         print(f"Chunk saved: s3://{CHUNKS_BUCKET}/{full_key}")
 
-    return {"status": "ok", "chunk_count": len(chunks)}
+    dated_count = _process_dated_gcp_chunks()
+
+    metadata = _build_metadata_chunk()
+    S3.put_object(Bucket=CHUNKS_BUCKET, Key=f"{CHUNKS_PREFIX}/metadata/index.txt", Body=metadata.encode("utf-8"), ContentType="text/plain")
+    print("메타데이터 청크 저장 완료")
+
+    return {"status": "ok", "chunk_count": len(chunks), "dated_gcp_chunk_count": dated_count}

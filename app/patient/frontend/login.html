@@ -80,11 +80,17 @@
                     style="background:#1d4ed8;">
                     <i class="fas fa-hospital mr-2"></i>내부 진료 DB 바로가기
                 </a>
-                <!-- 관리자 전용 Wazuh 링크 -->
-                <a id="wazuhLinkBtn" href="#" target="_blank"
+                <!-- admin/ops_admin 전용 Wazuh 보안 모니터링 링크 — by 김다정, 2026-06-17 -->
+                <a id="wazuhLinkBtn" href="https://wazuh.mzclinic.cloud" target="_blank"
                     class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
                     style="display:none; background:#b91c1c;">
                     <i class="fas fa-shield-virus mr-2"></i>Wazuh 보안 모니터링
+                </a>
+                <!-- admin/ops_admin 전용 운영 모니터링 링크 — by 김다정, 2026-06-17 -->
+                <a id="monitoringLinkBtn" href="https://monitoring.mzclinic.cloud/" target="_blank"
+                    class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
+                    style="display:none; background:#7c3aed;">
+                    <i class="fas fa-chart-bar mr-2"></i>운영 모니터링
                 </a>
                 <!-- 간호사/의사 당일 진료 현황 대시보드 링크 -->
                 <a id="nurseDashBtn" href="nurse-dashboard.html"
@@ -105,7 +111,8 @@
         //   doctor/nurse/admin → "내부 진료 DB 바로가기" 버튼 (온프레미스에서 별도 로그인, 토큰 공유 없음)
         //   patient            → 환자 포털(index.html) 이동
         const ONPREM_URL   = 'https://staff.mzclinic.cloud';
-        const STAFF_ROLES  = new Set(['doctor', 'nurse', 'admin']);
+        // ops_admin(운영 모니터링 담당자) role 추가 — by 김다정, 2026-06-17
+        const STAFF_ROLES  = new Set(['doctor', 'nurse', 'admin', 'ops_admin']);
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -153,17 +160,23 @@
                     pwExpired  = meData.password_expired     || false;
                 }
 
+                // role별 버튼 표시 분기 — by 김다정, 2026-06-17
+                // ops_admin: 내부 진료 DB 숨김, Wazuh + 운영 모니터링 표시
+                // admin: 내부 진료 DB + Wazuh + 운영 모니터링 표시
+                // doctor/nurse: 내부 진료 DB + 당일 진료 현황 표시
                 if (STAFF_ROLES.has(role)) {
-                    // 의사/간호사/관리자: 내부 DB 버튼 표시
-                    if (role === 'admin') {
-                        const wazuhBtn = document.getElementById('wazuhLinkBtn');
-                        wazuhBtn.href = 'https://wazuh.mzclinic.cloud';
-                        wazuhBtn.style.display = 'block';
+                    if (role === 'ops_admin') {
+                        document.getElementById('internalLinkBtn').style.display = 'none';
+                    } else {
+                        document.getElementById('internalLinkBtn').href = `${ONPREM_URL}/login.html`;
+                    }
+                    if (role === 'admin' || role === 'ops_admin') {
+                        document.getElementById('wazuhLinkBtn').style.display = 'block';
+                        document.getElementById('monitoringLinkBtn').style.display = 'block';
                     }
                     if (role === 'nurse' || role === 'doctor') {
                         document.getElementById('nurseDashBtn').style.display = 'block';
                     }
-                    document.getElementById('internalLinkBtn').href = `${ONPREM_URL}/login.html`;
                     document.getElementById('internalLinkBox').style.display = 'block';
                     document.getElementById('loginForm').style.display = 'none';
                 } else {

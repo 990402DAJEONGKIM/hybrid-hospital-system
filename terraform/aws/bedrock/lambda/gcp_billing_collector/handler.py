@@ -69,17 +69,19 @@ def _collect_month(cf_url: str, api_key: str, year: str, month: str, partial: bo
     today = date.today()
     rows = _fetch_billing(cf_url, api_key, year, month, table)
 
-    s3_key = f"{RAW_PREFIX}/gcp/{year}/{month}/gcp_cost.csv"
-    S3.put_object(
-        Bucket=BUCKET,
-        Key=s3_key,
-        Body=_rows_to_csv(rows).encode("utf-8"),
-        ContentType="text/csv",
-    )
+    csv_body = _rows_to_csv(rows).encode("utf-8")
+
+    # 날짜별 히스토리 저장
+    dated_key = f"{RAW_PREFIX}/gcp/{year}/{month}/{today.strftime('%d')}/gcp_cost.csv"
+    S3.put_object(Bucket=BUCKET, Key=dated_key, Body=csv_body, ContentType="text/csv")
+
+    # 기존 경로 최신 파일 유지 (reader Lambda 호환)
+    latest_key = f"{RAW_PREFIX}/gcp/{year}/{month}/gcp_cost.csv"
+    S3.put_object(Bucket=BUCKET, Key=latest_key, Body=csv_body, ContentType="text/csv")
 
     label = f"집계 중 (~{today} 기준)" if partial else "완료"
-    print(f"GCP billing saved: s3://{BUCKET}/{s3_key} ({len(rows)} services, {label})")
-    return {"status": "ok", "s3_key": s3_key, "row_count": len(rows), "year": year, "month": month, "partial": partial}
+    print(f"GCP billing saved: s3://{BUCKET}/{dated_key} + {latest_key} ({len(rows)} services, {label})")
+    return {"status": "ok", "s3_key": dated_key, "row_count": len(rows), "year": year, "month": month, "partial": partial}
 
 
 def lambda_handler(event, context):
