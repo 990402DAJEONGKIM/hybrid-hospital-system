@@ -6,14 +6,53 @@ import csv
 import io
 import json
 import os
+import urllib.request
 from datetime import date, timedelta
 
 import boto3
 
 S3 = boto3.client("s3")
+SSM = boto3.client("ssm")
 BUCKET = os.environ["RAW_BUCKET"]
 RAW_PREFIX = "cost/cost-raw"
 ANNUAL_BUDGET_KRW = int(os.environ.get("ANNUAL_BUDGET_KRW", "30000000"))
+SSM_EXIM_API_KEY = os.environ.get("SSM_EXIM_API_KEY", "")
+SSM_MSP_FEE = os.environ.get("SSM_MSP_FEE", "")
+
+
+def _get_msp_fee() -> int:
+    if not SSM_MSP_FEE:
+        return 0
+    try:
+        return int(SSM.get_parameter(Name=SSM_MSP_FEE)["Parameter"]["Value"])
+    except Exception as e:
+        print(f"MSP 월 계약금 조회 실패: {e}")
+        return 0
+
+
+def _get_usd_krw_rate() -> float:
+    if not SSM_EXIM_API_KEY:
+        return 1400.0
+    try:
+        api_key = SSM.get_parameter(Name=SSM_EXIM_API_KEY, WithDecryption=True)["Parameter"]["Value"]
+    except Exception:
+        return 1400.0
+    today = date.today()
+    for delta in range(7):
+        d = today - timedelta(days=delta)
+        url = (
+            "https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON"
+            f"?authkey={api_key}&searchdate={d.strftime('%Y%m%d')}&data=AP01"
+        )
+        try:
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                items = json.loads(resp.read())
+            usd = next((x for x in items if x.get("cur_unit") == "USD"), None)
+            if usd:
+                return float(usd["deal_bas_r"].replace(",", ""))
+        except Exception:
+            continue
+    return 1400.0
 
 
 def _response(status: int, body: dict) -> dict:
@@ -41,33 +80,34 @@ def _get_recent_months(n: int = 6) -> list[tuple[str, str]]:
     return list(reversed(months))
 
 
-def _load_aws(year: str, month: str) -> dict:
+def _load_aws(year: str, month: str, usd_to_krw: float) -> dict:
     key = f"{RAW_PREFIX}/aws/{year}/{month}/aws_cost.csv"
     try:
         body = S3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8")
         rows = list(csv.DictReader(io.StringIO(body)))
-        total = sum(float(r.get("UnblendedCost", 0)) for r in rows)
-        services = {
-            r["ProductName"]: round(float(r.get("UnblendedCost", 0)) * 1400)
-            for r in rows if r.get("ProductName") and float(r.get("UnblendedCost", 0)) > 0
-        }
-        return {"total": round(total * 1400), "services": services}
+        services_usd: dict[str, float] = {}
+        for r in rows:
+            name = r.get("ProductName", "")
+            if name:
+                services_usd[name] = services_usd.get(name, 0) + float(r.get("UnblendedCost", 0))
+        total_krw = sum(services_usd.values()) * usd_to_krw
+        services = {svc: round(cost * usd_to_krw) for svc, cost in services_usd.items() if cost > 0}
+        return {"total": round(total_krw), "services": services}
     except Exception as e:
         print(f"AWS 로드 실패 ({key}): {e}")
         return {"total": 0, "services": {}}
 
 
-def _load_gcp(year: str, month: str) -> dict:
+def _load_gcp(year: str, month: str, usd_to_krw: float) -> dict:
     key = f"{RAW_PREFIX}/gcp/{year}/{month}/gcp_cost.csv"
     try:
         body = S3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8")
         rows = list(csv.DictReader(io.StringIO(body)))
-        # currency가 KRW이면 그대로, USD이면 환율 적용
         def to_krw(r):
             cost = float(r.get("total_cost", 0))
-            return cost if r.get("currency") == "KRW" else round(cost * 1400)
+            return cost if r.get("currency") == "KRW" else cost * usd_to_krw
         total = sum(to_krw(r) for r in rows)
-        services = {r["service"]: to_krw(r) for r in rows if r.get("service") and to_krw(r) > 0}
+        services = {r["service"]: round(to_krw(r)) for r in rows if r.get("service") and to_krw(r) > 0}
         return {"total": round(total), "services": services}
     except Exception as e:
         print(f"GCP 로드 실패 ({key}): {e}")
@@ -104,11 +144,15 @@ def lambda_handler(event, context):
     trends = []
     current = None
 
+    usd_to_krw = _get_usd_krw_rate()
+    msp_fee = _get_msp_fee()
+    print(f"적용 환율: {usd_to_krw}원/USD, MSP 월 계약금: {msp_fee:,}원")
+
     for year, month in months:
-        aws = _load_aws(year, month)
-        gcp = _load_gcp(year, month)
+        aws = _load_aws(year, month, usd_to_krw)
+        gcp = _load_gcp(year, month, usd_to_krw)
         onprem = _load_onprem(year, month)
-        total = aws["total"] + gcp["total"] + onprem["total"]
+        total = aws["total"] + gcp["total"] + onprem["total"] + msp_fee
 
         if total == 0:
             continue
@@ -118,6 +162,7 @@ def lambda_handler(event, context):
             "aws": aws["total"],
             "gcp": gcp["total"],
             "onprem": onprem["total"],
+            "msp": msp_fee,
             "total": total,
         }
         trends.append(entry)

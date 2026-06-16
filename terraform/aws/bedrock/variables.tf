@@ -40,3 +40,9 @@ variable "gcp_billing_table_name" {
   type        = string
   default     = "gcp_billing_export_v1_011034_3337E0_C3B9BF"
 }
+
+variable "msp_monthly_fee" {
+  description = "MSP 운영 대행 월 계약금 (원) — AWS/GCP/온프레미스 통합 관리 비용"
+  type        = number
+  default     = 1500000
+}

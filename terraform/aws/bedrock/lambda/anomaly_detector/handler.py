@@ -6,19 +6,46 @@ import csv
 import io
 import json
 import os
+import urllib.request
 from datetime import date, timedelta
 
 import boto3
 
 S3 = boto3.client("s3")
+SSM = boto3.client("ssm")
 SES = boto3.client("ses", region_name=os.environ["SES_REGION"])
 
 BUCKET      = os.environ["BUCKET"]
 RAW_PREFIX  = os.environ.get("RAW_PREFIX", "cost/cost-raw")
 ALERT_EMAIL = os.environ["ALERT_EMAIL"]
 FROM_EMAIL  = os.environ.get("FROM_EMAIL", ALERT_EMAIL)
-# 환경변수로 임계값 조정 가능 — 테스트 시 낮춰서 트리거, 운영 시 0.30 유지
 ANOMALY_THRESHOLD = float(os.environ.get("ANOMALY_THRESHOLD", "0.30"))
+SSM_EXIM_API_KEY  = os.environ.get("SSM_EXIM_API_KEY", "")
+
+
+def _get_usd_krw_rate() -> float:
+    if not SSM_EXIM_API_KEY:
+        return 1400.0
+    try:
+        api_key = SSM.get_parameter(Name=SSM_EXIM_API_KEY, WithDecryption=True)["Parameter"]["Value"]
+    except Exception:
+        return 1400.0
+    today = date.today()
+    for delta in range(7):
+        d = today - timedelta(days=delta)
+        url = (
+            "https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON"
+            f"?authkey={api_key}&searchdate={d.strftime('%Y%m%d')}&data=AP01"
+        )
+        try:
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                items = json.loads(resp.read())
+            usd = next((x for x in items if x.get("cur_unit") == "USD"), None)
+            if usd:
+                return float(usd["deal_bas_r"].replace(",", ""))
+        except Exception:
+            continue
+    return 1400.0
 
 
 def _get_months() -> tuple[tuple[str, str], tuple[str, str]]:
@@ -32,12 +59,17 @@ def _get_months() -> tuple[tuple[str, str], tuple[str, str]]:
     return cur, prev
 
 
-def _load_aws_services(year: str, month: str) -> dict[str, float]:
+def _load_aws_services(year: str, month: str, usd_to_krw: float) -> dict[str, float]:
     try:
         key = f"{RAW_PREFIX}/aws/{year}/{month}/aws_cost.csv"
         body = S3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8")
         reader = csv.DictReader(io.StringIO(body))
-        return {r["ProductName"]: float(r.get("UnblendedCost", 0)) for r in reader if r.get("ProductName")}
+        services_usd: dict[str, float] = {}
+        for r in reader:
+            name = r.get("ProductName", "")
+            if name:
+                services_usd[name] = services_usd.get(name, 0) + float(r.get("UnblendedCost", 0))
+        return {svc: round(cost * usd_to_krw) for svc, cost in services_usd.items()}
     except Exception:
         return {}
 
@@ -118,9 +150,11 @@ def _build_alert_html(cur: tuple, prev: tuple, anomalies: list) -> str:
 
 def lambda_handler(event, context):
     cur, prev = _get_months()
+    usd_to_krw = _get_usd_krw_rate()
+    print(f"적용 환율: {usd_to_krw}원/USD")
 
-    cur_costs = {**_load_aws_services(*cur), **_load_gcp_services(*cur)}
-    prev_costs = {**_load_aws_services(*prev), **_load_gcp_services(*prev)}
+    cur_costs = {**_load_aws_services(*cur, usd_to_krw), **_load_gcp_services(*cur)}
+    prev_costs = {**_load_aws_services(*prev, usd_to_krw), **_load_gcp_services(*prev)}
 
     cur_onprem = _load_onprem_total(*cur)
     prev_onprem = _load_onprem_total(*prev)

@@ -17,3 +17,11 @@ resource "aws_ssm_parameter" "cost_chat_api_key" {
   value       = aws_api_gateway_api_key.cost_chat.value
   tags = merge(local.common_tags, { Name = "aws-ssm-cost-chat-api-key" })
 }
+
+resource "aws_ssm_parameter" "msp_monthly_fee" {
+  name        = "/mzclinic/cost/msp/monthly-fee"
+  description = "MSP 운영 대행 월 계약금 (원) — AWS/GCP/온프레미스 통합 관리"
+  type        = "String"
+  value       = tostring(var.msp_monthly_fee)
+  tags        = merge(local.common_tags, { Name = "aws-ssm-cost-msp-monthly-fee" })
+}
