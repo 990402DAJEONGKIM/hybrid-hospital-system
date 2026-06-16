@@ -88,11 +88,6 @@ resource "aws_cloudwatch_event_rule" "aws-wazuh-indexer-ec2-stop" {
   tags = { Name = "aws-wazuh-indexer-ec2-stop", Owner = "st2" }
 }
 
-# Lambda 트리거
-resource "aws_cloudwatch_event_target" "aws-wazuh-indexer-ec2-stop-lambda" {
-  rule = aws_cloudwatch_event_rule.aws-wazuh-indexer-ec2-stop.name
-  arn  = aws_sns_topic.aws-wazuh-indexer-recovery.arn
-}
 
 # Slack 알림
 resource "aws_cloudwatch_event_target" "aws-wazuh-indexer-ec2-stop-slack" {
