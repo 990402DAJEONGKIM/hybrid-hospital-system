@@ -1,21 +1,20 @@
 """
-Lambda: Secrets Manager 변경 이벤트 감지
-→ Vault 자동 업데이트
+Lambda: Secrets Manager 변경 이벤트 감지 → Vault 자동 업데이트
 
 처리 대상:
-  1. RDS 마스터 비밀번호 로테이션 (rds!cluster-...)
-     → Vault database/config/rds-hospital 업데이트
-  2. JWT Secret 변경 (aws-ecs-jwt-secret)
-     → Vault secret/data/hospital-auth 업데이트
+  - JWT Secret 변경 (aws-ecs-jwt-secret)
+    → Vault secret/data/hospital-auth 업데이트
 
 환경변수:
   VAULT_APPROLE_SECRET_ID  : Vault AppRole 자격증명 시크릿 이름
-  RDS_SECRET_ID            : RDS 마스터 계정 시크릿 ID (rds!cluster-...)
   JWT_SECRET_ID            : JWT 서명키 시크릿 이름 (aws-ecs-jwt-secret)
-  VAULT_DB_CONFIG_PATH     : Vault DB config 경로
   VAULT_AUTH_SECRET_PATH   : Vault hospital-auth KV 경로
-  RDS_HOST                 : Aurora 클러스터 엔드포인트
   AWS_REGION               : AWS 리전
+
+# 260612 박경수: RDS 마스터 로테이션 → Vault 동기화 분기 제거.
+#   RDS는 vault_dbadmin 전용 admin 계정으로 분리되어 마스터 비번과 무관해짐.
+#   이 Lambda가 database/config/rds-hospital 을 마스터로 덮으면 분리가 풀리므로 RDS 처리 삭제.
+#   JWT 동기화(김다정)만 유지.
 """
 import json
 import logging
@@ -29,11 +28,8 @@ logger.setLevel(logging.INFO)
 
 REGION                  = os.environ.get("AWS_REGION", "ap-south-2")
 VAULT_APPROLE_SECRET    = os.environ["VAULT_APPROLE_SECRET_ID"]
-RDS_SECRET_ID           = os.environ["RDS_SECRET_ID"]
 JWT_SECRET_ID           = os.environ.get("JWT_SECRET_ID", "aws-ecs-jwt-secret")
-VAULT_DB_CONFIG_PATH    = os.environ.get("VAULT_DB_CONFIG_PATH", "database/config/rds-hospital")
 VAULT_AUTH_SECRET_PATH  = os.environ.get("VAULT_AUTH_SECRET_PATH", "secret/data/hospital-auth")
-RDS_HOST                = os.environ["RDS_HOST"]
 
 
 def get_secret(secret_id: str) -> dict:
@@ -59,29 +55,6 @@ def vault_approle_login(vault_addr: str, role_id: str, secret_id: str) -> str:
         return json.loads(resp.read())["auth"]["client_token"]
 
 
-def vault_update_db_config(vault_addr: str, token: str, username: str, password: str):
-    """RDS 마스터 비밀번호 변경 → Vault database/config 업데이트"""
-    payload = json.dumps({
-        "plugin_name": "postgresql-database-plugin",
-        "connection_url": "postgresql://{{username}}:{{password}}@"
-                          f"{RDS_HOST}:5432/hospital?sslmode=require",
-        "allowed_roles": "api-role",
-        "username": username,
-        "password": password,
-    }).encode()
-    req = urllib.request.Request(
-        f"{vault_addr}/v1/{VAULT_DB_CONFIG_PATH}",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "X-Vault-Token": token,
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        logger.info("Vault DB config 업데이트 완료: %s", resp.status)
-
-
 def vault_get_kv(vault_addr: str, token: str, path: str) -> dict:
     """Vault KV v2 현재 값 조회"""
     req = urllib.request.Request(
@@ -100,11 +73,9 @@ def vault_get_kv(vault_addr: str, token: str, path: str) -> dict:
 
 def vault_update_kv(vault_addr: str, token: str, path: str, data: dict):
     """Vault KV v2 PATCH — 기존 키 보존하고 지정 키만 업데이트"""
-    # KV v2 patch endpoint 사용 (다른 키 보존)
-    patch_path = path.replace("secret/data/", "secret/data/", 1)
     payload = json.dumps({"data": data}).encode()
     req = urllib.request.Request(
-        f"{vault_addr}/v1/{patch_path}",
+        f"{vault_addr}/v1/{path}",
         data=payload,
         headers={
             "Content-Type": "application/merge-patch+json",
@@ -135,17 +106,6 @@ def vault_update_kv(vault_addr: str, token: str, path: str, data: dict):
                 logger.info("Vault KV PUT 완료: %s", put_resp.status)
         else:
             raise
-
-
-def handle_rds_rotation(vault_addr: str, token: str):
-    """RDS 마스터 비밀번호 로테이션 처리"""
-    rds_secret = get_secret(RDS_SECRET_ID)
-    username = rds_secret["username"]
-    password = rds_secret["password"]
-    logger.info("RDS 시크릿 조회 완료: user=%s", username)
-
-    vault_update_db_config(vault_addr, token, username, password)
-    logger.info("Vault %s 업데이트 완료", VAULT_DB_CONFIG_PATH)
 
 
 def handle_jwt_secret_rotation(vault_addr: str, token: str):
@@ -179,24 +139,20 @@ def handle_jwt_secret_rotation(vault_addr: str, token: str):
 def lambda_handler(event, context):
     logger.info("이벤트 수신: %s", json.dumps(event))
 
-    detail    = event.get("detail", {})
-    secret_id = detail.get("additionalEventData", {}).get("SecretId", "")
+    detail     = event.get("detail", {})
+    secret_id  = detail.get("additionalEventData", {}).get("SecretId", "")
     event_name = detail.get("eventName", "")
 
-    # 처리 대상 이벤트 판별
-    is_rds_rotation = (
-        RDS_SECRET_ID in secret_id or "rds!cluster" in secret_id
-    ) and event_name in ("RotationSucceeded", "PutSecretValue")
-
+    # 260612 박경수: RDS 분기 제거 — JWT 변경만 처리
     is_jwt_rotation = JWT_SECRET_ID in secret_id and event_name == "PutSecretValue"
 
-    if not is_rds_rotation and not is_jwt_rotation:
+    if not is_jwt_rotation:
         logger.info("처리 대상 이벤트 아님 (secret_id=%s, event=%s) — 스킵",
                     secret_id, event_name)
         return {"statusCode": 200, "body": "skipped"}
 
     try:
-        # Vault AppRole 로그인 (공통)
+        # Vault AppRole 로그인
         approle    = get_secret(VAULT_APPROLE_SECRET)
         vault_addr = approle["vault_addr"]
         role_id    = approle["role_id"]
@@ -205,17 +161,8 @@ def lambda_handler(event, context):
         token = vault_approle_login(vault_addr, role_id, secret_id_approle)
         logger.info("Vault 로그인 완료")
 
-        results = []
-
-        if is_rds_rotation:
-            handle_rds_rotation(vault_addr, token)
-            results.append("rds_db_config")
-
-        if is_jwt_rotation:
-            handle_jwt_secret_rotation(vault_addr, token)
-            results.append("jwt_secret")
-
-        return {"statusCode": 200, "body": f"success: {', '.join(results)}"}
+        handle_jwt_secret_rotation(vault_addr, token)
+        return {"statusCode": 200, "body": "success: jwt_secret"}
 
     except Exception as e:
         logger.error("오류 발생: %s", str(e))
