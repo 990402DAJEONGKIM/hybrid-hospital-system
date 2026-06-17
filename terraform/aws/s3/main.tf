@@ -631,6 +631,19 @@ resource "aws_s3_bucket_policy" "aws-alb-logs-01" {
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.aws-alb-logs-01.arn
       },
+      # Wazuh wodle ALB 로그 읽기 권한 (ISMS-P 2.9.1 통합 로그 관리) - 추가 260617 김강환
+      {
+        Sid    = "AllowWazuhReadALB"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-ssm-role"
+        }
+        Action   = ["s3:GetObject", "s3:ListBucket", "s3:GetBucketLocation"]
+        Resource = [
+          aws_s3_bucket.aws-alb-logs-01.arn,
+          "${aws_s3_bucket.aws-alb-logs-01.arn}/*"
+        ]
+      },
       {
         Sid       = "DenyNonSSL"
         Effect    = "Deny"
