@@ -23,5 +23,6 @@ resource "aws_ssm_parameter" "msp_monthly_fee" {
   description = "MSP 운영 대행 월 계약금 (원) — AWS/GCP/온프레미스 통합 관리"
   type        = "String"
   value       = tostring(var.msp_monthly_fee)
+  overwrite   = true
   tags        = merge(local.common_tags, { Name = "aws-ssm-cost-msp-monthly-fee" })
 }
