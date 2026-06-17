@@ -135,7 +135,6 @@ resource "aws_cloudwatch_event_rule" "rds_rotation_to_vault" {
       eventName = ["RotationSucceeded", "PutSecretValue"]
       additionalEventData = {
         SecretId = [
-          "rds!cluster-1073d242-a1f9-49fa-8855-054d05d6af5b",
           aws_secretsmanager_secret.jwt_secret_v2.name
         ]
       }
