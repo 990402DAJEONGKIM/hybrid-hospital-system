@@ -1,15 +1,16 @@
 name: Deploy DR App Artifact
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
     paths:
-      - "app/combined/**"
-      - "app/patient/**"
-      - "terraform/gcp/dr/scripts/build-dr-app-artifact.sh"
-      - ".github/workflows/deploy-dr-app.yml"
-  workflow_dispatch:
+      - 'app/combined/**'
+      - 'app/patient/**'
+      - 'app/dr-app/**'
+      - 'terraform/gcp/dr/scripts/build-dr-app-artifact.sh'
+      - '.github/workflows/deploy-dr-app.yml'
 
 permissions:
   contents: read
@@ -22,20 +23,20 @@ env:
 
 jobs:
   deploy-dr-artifact:
+    name: Build and upload DR app artifact
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Auth to Google Cloud
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DR_DEPLOY_SERVICE_ACCOUNT }}
-          token_format: access_token
 
-      - name: Setup gcloud
+      - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Install build tools
@@ -43,10 +44,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y rsync zip
 
-      - name: Build DR app artifact from repository paths
+      - name: Build DR app artifact
         run: |
           set -euo pipefail
           terraform/gcp/dr/scripts/build-dr-app-artifact.sh
+
+      - name: Verify DR app artifact
+        run: |
+          set -euo pipefail
+
+          test -f .artifacts/dr-app/dr-app.zip
+          test -f .artifacts/dr-app/dr-app.zip.sha256
+
+          unzip -l .artifacts/dr-app/dr-app.zip | grep -E 'testdb\.db|__pycache__|\.pyc|Zone.Identifier|\.env|cookies.txt|nurse_cookies.txt' && {
+            echo "ERROR: local or sensitive artifact found in DR zip"
+            exit 1
+          } || true
+
+          unzip -l .artifacts/dr-app/dr-app.zip | grep 'backend/main.py'
+          unzip -l .artifacts/dr-app/dr-app.zip | grep 'backend/requirements.txt'
+          unzip -l .artifacts/dr-app/dr-app.zip | grep 'frontend/index.html'
+          unzip -l .artifacts/dr-app/dr-app.zip | grep 'frontend/js/config.js'
 
       - name: Upload DR app artifact to GCS
         run: |
@@ -56,19 +74,12 @@ jobs:
           ARTIFACT_SHA=".artifacts/dr-app/dr-app.zip.sha256"
           SHA_OBJECT="dr-app/${GITHUB_SHA}.zip"
 
-          gcloud storage cp "$ARTIFACT_ZIP" \
-            "gs://${ARTIFACT_BUCKET}/${SHA_OBJECT}"
+          gcloud storage cp "$ARTIFACT_ZIP" "gs://${ARTIFACT_BUCKET}/${SHA_OBJECT}"
+          gcloud storage cp "$ARTIFACT_SHA" "gs://${ARTIFACT_BUCKET}/${SHA_OBJECT}.sha256"
 
-          gcloud storage cp "$ARTIFACT_SHA" \
-            "gs://${ARTIFACT_BUCKET}/${SHA_OBJECT}.sha256"
-
-          gcloud storage cp "$ARTIFACT_ZIP" \
-            "gs://${ARTIFACT_BUCKET}/${DR_ARTIFACT_OBJECT_LATEST}"
-
-          gcloud storage cp "$ARTIFACT_SHA" \
-            "gs://${ARTIFACT_BUCKET}/${DR_ARTIFACT_OBJECT_LATEST}.sha256"
+          gcloud storage cp "$ARTIFACT_ZIP" "gs://${ARTIFACT_BUCKET}/${DR_ARTIFACT_OBJECT_LATEST}"
+          gcloud storage cp "$ARTIFACT_SHA" "gs://${ARTIFACT_BUCKET}/${DR_ARTIFACT_OBJECT_LATEST}.sha256"
 
           echo "Uploaded:"
           echo "  gs://${ARTIFACT_BUCKET}/${SHA_OBJECT}"
           echo "  gs://${ARTIFACT_BUCKET}/${DR_ARTIFACT_OBJECT_LATEST}"
-EOF
