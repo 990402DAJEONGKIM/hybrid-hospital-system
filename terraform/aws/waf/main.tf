@@ -29,6 +29,21 @@
 
 
 # ─────────────────────────────────────────────────────────
+# IP Set — Wazuh/운영 모니터링 접근 허용 IP (ops_admin 전용)
+# WebACL Rule 제거 후 IPSet 순차 삭제를 위해 임시 유지 — by 김다정
+# ─────────────────────────────────────────────────────────
+resource "aws_wafv2_ip_set" "ops_admin_allowed" {
+  name               = "ops-admin-allowed"
+  scope              = "REGIONAL"
+  ip_address_version = "IPV4"
+  addresses          = var.ops_admin_allowed_ips
+
+  tags = { Name = "ops-admin-allowed" }
+}
+
+
+
+# ─────────────────────────────────────────────────────────
 # Web ACL — 통합 병원 WAF
 # 수정 260612 김강환: staff → hospital
 # ─────────────────────────────────────────────────────────
