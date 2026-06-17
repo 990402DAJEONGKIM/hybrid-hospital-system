@@ -5,11 +5,12 @@ set -e
 
 apt-get update -y
 apt-get install -y unzip curl
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-unzip -q /tmp/awscliv2.zip -d /tmp/
-/tmp/aws/install
-rm -rf /tmp/aws /tmp/awscliv2.zip
-
+if ! command -v aws &>/dev/null; then
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp/
+  /tmp/aws/install
+  rm -rf /tmp/aws /tmp/awscliv2.zip
+fi
 aws s3 cp "s3://aws-k2p-storage-01/monitoring/grafana/scripts/user_data.sh" \
   "/tmp/user_data_main.sh" --region ap-south-2
 
