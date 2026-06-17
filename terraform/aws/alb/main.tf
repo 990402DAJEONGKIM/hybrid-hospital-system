@@ -380,6 +380,12 @@ resource "aws_lb_listener_certificate" "aws-grafana-cert" {
 }
 
 
+# SNI 인증서 — monitoring.mzclinic.cloud - 260617 김강환
+resource "aws_lb_listener_certificate" "monitoring" {
+  listener_arn    = aws_lb_listener.staff_https.arn
+  certificate_arn = data.aws_acm_certificate.monitoring.arn
+}
+
 # ─────────────────────────────────────────────────────────
 # 라우팅 규칙 — mzclinic.cloud 루트 → hospital TG (환자/의료진 통합)
 # patient.mzclinic.cloud → mzclinic.cloud 루트 도메인으로 변경 — by 김다정, 2026-06-06
@@ -511,3 +517,5 @@ resource "aws_route53_record" "aws-grafana" {
     evaluate_target_health = true
   }
 }
+
+
