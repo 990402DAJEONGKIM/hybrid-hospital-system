@@ -74,7 +74,6 @@ data "aws_acm_certificate" "monitoring" {
 
 
 
-
 # ECS EC2 보안그룹 (ALB → ECS 트래픽 허용 규칙 추가용)
 data "aws_security_group" "ecs_ec2" {
   filter {
