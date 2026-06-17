@@ -32,4 +32,3 @@ output "dr_app_artifact_object" {
   description = "DR app artifact object expected by startup script"
   value       = "gs://${google_storage_bucket.artifact.name}/${var.dr_app_object_name}"
 }
-EOF

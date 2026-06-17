@@ -53,8 +53,8 @@ variable "proxy_service_account_email" {
     DR failover 모니터 스크립트를 실행할 VM의 서비스 계정 이메일.
     별도 모니터 VM 없이 기존 프록시 VM(gcp-rds-proxy-01)의 SA를 사용합니다.
   EOT
-  type    = string
-  default = "tc-st1-account@gcp-project-496802.iam.gserviceaccount.com"
+  type        = string
+  default     = "tc-st1-account@gcp-project-496802.iam.gserviceaccount.com"
 }
 
 variable "aws_healthcheck_url" {

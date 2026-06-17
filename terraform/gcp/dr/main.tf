@@ -498,8 +498,6 @@ resource "google_service_account_iam_member" "github_dr_deploy_token_creator" {
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
 }
-EOF
-
 # ── Cloud Logging ──────────────────────────────────────────────────────────────
 
 resource "google_logging_project_bucket_config" "default" {
