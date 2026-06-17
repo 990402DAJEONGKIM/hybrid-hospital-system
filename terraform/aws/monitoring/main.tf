@@ -411,7 +411,7 @@ resource "cloudflare_record" "monitoring" {
   content = data.aws_lb.hospital.dns_name
   type    = "CNAME"
   ttl     = 1
-  proxied = true
+  proxied = false
 }
 # #260609 박경수 end
 
