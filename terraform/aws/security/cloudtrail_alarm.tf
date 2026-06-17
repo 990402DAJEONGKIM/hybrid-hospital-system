@@ -30,33 +30,6 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-root-usage" {
   alarm_actions       = [local.sns_arn]
 }
 
-# ── IAM 정책 변경 탐지 ──────────────────────────────────
-resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-iam-policy-change" {
-  depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "aws-cw-ct-iam-policy-change"
-  log_group_name = "/aws/cloudtrail/main"
-  pattern        = "{ ($.eventName = DeleteGroupPolicy) || ($.eventName = DeleteRolePolicy) || ($.eventName = DeleteUserPolicy) || ($.eventName = PutGroupPolicy) || ($.eventName = PutRolePolicy) || ($.eventName = PutUserPolicy) || ($.eventName = CreatePolicy) || ($.eventName = DeletePolicy) || ($.eventName = AttachRolePolicy) || ($.eventName = DetachRolePolicy) }"
-
-  metric_transformation {
-    name      = "IAMPolicyChangeCount"
-    namespace = "CloudTrailAlarms"
-    value     = "1"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-iam-policy-change" {
-  alarm_name          = "aws-cw-ct-iam-policy-change"
-  alarm_description   = "IAM 정책 변경 탐지"
-  metric_name         = "IAMPolicyChangeCount"
-  namespace           = "CloudTrailAlarms"
-  period              = 300
-  evaluation_periods  = 1
-  statistic           = "Sum"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  threshold           = 1
-  treat_missing_data  = "notBreaching"
-  alarm_actions       = [local.sns_arn]
-}
 
 # ── 보안그룹 변경 탐지 ──────────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-sg-change" {
@@ -114,6 +87,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-disabled" {
   alarm_actions       = [local.sns_arn]
 }
 
+
 # ── 콘솔 로그인 실패 탐지 ────────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-console-login-failed" {
   depends_on     = [aws_cloudtrail.aws-ct-01]
@@ -141,6 +115,7 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-console-login-failed" {
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.sns_arn]
 }
+
 
 # ── MFA 없는 콘솔 로그인 탐지 ───────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-no-mfa-login" {
@@ -170,33 +145,6 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-no-mfa-login" {
   alarm_actions       = [local.sns_arn]
 }
 
-# ── S3 버킷 정책 변경 탐지 ──────────────────────────────
-resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-s3-policy-change" {
-  depends_on     = [aws_cloudtrail.aws-ct-01]
-  name           = "aws-cw-ct-s3-policy-change"
-  log_group_name = "/aws/cloudtrail/main"
-  pattern        = "{ ($.eventName = PutBucketPolicy) || ($.eventName = DeleteBucketPolicy) || ($.eventName = PutBucketAcl) || ($.eventName = PutBucketCors) || ($.eventName = PutBucketLifecycle) || ($.eventName = PutBucketReplication) || ($.eventName = DeleteBucketCors) || ($.eventName = DeleteBucketLifecycle) || ($.eventName = DeleteBucketReplication) }"
-
-  metric_transformation {
-    name      = "S3BucketPolicyChangeCount"
-    namespace = "CloudTrailAlarms"
-    value     = "1"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "aws-cw-ct-s3-policy-change" {
-  alarm_name          = "aws-cw-ct-s3-policy-change"
-  alarm_description   = "S3 버킷 정책 변경 탐지 - ISMS-P 2.8.1"
-  metric_name         = "S3BucketPolicyChangeCount"
-  namespace           = "CloudTrailAlarms"
-  period              = 300
-  evaluation_periods  = 1
-  statistic           = "Sum"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  threshold           = 1
-  treat_missing_data  = "notBreaching"
-  alarm_actions       = [local.sns_arn]
-}
 
 # ── VPC 변경 탐지 ────────────────────────────────────────
 resource "aws_cloudwatch_log_metric_filter" "aws-cw-ct-vpc-change" {
