@@ -203,7 +203,7 @@ resource "aws_cloudwatch_event_rule" "aws-monitoring-ec2-stop" {
   name        = "aws-monitoring-ec2-stop"
   description = "Monitoring EC2 중지/종료 즉시 감지 — Lambda 재구축 트리거"
   state       = "DISABLED"  # 추가
-  
+
   event_pattern = jsonencode({
     source      = ["aws.ec2"]
     detail-type = ["EC2 Instance State-change Notification"]
@@ -414,6 +414,18 @@ resource "cloudflare_record" "monitoring" {
   ttl     = 1
   proxied = false
 }
+
+
+# ACM monitoring.mzclinic.cloud DNS 검증 CNAME - 추가 260617 김강환
+resource "cloudflare_record" "acm_monitoring_validation" {
+  zone_id = var.cloudflare_zone_id
+  name    = "_396928562534e35df52179ef9c777870.monitoring"
+  content = "_5784340bbfffea0c419e67eede13aa85.jkddzztszm.acm-validations.aws."
+  type    = "CNAME"
+  ttl     = 60
+  proxied = false
+}
+
 # #260609 박경수 end
 
 # #260609 박경수 — Keycloak 설치 스크립트 S3 업로드
