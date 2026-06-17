@@ -22,54 +22,119 @@ gcloud storage cp "gs://$ARTIFACT_BUCKET/$DR_APP_OBJECT" /tmp/dr-app.zip
 unzip -q -o /tmp/dr-app.zip -d "$APP_DIR"
 rm /tmp/dr-app.zip
 
-# ── Secret Manager 시크릿 조회 ─────────────────────────────────────────────────
-echo "[startup] Secret Manager에서 시크릿 조회 중..."
 
-DB_PASSWORD=$(gcloud secrets versions access latest \
-  --project="$PROJECT_ID" --secret="$DB_PASSWORD_SECRET")
 
-JWT_SECRET_VALUE=$(gcloud secrets versions access latest \
-  --project="$PROJECT_ID" --secret="$JWT_SECRET_NAME")
 
-API_KEY_VALUE=$(gcloud secrets versions access latest \
-  --project="$PROJECT_ID" --secret="$API_KEY_SECRET_NAME")
+# ── Runtime secret runner 생성: secret 값을 디스크 .env에 저장하지 않음 ───────
+echo "[startup] FastAPI runtime runner 생성 중..."
 
-# ── DATABASE_URL 구성 ──────────────────────────────────────────────────────────
-DATABASE_URL=$(python3 - "$DATABASE_USER" "$DB_PASSWORD" "$CLOUD_SQL_IP" "$DATABASE_NAME" <<'PY'
+cat > /usr/local/bin/start-gcp-dr-app << RUNNER
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ID="$PROJECT_ID"
+CLOUD_SQL_IP="$CLOUD_SQL_IP"
+DATABASE_NAME="$DATABASE_NAME"
+DATABASE_USER="$DATABASE_USER"
+DB_PASSWORD_SECRET="$DB_PASSWORD_SECRET"
+JWT_SECRET_NAME="$JWT_SECRET_NAME"
+API_KEY_SECRET_NAME="$API_KEY_SECRET_NAME"
+ALLOWED_ORIGINS="$ALLOWED_ORIGINS"
+APP_PORT="$APP_PORT"
+APP_DIR="$APP_DIR"
+COOKIE_SECURE="${cookie_secure}"
+
+DB_PASSWORD=\$(gcloud secrets versions access latest \
+  --project="\$PROJECT_ID" --secret="\$DB_PASSWORD_SECRET")
+
+JWT_SECRET_VALUE=\$(gcloud secrets versions access latest \
+  --project="\$PROJECT_ID" --secret="\$JWT_SECRET_NAME")
+
+API_KEY_VALUE=\$(gcloud secrets versions access latest \
+  --project="\$PROJECT_ID" --secret="\$API_KEY_SECRET_NAME")
+
+DATABASE_URL=\$(python3 - "\$DATABASE_USER" "\$DB_PASSWORD" "\$CLOUD_SQL_IP" "\$DATABASE_NAME" <<'PY'
 import sys
 from urllib.parse import quote
-user     = quote(sys.argv[1], safe="")
+
+user = quote(sys.argv[1], safe="")
 password = quote(sys.argv[2], safe="")
-host     = sys.argv[3]
-name     = sys.argv[4]
+host = sys.argv[3]
+name = sys.argv[4]
+
 print(f"postgresql+psycopg2://{user}:{password}@{host}:5432/{name}")
 PY
 )
 
-# ── .env 생성 ──────────────────────────────────────────────────────────────────
-echo "[startup] .env 파일 생성 중..."
-umask 077
-cat > "$APP_DIR/backend/.env" << ENV
-DATABASE_URL=$DATABASE_URL
-DATABASE_READ_URL=$DATABASE_URL
-DB_SSLMODE=disable
-JWT_SECRET=$JWT_SECRET_VALUE
-JWT_ALGORITHM=HS256
-API_KEY=$API_KEY_VALUE
-COOKIE_SECURE=${cookie_secure}
-ALLOWED_ORIGINS=$ALLOWED_ORIGINS
-ALLOWED_HOSTS=*
-ENV
-chmod 0600 "$APP_DIR/backend/.env"
+cd "\$APP_DIR/backend"
+
+if [ -x "\$APP_DIR/venv/bin/python" ]; then
+  PYTHON="\$APP_DIR/venv/bin/python"
+else
+  PYTHON="\$(command -v python3)"
+fi
+
+exec env \
+  DATABASE_URL="\$DATABASE_URL" \
+  DATABASE_READ_URL="\$DATABASE_URL" \
+  DB_SSLMODE="disable" \
+  DB_MODE="cloud" \
+  JWT_SECRET="\$JWT_SECRET_VALUE" \
+  JWT_ALGORITHM="HS256" \
+  API_KEY="\$API_KEY_VALUE" \
+  COOKIE_SECURE="\$COOKIE_SECURE" \
+  ALLOWED_ORIGINS="\$ALLOWED_ORIGINS" \
+  ALLOWED_HOSTS="*" \
+  TZ="Asia/Seoul" \
+  PYTHONPATH="\$APP_DIR/backend" \
+  "\$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port "\$APP_PORT"
+RUNNER
+
+chmod 0750 /usr/local/bin/start-gcp-dr-app
+
+# systemd override: 기존 서비스가 .env를 읽더라도 무시하고 runner로 실행
+mkdir -p /etc/systemd/system/gcp-dr-app.service.d
+
+cat > /etc/systemd/system/gcp-dr-app.service.d/override.conf <<'EOF'
+[Service]
+EnvironmentFile=
+ExecStart=
+ExecStart=/usr/local/bin/start-gcp-dr-app
+Restart=always
+RestartSec=5
+EOF
+
+
+
+# ── NGINX API Key header는 /run tmpfs에만 생성 ────────────────────────────────
+echo "[startup] NGINX runtime API key header 생성 중..."
+
+API_KEY_VALUE=$(gcloud secrets versions access latest \
+  --project="$PROJECT_ID" --secret="$API_KEY_SECRET_NAME")
+
+install -d -m 0700 /run/gcp-dr-app
+
+python3 - "$API_KEY_VALUE" <<'PY'
+import sys
+
+api_key = sys.argv[1].replace("\\", "\\\\").replace('"', '\\"')
+
+with open("/run/gcp-dr-app/api-key-header.conf", "w") as f:
+    f.write(f'include /run/gcp-dr-app/api-key-header.conf;\n')
+PY
+
+chmod 0600 /run/gcp-dr-app/api-key-header.conf
+
+
+
 
 # ── nginx 설정 ─────────────────────────────────────────────────────────────────
 echo "[startup] nginx 설정 생성 중..."
-python3 - "$API_KEY_VALUE" "$APP_PORT" "$APP_DIR" <<'PY'
+python3 - "$APP_PORT" "$APP_DIR" <<'PY'
 import sys
 
-api_key  = sys.argv[1].replace("\\", "\\\\").replace('"', '\\"')
-app_port = sys.argv[2]
-app_dir  = sys.argv[3]
+app_port = sys.argv[1]
+app_dir  = sys.argv[2]
 
 def proxy_location(path, upstream_path=None):
     upstream = upstream_path or path
@@ -79,7 +144,7 @@ def proxy_location(path, upstream_path=None):
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-API-Key "{api_key}";
+        include /run/gcp-dr-app/api-key-header.conf;
         proxy_pass http://127.0.0.1:{app_port}{upstream};
     }}'''
 
@@ -95,7 +160,7 @@ config = f'''server {{
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-API-Key "{api_key}";
+        include /run/gcp-dr-app/api-key-header.conf;
         proxy_pass http://127.0.0.1:{app_port}/health;
     }}
 {proxy_location("/auth/")}

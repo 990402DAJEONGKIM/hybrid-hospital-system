@@ -93,9 +93,9 @@ class User(Base):
     email                = Column(String(255), nullable=True, unique=True)
     password_hash        = Column(String(255), nullable=False)
     role_id              = Column(Integer,     ForeignKey("roles.role_id"), nullable=False)
-    # DB_MODE 분기: 클라우드는 patient_id_hash varchar, 온프레미스는 patient_id UUID FK — by 김다정, 2026-06-06
     patient_id_hash = Column(String(64), nullable=True) if DB_MODE == "cloud" else None
-    patient_id      = Column(Uuid, ForeignKey("patients.patient_id"), nullable=True) if DB_MODE == "onprem" else None
+    # 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+    # patient_id      = Column(Uuid, ForeignKey("patients.patient_id"), nullable=True) if DB_MODE == "onprem" else None
     doctor_id            = Column(Uuid)
     is_active            = Column(Boolean,      nullable=False, default=True)
     failed_login_cnt     = Column(SmallInteger, nullable=False, default=0)
@@ -189,22 +189,23 @@ class AppointmentStatus(Base):
     sort_order  = Column(Integer,    nullable=False, default=0)
 
 
-class Patient(Base):
-    __tablename__ = "patients"
+# 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+# class Patient(Base):
+#     __tablename__ = "patients"
 
-    patient_id           = Column(Uuid,         primary_key=True, default=uuid.uuid4)
-    patient_name         = Column(String(100),  nullable=False)
-    national_id_encrypted = Column(Text,        nullable=False)
-    birth_date           = Column(Date,         nullable=False)
-    gender_code          = Column(String(1),    nullable=False)
-    phone_number         = Column(String(20),   nullable=False)
-    email                = Column(String(255))
-    address              = Column(Text)
-    created_at           = Column(DateTime,     nullable=False)
-    updated_at           = Column(DateTime,     nullable=False)
-    patient_id_hash      = Column(String(255),  nullable=False)
-    member_number        = Column(String(20))
-    internal_seq         = Column(String(20))
+#     patient_id           = Column(Uuid,         primary_key=True, default=uuid.uuid4)
+#     patient_name         = Column(String(100),  nullable=False)
+#     national_id_encrypted = Column(Text,        nullable=False)
+#     birth_date           = Column(Date,         nullable=False)
+#     gender_code          = Column(String(1),    nullable=False)
+#     phone_number         = Column(String(20),   nullable=False)
+#     email                = Column(String(255))
+#     address              = Column(Text)
+#     created_at           = Column(DateTime,     nullable=False)
+#     updated_at           = Column(DateTime,     nullable=False)
+#     patient_id_hash      = Column(String(255),  nullable=False)
+#     member_number        = Column(String(20))
+#     internal_seq         = Column(String(20))
 
 
 class Appointment(Base):
@@ -262,12 +263,54 @@ class AppointmentHistory(Base):
 class SyncWard(Base):
     __tablename__ = "sync_wards"
 
-    ward_id        = Column(Uuid,        primary_key=True)
-    ward_name      = Column(String(100))
-    room_type      = Column(String(20))   # 'shared', 'double', 'single'
-    total_beds     = Column(SmallInteger)
-    available_beds = Column(SmallInteger)
-    synced_at      = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    ward_id         = Column(Uuid,        primary_key=True)
+    ward_name       = Column(String(100))
+    department_code = Column(String(20),  ForeignKey("sync_departments.department_code"))
+    room_type       = Column(String(20))   # 'shared', 'double', 'single'
+    total_beds      = Column(SmallInteger)
+    available_beds  = Column(SmallInteger)
+    synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at      = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    beds = relationship("Bed", back_populates="ward")
+
+
+class Bed(Base):
+    __tablename__ = "beds"
+
+    bed_id      = Column(Uuid,       primary_key=True, default=uuid.uuid4)
+    ward_id     = Column(Uuid,       ForeignKey("sync_wards.ward_id"), nullable=False)
+    room_number = Column(String(20), nullable=False)
+    status      = Column(String(20), nullable=False, default="AVAILABLE")  # AVAILABLE / OCCUPIED / MAINTENANCE
+    created_at  = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at  = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    ward       = relationship("SyncWard",  back_populates="beds")
+    admissions = relationship("Admission", back_populates="bed")
+
+
+class Admission(Base):
+    __tablename__ = "admissions"
+
+    admission_id            = Column(Uuid,       primary_key=True, default=uuid.uuid4)
+    appointment_id          = Column(Uuid,       ForeignKey("appointments.appointment_id"), nullable=False)
+    patient_id_hash         = Column(String(64), ForeignKey("sync_patients.patient_id_hash"), nullable=False)
+    ward_id                 = Column(Uuid,       ForeignKey("sync_wards.ward_id"), nullable=False)
+    bed_id                  = Column(Uuid,       ForeignKey("beds.bed_id"))
+    room_type               = Column(String(20))
+    status                  = Column(String(20), nullable=False, default="PENDING")
+    # PENDING → ADMITTED → DISCHARGE_ORDERED → DISCHARGED
+    admitted_by             = Column(Uuid,       ForeignKey("users.user_id"))
+    discharge_ordered_by    = Column(Uuid,       ForeignKey("users.user_id"))
+    admitted_at             = Column(DateTime(timezone=True))
+    expected_discharge_date = Column(Date)
+    discharged_at           = Column(DateTime(timezone=True))
+    notes                   = Column(Text)
+    created_at              = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at              = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    ward = relationship("SyncWard")
+    bed  = relationship("Bed",         back_populates="admissions")
 
 
 # ============================================================
@@ -314,6 +357,7 @@ class SyncPatient(Base):
     birth_year      = Column(SmallInteger)
     gender_code     = Column(String(1))
     phone_hash      = Column(String(64))
+    patient_hash    = Column(String(64))
     created_at      = Column(DateTime(timezone=True))
     synced_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
@@ -385,92 +429,93 @@ class SyncSurgery(Base):
     synced_at          = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
+# 온프레미스용으로 주석처리, by 김다정, 2026-06-13
 # ============================================================
-# 온프레미스 원본 테이블 — DB_MODE=onprem 전용
-# ============================================================
+# # 온프레미스 원본 테이블 — DB_MODE=onprem 전용
+# # ============================================================
 
-class OnpremDepartment(Base):
-    __tablename__ = "departments"
+# class OnpremDepartment(Base):
+#     __tablename__ = "departments"
 
-    department_code = Column(String(20),  primary_key=True)
-    department_name = Column(String(100))
-    is_active       = Column(Boolean)
-    updated_at      = Column(DateTime(timezone=False))
-
-
-class OnpremDoctor(Base):
-    __tablename__ = "doctors"
-
-    doctor_id       = Column(Uuid,       primary_key=True)
-    doctor_name     = Column(String(100))
-    department_code = Column(String(20))
-    is_active       = Column(Boolean)
-    updated_at      = Column(DateTime(timezone=False))
+#     department_code = Column(String(20),  primary_key=True)
+#     department_name = Column(String(100))
+#     is_active       = Column(Boolean)
+#     updated_at      = Column(DateTime(timezone=False))
 
 
-class OnpremEncounter(Base):
-    __tablename__ = "encounters"
+# class OnpremDoctor(Base):
+#     __tablename__ = "doctors"
 
-    encounter_id     = Column(Uuid,        primary_key=True)
-    patient_id       = Column(Uuid)
-    encounter_type   = Column(String(30))
-    department_code  = Column(String(20))
-    doctor_id        = Column(Uuid)
-    visit_datetime   = Column(DateTime(timezone=False))
-    chief_complaint  = Column(Text)
-    status_code      = Column(String(20))
-    created_at       = Column(DateTime(timezone=False))
-    updated_at       = Column(DateTime(timezone=False))
+#     doctor_id       = Column(Uuid,       primary_key=True)
+#     doctor_name     = Column(String(100))
+#     department_code = Column(String(20))
+#     is_active       = Column(Boolean)
+#     updated_at      = Column(DateTime(timezone=False))
 
 
-class OnpremDiagnosis(Base):
-    __tablename__ = "diagnoses"
+# class OnpremEncounter(Base):
+#     __tablename__ = "encounters"
 
-    diagnosis_id    = Column(Uuid,        primary_key=True)
-    encounter_id    = Column(Uuid)
-    patient_id      = Column(Uuid)
-    diagnosis_code  = Column(String(20))
-    diagnosis_text  = Column(Text)
-    is_primary      = Column(Boolean)
-    diagnosed_at    = Column(DateTime(timezone=False))
-    updated_at      = Column(DateTime(timezone=False))
-
-
-class OnpremAllergy(Base):
-    __tablename__ = "allergies"
-
-    allergy_id    = Column(Uuid,        primary_key=True)
-    patient_id    = Column(Uuid)
-    allergy_code  = Column(String(50))
-    allergy_name  = Column(Text)
-    severity_code = Column(String(20))
-    is_active     = Column(Boolean)
-    recorded_at   = Column(DateTime(timezone=False))
-    updated_at    = Column(DateTime(timezone=False))
+#     encounter_id     = Column(Uuid,        primary_key=True)
+#     patient_id       = Column(Uuid)
+#     encounter_type   = Column(String(30))
+#     department_code  = Column(String(20))
+#     doctor_id        = Column(Uuid)
+#     visit_datetime   = Column(DateTime(timezone=False))
+#     chief_complaint  = Column(Text)
+#     status_code      = Column(String(20))
+#     created_at       = Column(DateTime(timezone=False))
+#     updated_at       = Column(DateTime(timezone=False))
 
 
-class OnpremSurgery(Base):
-    __tablename__ = "surgery_histories"
+# class OnpremDiagnosis(Base):
+#     __tablename__ = "diagnoses"
 
-    surgery_history_id = Column(Uuid, primary_key=True)
-    patient_id         = Column(Uuid)
-    surgery_code       = Column(String(50))
-    surgery_name       = Column(Text)
-    surgery_date       = Column(Date)
-    note               = Column(Text)
-    updated_at         = Column(DateTime(timezone=False))
+#     diagnosis_id    = Column(Uuid,        primary_key=True)
+#     encounter_id    = Column(Uuid)
+#     patient_id      = Column(Uuid)
+#     diagnosis_code  = Column(String(20))
+#     diagnosis_text  = Column(Text)
+#     is_primary      = Column(Boolean)
+#     diagnosed_at    = Column(DateTime(timezone=False))
+#     updated_at      = Column(DateTime(timezone=False))
 
 
-class OnpremClinicalNote(Base):
-    __tablename__ = "clinical_notes"
+# class OnpremAllergy(Base):
+#     __tablename__ = "allergies"
 
-    note_id      = Column(Uuid,        primary_key=True)
-    encounter_id = Column(Uuid)
-    patient_id   = Column(Uuid)
-    author_type  = Column(String(20))
-    note_type    = Column(String(30))
-    note_text    = Column(Text)
-    created_at   = Column(DateTime(timezone=False))
+#     allergy_id    = Column(Uuid,        primary_key=True)
+#     patient_id    = Column(Uuid)
+#     allergy_code  = Column(String(50))
+#     allergy_name  = Column(Text)
+#     severity_code = Column(String(20))
+#     is_active     = Column(Boolean)
+#     recorded_at   = Column(DateTime(timezone=False))
+#     updated_at    = Column(DateTime(timezone=False))
+
+
+# class OnpremSurgery(Base):
+#     __tablename__ = "surgery_histories"
+
+#     surgery_history_id = Column(Uuid, primary_key=True)
+#     patient_id         = Column(Uuid)
+#     surgery_code       = Column(String(50))
+#     surgery_name       = Column(Text)
+#     surgery_date       = Column(Date)
+#     note               = Column(Text)
+#     updated_at         = Column(DateTime(timezone=False))
+
+
+# class OnpremClinicalNote(Base):
+#     __tablename__ = "clinical_notes"
+
+#     note_id      = Column(Uuid,        primary_key=True)
+#     encounter_id = Column(Uuid)
+#     patient_id   = Column(Uuid)
+#     author_type  = Column(String(20))
+#     note_type    = Column(String(30))
+#     note_text    = Column(Text)
+#     created_at   = Column(DateTime(timezone=False))
 
 
 # ============================================================
@@ -482,9 +527,9 @@ class AuditLog(Base):
 
     audit_log_id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id      = Column(Uuid, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
-    # DB_MODE 분기: 클라우드는 patient_id_hash varchar, 온프레미스는 patient_id UUID — by 김다정, 2026-06-06
     patient_id_hash = Column(String(64), nullable=True) if DB_MODE == "cloud" else None
-    patient_id      = Column(Uuid,       nullable=True) if DB_MODE == "onprem"  else None
+    # 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+    # patient_id      = Column(Uuid,       nullable=True) if DB_MODE == "onprem"  else None
     action_type     = Column(String(50), nullable=False)
     target_table = Column(String(50))
     target_id    = Column(Uuid)

@@ -87,25 +87,53 @@ async function extendSession() {
     }
 }
 
+const _API_TIMEOUT_MS = 10000;
+const _TIMEOUT_RESPONSE = () => new Response(
+    JSON.stringify({ detail: '요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.' }),
+    { status: 408, headers: { 'Content-Type': 'application/json' } }
+);
+
+async function _fetchWithTimeout(url, opts) {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), _API_TIMEOUT_MS);
+    try {
+        const res = await fetch(url, { ...opts, signal: ctrl.signal });
+        clearTimeout(tid);
+        return res;
+    } catch (e) {
+        clearTimeout(tid);
+        if (e.name === 'AbortError') return _TIMEOUT_RESPONSE();
+        throw e;
+    }
+}
+
 async function apiCall(path, options = {}) {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const merged = {
         ..._fetchDefaults,
         ...options,
         headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
-    });
+    };
+    const res = await _fetchWithTimeout(`${BASE_URL}${path}`, merged);
     if (res && res.headers.get('X-Session-Expiring-Soon') === 'true') {
         _showSessionWarning(parseInt(res.headers.get('X-Session-Remaining-Seconds') || '300'));
     }
     if (res.status === 401) {
         const ok = await _refreshTokens();
         if (!ok) { logout(); return null; }
-        return fetch(`${BASE_URL}${path}`, {
-            ..._fetchDefaults,
-            ...options,
-            headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
-        });
+        return _fetchWithTimeout(`${BASE_URL}${path}`, merged);
     }
     return res;
+}
+
+function _setBtnLoading(btn, isLoading, originalText) {
+    if (isLoading) {
+        btn.disabled   = true;
+        btn._origText  = btn.innerHTML;
+        btn.innerHTML  = '<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>처리 중...';
+    } else {
+        btn.disabled  = false;
+        btn.innerHTML = originalText !== undefined ? originalText : (btn._origText || btn.innerHTML);
+    }
 }
 
 async function logout() {
@@ -118,7 +146,7 @@ async function requireLogin() {
         const res = await apiCall('/auth/me');
         if (!res || !res.ok) { window.location.href = 'login.html'; return null; }
         const me = await res.json();
-        if (!['patient', 'doctor', 'nurse'].includes(me.role)) { window.location.href = 'login.html'; return null; }
+        if (me.role !== 'patient') { window.location.href = 'login.html'; return null; }
         // must_change_password=true 또는 비밀번호 만료 시 변경 페이지 강제 이동 (SFR-038)
         if (me.must_change_password || me.password_expired) {
             if (!window.location.pathname.includes('change-password.html')) {
@@ -145,7 +173,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         if (res && res.ok) {
             const data = await res.json();
-            if (['patient', 'doctor', 'nurse'].includes(data.role)) me = data;
+            if (data.role === 'patient') me = data;
         }
     } catch {}
 

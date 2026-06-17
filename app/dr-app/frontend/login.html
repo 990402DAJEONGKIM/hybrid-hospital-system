@@ -80,17 +80,23 @@
                     style="background:#1d4ed8;">
                     <i class="fas fa-hospital mr-2"></i>내부 진료 DB 바로가기
                 </a>
-                <!-- DR 예약 현황 버튼 (doctor/nurse 전용) -->
-                <a id="drPortalBtn" href="staff-appointments.html"
-                    class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
-                    style="display:none; background:#059669;">
-                    <i class="fas fa-calendar-alt mr-2"></i>DR 예약 현황 보기
-                </a>
-                <!-- 관리자 전용 Wazuh 링크 -->
-                <a id="wazuhLinkBtn" href="#" target="_blank"
+                <!-- admin/ops_admin 전용 Wazuh 보안 모니터링 링크 — by 김다정, 2026-06-17 -->
+                <a id="wazuhLinkBtn" href="https://wazuh.mzclinic.cloud" target="_blank"
                     class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
                     style="display:none; background:#b91c1c;">
                     <i class="fas fa-shield-virus mr-2"></i>Wazuh 보안 모니터링
+                </a>
+                <!-- admin/ops_admin 전용 운영 모니터링 링크 — by 김다정, 2026-06-17 -->
+                <a id="monitoringLinkBtn" href="https://monitoring.mzclinic.cloud/" target="_blank"
+                    class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
+                    style="display:none; background:#7c3aed;">
+                    <i class="fas fa-chart-bar mr-2"></i>운영 모니터링
+                </a>
+                <!-- 간호사/의사 당일 진료 현황 대시보드 링크 -->
+                <a id="nurseDashBtn" href="nurse-dashboard.html"
+                    class="block text-center text-white py-2.5 rounded-xl font-bold text-sm mt-2"
+                    style="display:none; background:#1565c0;">
+                    <i class="fas fa-hospital-user mr-2"></i>당일 진료 현황 대시보드
                 </a>
             </div>
         </div>
@@ -99,23 +105,14 @@
 
     <script src="js/config.js"></script>
     <script>
-        // JWT payload 디코딩 (서명 검증 없이 role 확인용) — by 김다정, 2026-06-06
-        function parseJwtPayload(token) {
-            try {
-                const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-                return JSON.parse(atob(b64));
-            } catch { return {}; }
-        }
-
-        // 로그인 — by 김다정, 2026-06-06
-        // 1. /api/staff/auth/login 으로 통합 인증 (환자·직원 모두 처리)
-        // 2. JWT payload 의 role 로 분기
-        //    - doctor / nurse / admin → 내부 진료 DB 버튼 표시
-        //    - patient               → 환자 포털(index.html)로 이동
-        // 3. 직원인 경우 토큰을 URL 해시에 담아 버튼 href 설정
-        //    URL 해시는 서버 로그에 남지 않아 query param 보다 안전
-        const STAFF_ROLES = new Set(['doctor', 'nurse', 'admin']);
-        const ONPREM_URL  = 'https://staff.mzclinic.cloud';
+        // 통합 로그인 — by 김다정, 2026-06-14
+        // 환자/직원 모두 /api/staff/auth/login 단일 엔드포인트 사용 (patient/auth/login 통합됨)
+        // 응답의 role로 분기:
+        //   doctor/nurse/admin → "내부 진료 DB 바로가기" 버튼 (온프레미스에서 별도 로그인, 토큰 공유 없음)
+        //   patient            → 환자 포털(index.html) 이동
+        const ONPREM_URL   = 'https://staff.mzclinic.cloud';
+        // ops_admin(운영 모니터링 담당자) role 추가 — by 김다정, 2026-06-17
+        const STAFF_ROLES  = new Set(['doctor', 'nurse', 'admin', 'ops_admin']);
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -131,60 +128,64 @@
             submitBtn.textContent = '로그인 중...';
 
             try {
-                const res = await fetch('/api/staff/auth/login', {
+                const loginRes  = await fetch('/api/staff/auth/login', {
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ member_number: memberNumber, password: pw }),
                 });
-                const data = await res.json();
+                const loginData = await loginRes.json();
 
-                if (!res.ok) {
-                    errorMsg.textContent = data.detail || '로그인 중 오류가 발생했습니다.';
+                if (!loginRes.ok) {
+                    errorMsg.textContent = loginData.detail || '로그인 중 오류가 발생했습니다.';
                     errorBox.classList.remove('hidden');
                     return;
                 }
 
-                const payload = parseJwtPayload(data.access_token);
-                const role    = payload.role || '';
+                // role 확인: 로그인 응답 body 우선, 없으면 /me 폴백
+                let role = loginData.role || '';
+                let mustChange = loginData.must_change_password || false;
+                let pwExpired  = loginData.password_expired    || false;
 
-                if (STAFF_ROLES.has(role)) {
-                    const token = data.access_token;
-
-                    // 최초 로그인 / 비밀번호 만료 → 직원 포털 비밀번호 변경 페이지로 이동
-                    if (payload.must_change_password || payload.password_expired) {
-                        window.location.href = `${ONPREM_URL}/change-password.html#access_token=${encodeURIComponent(token)}`;
+                if (!role) {
+                    const meRes = await fetch('/api/staff/auth/me', { credentials: 'include' });
+                    if (!meRes.ok) {
+                        errorMsg.textContent = '사용자 정보를 확인할 수 없습니다. 다시 로그인해주세요.';
+                        errorBox.classList.remove('hidden');
                         return;
                     }
+                    const meData = await meRes.json();
+                    role       = meData.role || '';
+                    mustChange = meData.must_change_password || false;
+                    pwExpired  = meData.password_expired     || false;
+                }
 
-                    // 직원: 토큰을 URL 해시에 담아 온프레미스 버튼 활성화
-                    const internalUrl = `${ONPREM_URL}/#access_token=${encodeURIComponent(token)}`;
-                    document.getElementById('internalLinkBtn').href = internalUrl;
-
-                    // 관리자 전용: Wazuh 모니터링 대시보드 링크 (AWS)
-                    if (role === 'admin') {
-                        const wazuhBtn = document.getElementById('wazuhLinkBtn');
-                        wazuhBtn.href = 'https://wazuh.mzclinic.cloud';
-                        wazuhBtn.style.display = 'block';
+                // role별 버튼 표시 분기 — by 김다정, 2026-06-17
+                // ops_admin: 내부 진료 DB 숨김, Wazuh + 운영 모니터링 표시
+                // admin: 내부 진료 DB + Wazuh + 운영 모니터링 표시
+                // doctor/nurse: 내부 진료 DB + 당일 진료 현황 표시
+                if (STAFF_ROLES.has(role)) {
+                    if (role === 'ops_admin') {
+                        document.getElementById('internalLinkBtn').style.display = 'none';
+                    } else {
+                        document.getElementById('internalLinkBtn').href = `${ONPREM_URL}/login.html`;
                     }
-
+                    if (role === 'admin' || role === 'ops_admin') {
+                        document.getElementById('wazuhLinkBtn').style.display = 'block';
+                        document.getElementById('monitoringLinkBtn').style.display = 'block';
+                    }
+                    if (role === 'nurse' || role === 'doctor') {
+                        document.getElementById('nurseDashBtn').style.display = 'block';
+                    }
                     document.getElementById('internalLinkBox').style.display = 'block';
-                                        // DR 예약 현황 버튼 — doctor/nurse만 표시
-                    if (role === 'doctor' || role === 'nurse') {
-                        document.getElementById('drPortalBtn').style.display = 'block';
-                    }
                     document.getElementById('loginForm').style.display = 'none';
                 } else {
                     // 환자: 비밀번호 만료 확인 후 포털로 이동
-                    const meRes  = await fetch(`${BASE_URL}/auth/me`, {
-                        credentials: 'include',
-                        headers: { 'X-API-Key': API_KEY },
-                    });
-                    const meData = await meRes.json();
-                    window.location.href = (meData.password_expired || meData.must_change_password)
+                    window.location.href = (pwExpired || mustChange)
                         ? 'change-password.html'
                         : 'index.html';
                 }
+
             } catch {
                 errorMsg.textContent = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.';
                 errorBox.classList.remove('hidden');

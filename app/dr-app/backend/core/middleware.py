@@ -1,8 +1,11 @@
+# AWS 전용 middleware — by 김다정, 2026-06-12
+# AWS nginx 노출 경로: /staff/auth/*, /patient/auth/*, /patient/portal/*
+# 온프레미스 전용 경로(/staff/portal/, /staff/emr/, /staff/admin/, /portal/) 제거
 import re
 import uuid
-import json      # 추가 260604 김강환 - Wazuh stdout JSON 직렬화용
-import logging   # 추가 260604 김강환 - stdout 로거 생성용
-import sys        # 추가 260604 김강환 - stdout 핸들러 출력 대상 지정용
+import json
+import logging
+import sys
 
 from datetime import datetime, timezone
 from fastapi import Request
@@ -10,7 +13,7 @@ from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.database import SessionLocal
-from core.security import JWT_ALGORITHM, JWT_SECRET, JWT_SECRET_PREVIOUS  # 260601 박경수 수정 - JWT_SECRET_PREVIOUS 추가
+from core.security import JWT_ALGORITHM, JWT_SECRET, JWT_SECRET_PREVIOUS
 
 SESSION_WARN_SECONDS = 300  # 세션 만료 5분 전 경고
 
@@ -24,83 +27,87 @@ UUID_PATTERN = re.compile(
 
 
 # ──────────────────────────────────────────────────────────────
-# Wazuh stdout 로거 (추가 260604 김강환)
+# Wazuh stdout 로거
 # 동작 흐름:
 #   FastAPI stdout 출력 → Docker json-file 드라이버가 파일로 저장
 #   → /var/lib/docker/containers/*/*-json.log
 #   → ECS EC2의 Wazuh agent가 해당 파일을 읽어 Manager로 전송
-# 별도 파일 저장 코드 불필요 — stdout 출력만 하면 Docker가 알아서 파일화함
 # ──────────────────────────────────────────────────────────────
 _wazuh_logger = logging.getLogger("wazuh.audit")
-if not _wazuh_logger.handlers:                             # 추가 260605 김강환 - 핸들러 중복 방지 (hot reload 시 로그 중복 출력 방지)
-    _wazuh_handler = logging.StreamHandler(sys.stdout)        # stdout으로 출력
-    _wazuh_handler.setFormatter(logging.Formatter("%(message)s"))  # JSON만 출력 (로그레벨/시각 prefix 제거)
+if not _wazuh_logger.handlers:
+    _wazuh_handler = logging.StreamHandler(sys.stdout)
+    _wazuh_handler.setFormatter(logging.Formatter("%(message)s"))
     _wazuh_logger.addHandler(_wazuh_handler)
     _wazuh_logger.setLevel(logging.INFO)
-    _wazuh_logger.propagate = False    
+    _wazuh_logger.propagate = False
 
 def _emit_wazuh_log(action_type, result_code, user_id, source_ip, path, method, role=None):
-    # UUID_PATTERN은 이 파일 상단에 이미 선언돼 있음 → 재사용
-    # 예: /patients/a1b2...-... → /patients/{id}
     masked_path = UUID_PATTERN.sub("{id}", path)
 
     _wazuh_logger.info(json.dumps({
-        "event_type":  "fastapi_audit",   # Wazuh 룰 필터용 식별자
-        "action_type": action_type,        # LOGIN, CREATE_USER 등 행위 종류
-        "result_code": result_code,        # HTTP 상태코드 (200/401 등)
-        "user_id":     user_id,            # 직원 UUID (환자 정보 아님)
-        "role":        role,               # admin/doctor/nurse
-        "source_ip":   source_ip,          # 접속 IP (감사 추적용)
-        "path":        masked_path,        # UUID 마스킹된 요청 경로
-        "method":      method,             # GET/POST 등
+        "event_type":  "fastapi_audit",
+        "action_type": action_type,
+        "result_code": result_code,
+        "user_id":     user_id,
+        "role":        role,
+        "source_ip":   source_ip,
+        "path":        masked_path,
+        "method":      method,
         "timestamp":   datetime.now(timezone.utc).isoformat(),
-    }, ensure_ascii=False))                # ensure_ascii=False: 한글 등 비ASCII 깨짐 방지
-
+    }, ensure_ascii=False))
 
 
 # (HTTP 메서드, 경로 패턴, action_type) — 순서 중요 (구체적인 경로 먼저)
+# AWS 노출 라우터 기준으로 재작성 — by 김다정, 2026-06-12
 ACTION_MAP = [
-    # 인증
-    ("POST",   r"^/auth/login$",                              "LOGIN"),
-    ("POST",   r"^/auth/logout$",                             "LOGOUT"),
-    ("POST",   r"^/auth/register$",                           "REGISTER"),
-    ("POST",   r"^/auth/refresh$",                            "TOKEN_REFRESH"),
-    ("POST",   r"^/auth/change-password$",                    "CHANGE_PASSWORD"),
-    ("GET",    r"^/auth/me$",                                 "READ_ME"),
-    ("GET",    r"^/auth/session-status$",                     "SESSION_STATUS"),
-    # 환자 포털 — 예약
-    ("GET",    r"^/portal/appointments$",                     "READ_APPOINTMENTS"),
-    ("POST",   r"^/portal/appointments$",                     "CREATE_APPOINTMENT"),
-    ("GET",    r"^/portal/appointments/",                     "READ_APPOINTMENT"),
-    ("PATCH",  r"^/portal/appointments/",                     "UPDATE_APPOINTMENT"),
-    ("DELETE", r"^/portal/appointments/",                     "DELETE_APPOINTMENT"),
-    # 스태프 포털 — 의사 일정 / 환자
-    ("GET",    r"^/portal/doctor/schedule$",                  "VIEW_DOCTOR_SCHEDULE"),
-    ("GET",    r"^/portal/doctor/patients/",                  "READ_PATIENT_DETAIL"),
-    ("GET",    r"^/portal/doctor/patients$",                  "READ_PATIENTS"),
-    # 스태프 포털 — 원무과 예약 관리
-    ("GET",    r"^/portal/doctor/staff/appointments$",        "VIEW_ALL_APPOINTMENTS"),
-    ("PATCH",  r"^/portal/doctor/staff/appointments/",        "UPDATE_APPOINTMENT_STATUS"),
-    ("GET",    r"^/portal/doctor/staff/wards$",               "VIEW_WARD_STATUS"),
-    ("GET",    r"^/portal/doctor/staff/departments$",         "VIEW_DEPARTMENTS"),
-    # 관리자
-    ("POST",   r"^/admin/users$",                             "CREATE_USER"),
-    ("GET",    r"^/admin/users$",                             "READ_USERS"),
-    ("PATCH",  r"^/admin/users/",                             "UPDATE_USER_LOCK"),
-    ("GET",    r"^/admin/audit-logs$",                        "READ_AUDIT_LOGS"),
-    ("GET",    r"^/admin/password-policy$",                   "READ_PASSWORD_POLICY"),
-    ("PATCH",  r"^/admin/password-policy$",                   "UPDATE_PASSWORD_POLICY"),
+    # ── 스태프 인증 (/staff/auth/...) — AWS nginx 노출 ────────────
+    ("POST",   r"^/staff/auth/login$",             "LOGIN"),
+    ("POST",   r"^/staff/auth/logout$",            "LOGOUT"),
+    ("POST",   r"^/staff/auth/refresh$",           "TOKEN_REFRESH"),
+    # 웹 구조 변경 이후 잔재가 남아있는 것으로 삭제 진행 (2026-06-16) — by 김다정
+    # ("POST",   r"^/staff/auth/set-token$",         "SET_TOKEN"),
+    ("POST",   r"^/staff/auth/change-password$",   "CHANGE_PASSWORD"),
+    ("GET",    r"^/staff/auth/me/permissions$",    "READ_PERMISSIONS"),
+    ("GET",    r"^/staff/auth/me/menus$",          "READ_MENUS"),
+    ("GET",    r"^/staff/auth/me$",                "READ_ME"),
+    ("GET",    r"^/staff/auth/session-status$",    "SESSION_STATUS"),
+    # ── 간호사 대시보드 (/staff/nurse/...) ───────────────────────
+    ("GET",    r"^/staff/nurse/dashboard$",          "NURSE_DASHBOARD_VIEW"),
+    # ── 환자 포털 인증 (/patient/auth/...) ───────────────────────
+    ("POST",   r"^/patient/auth/login$",           "LOGIN"),
+    ("POST",   r"^/patient/auth/logout$",          "LOGOUT"),
+    ("POST",   r"^/patient/auth/register$",        "REGISTER"),
+    ("POST",   r"^/patient/auth/refresh$",         "TOKEN_REFRESH"),
+    ("POST",   r"^/patient/auth/change-password$", "CHANGE_PASSWORD"),
+    ("GET",    r"^/patient/auth/me$",              "READ_ME"),
+    ("GET",    r"^/patient/auth/session-status$",  "SESSION_STATUS"),
+    # ── 환자 포털 (/patient/portal/...) ──────────────────────────
+    ("GET",    r"^/patient/portal/appointments/available-slots$",       "READ_AVAILABLE_SLOTS"),
+    ("GET",    r"^/patient/portal/appointments/[^/]+/history$",         "READ_APPOINTMENT_HISTORY"),
+    ("GET",    r"^/patient/portal/appointments/[^/]+$",                 "READ_APPOINTMENT"),
+    ("POST",   r"^/patient/portal/appointments$",                       "CREATE_APPOINTMENT"),
+    ("PATCH",  r"^/patient/portal/appointments/[^/]+$",                 "UPDATE_APPOINTMENT"),
+    ("DELETE", r"^/patient/portal/appointments/[^/]+$",                 "DELETE_APPOINTMENT"),
+    ("GET",    r"^/patient/portal/appointments$",                       "READ_APPOINTMENTS"),
+    ("GET",    r"^/patient/portal/my-profile$",                         "READ_MY_PROFILE"),
+    ("PATCH",  r"^/patient/portal/my-profile$",                         "UPDATE_MY_PROFILE"),
+    ("GET",    r"^/patient/portal/recent-encounter$",                   "READ_RECENT_ENCOUNTER"),
+    ("GET",    r"^/patient/portal/my-records$",                         "READ_MY_RECORDS"),
+    ("GET",    r"^/patient/portal/encounters/[^/]+$",                   "READ_ENCOUNTER"),
+    ("GET",    r"^/patient/portal/allergies$",                          "READ_ALLERGIES"),
+    ("GET",    r"^/patient/portal/surgery-histories$",                  "READ_SURGERY_HISTORIES"),
+    ("GET",    r"^/patient/portal/prescriptions$",                      "READ_PRESCRIPTIONS"),
+    ("GET",    r"^/patient/portal/wards/availability$",                 "READ_WARD_AVAILABILITY"),
+    ("GET",    r"^/patient/portal/appointment-types$",                  "READ_APPOINTMENT_TYPES"),
+    ("GET",    r"^/patient/portal/departments$",                        "READ_DEPARTMENTS"),
+    ("GET",    r"^/patient/portal/doctors$",                            "READ_DOCTORS"),
 ]
 
+# AWS 노출 라우터 기준으로 재작성 — by 김다정, 2026-06-12
 TARGET_TABLE_MAP = [
-    (r"^/portal/appointments",              "appointments"),
-    (r"^/portal/doctor/staff/appointments", "appointments"),
-    (r"^/portal/doctor/patients",           "sync_patients"),
-    (r"^/portal/doctor/schedule",           "appointments"),
-    (r"^/portal/doctor/staff/wards",        "sync_wards"),
-    (r"^/auth",                             "users"),
-    (r"^/admin/users",                      "users"),
-    (r"^/admin/password-policy",            "password_policy"),
+    (r"^/staff/auth",                  "users"),
+    (r"^/patient/auth",                "users"),
+    (r"^/patient/portal/appointments", "appointments"),
 ]
 
 
@@ -198,35 +205,20 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         client_ip     = _get_client_ip(request)
         result_code   = str(response.status_code)
 
-        # ── DB 저장 (AuditLog 테이블) ──────────────────────────
+        # ── DB 저장 (AuditLog 테이블) — AWS cloud 모드 고정 — by 김다정, 2026-06-12
         try:
-            import os
             from models.db import AuditLog
             db = SessionLocal()
-            db_mode = os.getenv("DB_MODE", "cloud")
             try:
-                # DB_MODE 분기: 클라우드는 patient_id_hash, 온프레미스는 patient_id UUID — by 김다정, 2026-06-06
-                pid = payload.get("pid")
-                if db_mode == "onprem":
-                    log = AuditLog(
-                        user_id      = uuid.UUID(user_id_str) if user_id_str else None,
-                        patient_id   = uuid.UUID(pid) if pid else None,
-                        action_type  = action_type,
-                        target_table = _get_target_table(request.url.path),
-                        target_id    = uuid.UUID(target_id_str) if target_id_str else None,
-                        source_ip    = client_ip,
-                        result_code  = result_code,
-                    )
-                else:
-                    log = AuditLog(
-                        user_id         = uuid.UUID(user_id_str) if user_id_str else None,
-                        patient_id_hash = pid,
-                        action_type     = action_type,
-                        target_table    = _get_target_table(request.url.path),
-                        target_id       = uuid.UUID(target_id_str) if target_id_str else None,
-                        source_ip       = client_ip,
-                        result_code     = result_code,
-                    )
+                log = AuditLog(
+                    user_id         = uuid.UUID(user_id_str) if user_id_str else None,
+                    patient_id_hash = payload.get("pid"),   # AWS RDS: patient_id_hash varchar
+                    action_type     = action_type,
+                    target_table    = _get_target_table(request.url.path),
+                    target_id       = uuid.UUID(target_id_str) if target_id_str else None,
+                    source_ip       = client_ip,
+                    result_code     = result_code,
+                )
                 db.add(log)
                 db.commit()
             finally:
