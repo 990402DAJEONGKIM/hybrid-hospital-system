@@ -13,11 +13,10 @@ from core.security import (
     COOKIE_SECURE,
     create_access_token, generate_refresh_token,
     get_client_ip, get_current_user, get_password_policy,
-    hash_password, sha256_hex,
+    hash_password, hash_phone, sha256_hex,
     verify_api_key, verify_password,
 )
-from core.ses import send_lockout_alert
-from models.db import AuditLog, LoginHistory, Role, Session as SessionModel, SyncPatient, User
+from models.db import AuditLog, Role, Session as SessionModel, SyncPatient, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -27,9 +26,15 @@ REFRESH_TOKEN_EXPIRE_HOURS  = 8
 
 # ── Pydantic 스키마 ─────────────────────────────────────────
 
-class LoginRequest(BaseModel):
-    member_number: str
-    password:      str
+# 미사용 — 로그인은 /api/staff/auth/login 으로 통합, by 김다정, 2026-06-13
+# class LoginRequest(BaseModel):
+#     member_number: str
+#     password:      str
+
+class RegisterRequest(BaseModel):
+    phone_number: str  # 전화번호 (숫자만 또는 하이픈 포함 허용)
+    birth_year:   int  # 생년 4자리
+    password:     str
 
 class ChangePasswordRequest(BaseModel):
     old_password: str
@@ -82,87 +87,151 @@ def _build_token_payload(user: User) -> dict:
 # ── 엔드포인트 ──────────────────────────────────────────────
 
 
-@router.post("/login")
-def login(
-    body:    LoginRequest,
+@router.post("/register", status_code=201)
+def register(
+    body:    RegisterRequest,
     request: Request,
     db:      DbSession = Depends(get_db),
     _:       str       = Depends(verify_api_key),
 ):
-    # 로그인 시도 기록 준비 (ISMS-P 2.9.1)
-    history = LoginHistory(email=body.member_number, ip_address=get_client_ip(request), user_agent=request.headers.get("user-agent"))
+    """환자 포털 계정 신규 등록.
 
-    user = db.query(User).filter(User.member_number == body.member_number).first()
-    if not user:
-        history.result = "fail"
-        db.add(history)
+    전화번호 + 생년으로 sync_patients에서 환자를 조회한 뒤,
+    해당 patient_id_hash를 연결한 users 계정을 생성한다.
+    """
+    pw_error = validate_password(body.password)
+    if pw_error:
+        raise HTTPException(status_code=400, detail=pw_error)
+
+    phone_hash = hash_phone(body.phone_number)
+    patient = db.query(SyncPatient).filter(
+        SyncPatient.phone_hash == phone_hash,
+        SyncPatient.birth_year == body.birth_year,
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="일치하는 환자 정보를 찾을 수 없습니다. 전화번호·생년을 확인하세요.")
+
+    existing = db.query(User).filter(
+        User.patient_id_hash == patient.patient_id_hash
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="이미 등록된 환자 포털 계정이 있습니다.")
+
+    patient_role = db.query(Role).filter(Role.role_code == "patient", Role.is_active == True).first()
+    if not patient_role:
+        raise HTTPException(status_code=500, detail="patient 역할이 설정되지 않았습니다. 관리자에게 문의하세요.")
+
+    # member_number 자동 생성: 현재 patient 계정 수 기반 순번
+    seq = db.query(User).filter(User.role_id == patient_role.role_id).count() + 1
+    member_number = f"P{seq:07d}"
+    while db.query(User).filter(User.member_number == member_number).first():
+        seq += 1
+        member_number = f"P{seq:07d}"
+
+    now  = datetime.now(timezone.utc)
+    user = User(
+        member_number        = member_number,
+        password_hash        = hash_password(body.password),
+        role_id              = patient_role.role_id,
+        patient_id_hash      = patient.patient_id_hash,
+        must_change_password = False,
+        password_changed_at  = now,
+    )
+    db.add(user)
+    try:
         db.commit()
-        raise HTTPException(status_code=401, detail="회원번호 또는 비밀번호가 올바르지 않습니다.")
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="계정 생성 중 충돌이 발생했습니다. 다시 시도해주세요.")
 
-    now = datetime.now(timezone.utc)
+    _record_audit(db, user.user_id, "REGISTER", "201", request, patient.patient_id_hash)
 
-    if user.locked_until and user.locked_until > now:
-        history.user_id = user.user_id
-        history.result = "locked"
-        db.add(history)
-        db.commit()
-        remaining = int((user.locked_until - now).total_seconds() / 60)
-        raise HTTPException(
-            status_code=401,
-            detail=f"계정이 잠겨 있습니다. {remaining}분 후 재시도하세요.",
-        )
+    return {
+        "member_number": member_number,
+        "message":       "환자 포털 계정이 생성되었습니다. 회원번호를 저장해두세요.",
+    }
 
-    if not verify_password(body.password, user.password_hash):
-        policy = get_password_policy(db)
-        history.user_id = user.user_id
-        history.result = "fail"
-        user.failed_login_cnt += 1
-        if user.failed_login_cnt >= policy.max_failed_logins:
-            user.locked_until = now + timedelta(minutes=policy.lockout_minutes)
-            history.result = "locked"
-            _record_audit(db, user.user_id, "ACCOUNT_LOCKED", "401", request)
-            # 관리자 SES 알림 (실패해도 로그인 흐름에 영향 없음)
-            send_lockout_alert(
-                target_email = user.email,
-                ip_address   = get_client_ip(request),
-                locked_until = user.locked_until.isoformat(),
-            )
-        db.add(history)
-        db.commit()
-        raise HTTPException(status_code=401, detail="회원번호 또는 비밀번호가 올바르지 않습니다.")
 
-    # 성공 기록
-    user.failed_login_cnt = 0
-    user.locked_until     = None
-    user.last_login_at    = now
-    history.user_id = user.user_id
-    history.result = "success"
-    db.add(history)
-    _record_audit(db, user.user_id, "LOGIN", "200", request)
-
-    access_token  = create_access_token(_build_token_payload(user), ACCESS_TOKEN_EXPIRE_SECONDS)
-    refresh_token = generate_refresh_token()
-
-    db.add(SessionModel(
-        user_id            = user.user_id,
-        refresh_token_hash = sha256_hex(refresh_token),
-        user_agent         = request.headers.get("user-agent"),
-        ip_address         = get_client_ip(request),
-        expires_at         = now + timedelta(hours=REFRESH_TOKEN_EXPIRE_HOURS),
-    ))
-    db.commit()
-
-    access_token_expires_at = (
-        now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)
-    ).isoformat()
-
-    response = JSONResponse({
-        "token_type":              "bearer",
-        "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
-        "access_token_expires_at": access_token_expires_at,
-    })
-    _set_auth_cookies(response, access_token, refresh_token)
-    return response
+# 미사용 — 로그인은 /api/staff/auth/login 으로 통합, by 김다정, 2026-06-13
+# @router.post("/login")
+# def login(
+#     body:    LoginRequest,
+#     request: Request,
+#     db:      DbSession = Depends(get_db),
+#     _:       str       = Depends(verify_api_key),
+# ):
+#     history = LoginHistory(email=body.member_number, ip_address=get_client_ip(request), user_agent=request.headers.get("user-agent"))
+#
+#     user = db.query(User).filter(User.member_number == body.member_number).first()
+#     if not user:
+#         history.result = "fail"
+#         db.add(history)
+#         db.commit()
+#         raise HTTPException(status_code=401, detail="회원번호 또는 비밀번호가 올바르지 않습니다.")
+#
+#     now = datetime.now(timezone.utc)
+#
+#     if user.locked_until and user.locked_until > now:
+#         history.user_id = user.user_id
+#         history.result = "locked"
+#         db.add(history)
+#         db.commit()
+#         remaining = int((user.locked_until - now).total_seconds() / 60)
+#         raise HTTPException(
+#             status_code=401,
+#             detail=f"계정이 잠겨 있습니다. {remaining}분 후 재시도하세요.",
+#         )
+#
+#     if not verify_password(body.password, user.password_hash):
+#         policy = get_password_policy(db)
+#         history.user_id = user.user_id
+#         history.result = "fail"
+#         user.failed_login_cnt += 1
+#         if user.failed_login_cnt >= policy.max_failed_logins:
+#             user.locked_until = now + timedelta(minutes=policy.lockout_minutes)
+#             history.result = "locked"
+#             _record_audit(db, user.user_id, "ACCOUNT_LOCKED", "401", request)
+#             send_lockout_alert(
+#                 target_email = user.email,
+#                 ip_address   = get_client_ip(request),
+#                 locked_until = user.locked_until.isoformat(),
+#             )
+#         db.add(history)
+#         db.commit()
+#         raise HTTPException(status_code=401, detail="회원번호 또는 비밀번호가 올바르지 않습니다.")
+#
+#     user.failed_login_cnt = 0
+#     user.locked_until     = None
+#     user.last_login_at    = now
+#     history.user_id = user.user_id
+#     history.result = "success"
+#     db.add(history)
+#     _record_audit(db, user.user_id, "LOGIN", "200", request)
+#
+#     access_token  = create_access_token(_build_token_payload(user), ACCESS_TOKEN_EXPIRE_SECONDS)
+#     refresh_token = generate_refresh_token()
+#
+#     db.add(SessionModel(
+#         user_id            = user.user_id,
+#         refresh_token_hash = sha256_hex(refresh_token),
+#         user_agent         = request.headers.get("user-agent"),
+#         ip_address         = get_client_ip(request),
+#         expires_at         = now + timedelta(hours=REFRESH_TOKEN_EXPIRE_HOURS),
+#     ))
+#     db.commit()
+#
+#     access_token_expires_at = (
+#         now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)
+#     ).isoformat()
+#
+#     response = JSONResponse({
+#         "token_type":              "bearer",
+#         "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
+#         "access_token_expires_at": access_token_expires_at,
+#     })
+#     _set_auth_cookies(response, access_token, refresh_token)
+#     return response
 
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
@@ -328,20 +397,20 @@ def change_password(
     response.delete_cookie(key="refresh_token", path="/api/patient/auth/refresh")
 
 
-@router.get("/session-status")
-def session_status(
-    current_user: dict = Depends(get_current_user),
-):
-    """액세스 토큰 잔여 시간 반환. 프론트엔드 만료 경고 타이머용."""
-    exp = current_user.get("exp")
-    if not exp:
-        return {"remaining_seconds": 0, "will_expire_soon": True, "expires_at": None}
-
-    now_ts    = datetime.now(timezone.utc).timestamp()
-    remaining = max(0, int(exp - now_ts))
-
-    return {
-        "remaining_seconds": remaining,
-        "will_expire_soon":  remaining < 300,
-        "expires_at":        datetime.fromtimestamp(exp, tz=timezone.utc).isoformat(),
-    }
+# 미사용 — 프론트엔드에서 호출하지 않음, by 김다정, 2026-06-13
+# @router.get("/session-status")
+# def session_status(
+#     current_user: dict = Depends(get_current_user),
+# ):
+#     exp = current_user.get("exp")
+#     if not exp:
+#         return {"remaining_seconds": 0, "will_expire_soon": True, "expires_at": None}
+#
+#     now_ts    = datetime.now(timezone.utc).timestamp()
+#     remaining = max(0, int(exp - now_ts))
+#
+#     return {
+#         "remaining_seconds": remaining,
+#         "will_expire_soon":  remaining < 300,
+#         "expires_at":        datetime.fromtimestamp(exp, tz=timezone.utc).isoformat(),
+#     }

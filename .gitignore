@@ -54,3 +54,24 @@ __pycache__/
 *.pyo
 .claude/
 .devcontainer/
+
+
+
+# DR app build artifacts
+.artifacts/
+app/dr-app/VERSION
+
+# Python cache / local db
+__pycache__/
+*.pyc
+testdb.db
+
+# Sensitive local files
+.env
+cookies.txt
+nurse_cookies.txt
+
+# Terraform / packaged archives
+*.tfstate
+*.tfstate.*
+.terraform/

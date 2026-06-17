@@ -56,7 +56,7 @@
 
     <div id="errMsg"></div>
     <div class="btn-row">
-        <button class="btn-secondary" onclick="location.href='index.html'">뒤로</button>
+        <button class="btn-secondary" onclick="location.href='my-appointments.html'">뒤로</button>
         <button class="btn-primary" id="saveBtn" onclick="save()">변경 저장</button>
     </div>
 </div>
@@ -73,7 +73,7 @@
 
         if (!apptId) {
             alert('잘못된 접근입니다.');
-            location.href = 'index.html';
+            location.href = 'my-appointments.html';
             return;
         }
 
@@ -100,7 +100,7 @@
 
         if (!date) { document.getElementById('errMsg').textContent = '날짜를 선택해주세요.'; return; }
 
-        btn.disabled = true;
+        _setBtnLoading(btn, true);
         document.getElementById('errMsg').textContent = '';
 
         const body = { appointment_date: date, appointment_time: time };
@@ -114,11 +114,11 @@
 
         if (res && res.ok) {
             alert('예약이 변경되었습니다.');
-            location.href = 'index.html';
+            location.href = 'my-appointments.html';
         } else {
             const err = await res?.json().catch(() => ({}));
             document.getElementById('errMsg').textContent = err.detail || '변경 처리 중 오류가 발생했습니다.';
-            btn.disabled = false;
+            _setBtnLoading(btn, false, '변경 저장');
         }
     }
 

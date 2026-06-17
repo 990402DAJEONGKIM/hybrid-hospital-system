@@ -30,11 +30,7 @@ resource "google_storage_bucket" "artifact" {
   depends_on = [google_project_service.storage]
 }
 
-resource "google_storage_bucket_object" "dr_app" {
-  name   = "dr-app-${data.archive_file.dr_app.output_md5}.zip"
-  bucket = google_storage_bucket.artifact.name
-  source = data.archive_file.dr_app.output_path
-}
+
 
 # 모니터 설치 스크립트 GCS 업로드
 # variables 변경 후 apply → gcp-rds-proxy-01 reset 으로 반영
@@ -42,20 +38,20 @@ resource "google_storage_bucket_object" "monitor_script" {
   name   = "dr-monitor-install.sh"
   bucket = google_storage_bucket.artifact.name
   content = templatefile("${path.module}/scripts/startup-monitor.sh.tftpl", {
-    project_id              = var.project_id
-    zone                    = var.zone
-    mig_name                = google_compute_instance_group_manager.dr_app.name
-    aws_healthcheck_url     = var.aws_healthcheck_url
-    interval_seconds        = var.healthcheck_interval_seconds
-    failure_threshold       = var.failure_threshold
-    recovery_threshold      = var.recovery_threshold
-    cf_api_token_secret     = var.cf_api_token_secret_name
-    cf_zone_id_secret       = var.cf_zone_id_secret_name
-    cf_record_name          = var.cf_record_name
-    gcp_cname_target        = var.gcp_cname_target
-    aws_record_content      = var.aws_record_content
-    failover_mode           = var.failover_mode
-    enable_ops_agent        = var.enable_ops_agent
+    project_id          = var.project_id
+    zone                = var.zone
+    mig_name            = google_compute_instance_group_manager.dr_app.name
+    aws_healthcheck_url = var.aws_healthcheck_url
+    interval_seconds    = var.healthcheck_interval_seconds
+    failure_threshold   = var.failure_threshold
+    recovery_threshold  = var.recovery_threshold
+    cf_api_token_secret = var.cf_api_token_secret_name
+    cf_zone_id_secret   = var.cf_zone_id_secret_name
+    cf_record_name      = var.cf_record_name
+    gcp_cname_target    = var.gcp_cname_target
+    aws_record_content  = var.aws_record_content
+    failover_mode       = var.failover_mode
+    enable_ops_agent    = var.enable_ops_agent
   })
 }
 
@@ -265,7 +261,7 @@ resource "google_compute_instance_template" "dr_app" {
       app_port                = local.app_port
       cookie_secure           = var.cookie_secure
       artifact_bucket         = google_storage_bucket.artifact.name
-      dr_app_object           = google_storage_bucket_object.dr_app.name
+      dr_app_object           = var.dr_app_object_name
     })
   }
 
@@ -473,6 +469,32 @@ resource "google_service_account_iam_member" "github_packer_workload_identity" {
 
 resource "google_service_account_iam_member" "github_packer_token_creator" {
   service_account_id = google_service_account.github_packer.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
+}
+
+# ── GitHub Actions — DR 앱 아티팩트 업로드 전용 SA ─────────────────────────────
+
+resource "google_service_account" "github_dr_deploy" {
+  account_id   = "gcp-sa-github-dr-deploy"
+  display_name = "GitHub Actions DR App Deploy SA"
+  description  = "GitHub Actions에서 DR 앱 아티팩트를 GCS로 업로드하는 전용 서비스 계정"
+}
+
+resource "google_storage_bucket_iam_member" "github_dr_deploy_artifact_writer" {
+  bucket = google_storage_bucket.artifact.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.github_dr_deploy.email}"
+}
+
+resource "google_service_account_iam_member" "github_dr_deploy_workload_identity" {
+  service_account_id = google_service_account.github_dr_deploy.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
+}
+
+resource "google_service_account_iam_member" "github_dr_deploy_token_creator" {
+  service_account_id = google_service_account.github_dr_deploy.name
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
 }

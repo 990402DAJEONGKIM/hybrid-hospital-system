@@ -1,6 +1,9 @@
+import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -20,7 +23,8 @@ from core.ses import send_lockout_alert
 import os
 
 from models.db import (
-    AuditLog, LoginHistory, Menu, OnpremDepartment, OnpremDoctor,
+    AuditLog, LoginHistory, Menu,
+    # OnpremDepartment, OnpremDoctor,  # 불필요, by 김다정, 2026-06-13
     Role, RoleMenu, Session as SessionModel,
     SyncDepartment, SyncDoctor, User,
 )
@@ -48,9 +52,6 @@ class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
 
-class SetTokenRequest(BaseModel):
-    token: str
-
 
 # ── 비밀번호 정책 검증 (ISMS-P 2.5.3) ──────────────────────
 
@@ -75,32 +76,33 @@ def _record_audit(db: DbSession, user_id: uuid.UUID | None, action: str, result:
     try:
         log = AuditLog(
             user_id=user_id,
-            patient_id=patient_id,
+            patient_id_hash=str(patient_id) if patient_id else None,
             action_type=action,
             source_ip=get_client_ip(request),
             result_code=result
         )
         db.add(log)
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.error("감사 로그 기록 실패 (action=%s user=%s): %s", action, user_id, exc)
 
 
 def _build_token_payload(user: User) -> dict:
-    import os
+    # import os  # 불필요, by 김다정, 2026-06-13
     payload = {
         "sub":  str(user.user_id),
         "role": user.role_ref.role_code,
     }
-    # DB_MODE 분기: 클라우드는 patient_id_hash, 온프레미스는 patient_id UUID — by 김다정, 2026-06-06
-    if os.getenv("DB_MODE", "cloud") == "onprem":
-        pid = getattr(user, "patient_id", None)
-        if pid:
-            payload["pid"] = str(pid)
-    else:
-        pid = getattr(user, "patient_id_hash", None)
-        if pid:
-            payload["pid"] = pid
+    # 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+    # if os.getenv("DB_MODE", "cloud") == "onprem":
+    #     pid = getattr(user, "patient_id", None)
+    #     if pid:
+    #         payload["pid"] = str(pid)
+    # else:
+    pid = getattr(user, "patient_id_hash", None)
+    if pid:
+        payload["pid"] = pid
     if user.doctor_id:
         payload["did"] = str(user.doctor_id)
     return payload
@@ -175,31 +177,33 @@ def login(
 
     now = datetime.now(timezone.utc)
 
-    if user.locked_until and user.locked_until > now:
-        history.user_id = user.user_id
-        history.result = "locked"
-        db.add(history)
-        db.commit()
-        remaining = int((user.locked_until - now).total_seconds() / 60)
-        raise HTTPException(
-            status_code=401,
-            detail=f"계정이 잠겨 있습니다. {remaining}분 후 재시도하세요.",
-        )
+    # [임시] 계정 잠금 해제 - 원복 필요 (ISMS-P 2.9.1)
+    # if user.locked_until and user.locked_until > now:
+    #     history.user_id = user.user_id
+    #     history.result = "locked"
+    #     db.add(history)
+    #     db.commit()
+    #     remaining = int((user.locked_until - now).total_seconds() / 60)
+    #     raise HTTPException(
+    #         status_code=401,
+    #         detail=f"계정이 잠겨 있습니다. {remaining}분 후 재시도하세요.",
+    #     )
 
     if not verify_password(body.password, user.password_hash):
         policy = get_password_policy(db)
         history.user_id = user.user_id
         history.result = "fail"
         user.failed_login_cnt += 1
-        if user.failed_login_cnt >= policy.max_failed_logins:
-            user.locked_until = now + timedelta(minutes=policy.lockout_minutes)
-            history.result = "locked"
-            _record_audit(db, user.user_id, "ACCOUNT_LOCKED", "401", request)
-            send_lockout_alert(
-                target_email = user.email,
-                ip_address   = get_client_ip(request),
-                locked_until = user.locked_until.isoformat(),
-            )
+        # [임시] 계정 잠금 해제 - 원복 필요 (ISMS-P 2.9.1)
+        # if user.failed_login_cnt >= policy.max_failed_logins:
+        #     user.locked_until = now + timedelta(minutes=policy.lockout_minutes)
+        #     history.result = "locked"
+        #     _record_audit(db, user.user_id, "ACCOUNT_LOCKED", "401", request)
+        #     send_lockout_alert(
+        #         target_email = user.email,
+        #         ip_address   = get_client_ip(request),
+        #         locked_until = user.locked_until.isoformat(),
+        #     )
         db.add(history)
         db.commit()
         raise HTTPException(status_code=401, detail="회원번호 또는 비밀번호가 올바르지 않습니다.")
@@ -229,14 +233,23 @@ def login(
         now + timedelta(seconds=ACCESS_TOKEN_EXPIRE_SECONDS)
     ).isoformat()
 
-    # access_token을 응답 body에도 포함 — by 김다정, 2026-06-06
-    # mzclinic.cloud(AWS)에서 로그인 후 staff.mzclinic.cloud(온프레미스)로 이동 시
-    # 서로 다른 도메인이라 쿠키 공유 불가 → JS가 토큰을 읽어 URL 해시로 전달하는 방식 사용
+    # 이중 로그인 전환 — by 김다정, 2026-06-14
+    # AWS와 온프레미스 각각 독립 로그인. 토큰 크로스 도메인 공유 없음.
+    # access_token은 httponly 쿠키로만 설정 (mzclinic.cloud 도메인 한정).
+    # 프론트엔드에서 역할 분기 UI용으로 role만 응답 body에 포함.
+    policy = get_password_policy(db)
+    password_expired = (
+        (now - user.password_changed_at).days >= policy.expire_days
+        if user.password_changed_at else False
+    )
+
     response = JSONResponse({
         "token_type":              "bearer",
         "expires_in":              ACCESS_TOKEN_EXPIRE_SECONDS,
         "access_token_expires_at": access_token_expires_at,
-        "access_token":            access_token,   # 크로스 도메인 전달용 — by 김다정, 2026-06-06
+        "role":                    user.role_ref.role_code,
+        "must_change_password":    user.must_change_password,
+        "password_expired":        password_expired,
     })
     _set_auth_cookies(response, access_token, refresh_token)
     return response
@@ -320,26 +333,9 @@ def refresh(
     return response
 
 
-@router.post("/set-token", status_code=204)
-def set_token(
-    body:     SetTokenRequest,
-    response: Response,
-    _:        str = Depends(verify_api_key),
-):
-    """mzclinic.cloud 에서 발급된 JWT 를 온프레미스 HTTP-only 쿠키로 설정. — by 김다정, 2026-06-06
-    토큰 검증 실패 시 401 반환 → 브라우저가 일반 로그인 화면을 표시.
-    """
-    from core.security import decode_access_token
-    decode_access_token(body.token)  # 유효하지 않으면 401 raise
-    response.set_cookie(
-        key      = "access_token",
-        value    = body.token,
-        httponly = True,
-        secure   = COOKIE_SECURE,
-        samesite = "strict",
-        max_age  = ACCESS_TOKEN_EXPIRE_SECONDS,
-        path     = "/",
-    )
+# /set-token 엔드포인트 제거 — by 김다정, 2026-06-14
+# 단일 로그인(AWS JWT → 온프레미스 쿠키 중계) 방식 폐기.
+# AWS/온프레미스 이중 로그인으로 전환, 토큰 공유 없음.
 
 
 @router.post("/logout", status_code=204)
@@ -387,27 +383,29 @@ def me(
         "must_change_password": user.must_change_password,
         "password_expire_days": policy.expire_days,
     }
-    if user.patient_id:
-        result["patient_id_hash"] = str(user.patient_id)
+    # 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+    # if user.patient_id:
+    #     result["patient_id_hash"] = str(user.patient_id)
     if user.doctor_id:
-        if _DB_MODE == "onprem":
-            doctor = db.query(OnpremDoctor).filter(OnpremDoctor.doctor_id == user.doctor_id).first()
-            if doctor:
-                result["department_code"] = doctor.department_code
-                result["doctor_name"]     = doctor.doctor_name
-                dept = db.query(OnpremDepartment).filter(
-                    OnpremDepartment.department_code == doctor.department_code
-                ).first()
-                result["department_name"] = dept.department_name if dept else doctor.department_code
-        else:
-            doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
-            if doctor:
-                result["department_code"] = doctor.department_code
-                result["doctor_name"]     = doctor.doctor_name
-                dept = db.query(SyncDepartment).filter(
-                    SyncDepartment.department_code == doctor.department_code
-                ).first()
-                result["department_name"] = dept.department_name if dept else doctor.department_code
+        # 온프레미스용으로 주석처리, by 김다정, 2026-06-13
+        # if _DB_MODE == "onprem":
+        #     doctor = db.query(OnpremDoctor).filter(OnpremDoctor.doctor_id == user.doctor_id).first()
+        #     if doctor:
+        #         result["department_code"] = doctor.department_code
+        #         result["doctor_name"]     = doctor.doctor_name
+        #         dept = db.query(OnpremDepartment).filter(
+        #             OnpremDepartment.department_code == doctor.department_code
+        #         ).first()
+        #         result["department_name"] = dept.department_name if dept else doctor.department_code
+        # else:
+        doctor = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == user.doctor_id).first()
+        if doctor:
+            result["department_code"] = doctor.department_code
+            result["doctor_name"]     = doctor.doctor_name
+            dept = db.query(SyncDepartment).filter(
+                SyncDepartment.department_code == doctor.department_code
+            ).first()
+            result["department_name"] = dept.department_name if dept else doctor.department_code
     return result
 
 

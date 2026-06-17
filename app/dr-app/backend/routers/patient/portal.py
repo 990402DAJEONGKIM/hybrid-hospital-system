@@ -13,7 +13,7 @@ from core.security import get_current_user, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
-    Notification, Patient, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
+    Notification, SyncAllergy, SyncDepartment, SyncDiagnosis, SyncDoctor,
     SyncEncounter, SyncPatient, SyncSurgery, SyncWard, User,
 )
 
@@ -24,24 +24,31 @@ router = APIRouter(prefix="/portal", tags=["patient-portal"])
 
 # ── 알림 헬퍼 ────────────────────────────────────────────────────
 
-def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
-    """예약 상태 변경 시 환자 이메일 알림 발송 + notifications 테이블 기록."""
+def _notify_patient(
+    db:        DbSession,
+    appt:      Appointment,
+    status:    str,
+    prev_date: Optional[str] = None,
+    prev_time: Optional[str] = None,
+) -> None:
+    """예약 상태 변경 시 환자 이메일 알림 발송 + notifications/audit_logs 기록."""
     try:
-        patient = db.query(Patient).filter(Patient.patient_id_hash == appt.patient_id_hash).first()
-        if not patient:
+        patient_user = db.query(User).filter(User.patient_id_hash == appt.patient_id_hash).first()
+        if not patient_user:
             return
-        if not patient.email:
+        if not patient_user.email:
             logger.info("이메일 미등록 환자 — 알림 생략 (patient_id_hash=%s)", appt.patient_id_hash)
             return
-        patient_user = db.query(User).filter(User.patient_id == patient.patient_id).first()
         type_name = appt.appt_type.type_name if appt.appt_type else None
         sent = send_appointment_notification(
-            to_email  = patient.email,
+            to_email  = patient_user.email,
             status    = status,
             appt_date = str(appt.appointment_date),
             appt_time = appt.appointment_time.strftime("%H:%M") if appt.appointment_time else None,
             dept_code = appt.department_code,
             type_name = type_name,
+            prev_date = prev_date,
+            prev_time = prev_time,
         )
         now = datetime.now(timezone.utc)
         db.add(Notification(
@@ -51,6 +58,15 @@ def _notify_patient(db: DbSession, appt: Appointment, status: str) -> None:
             status         = "sent" if sent else "failed",
             sent_at        = now if sent else None,
         ))
+        # 알림 발송 이벤트 감사 기록 (SER-005: action_type=NOTIFICATION_SENT)
+        record_audit(
+            db, action_type="NOTIFICATION_SENT",
+            result_code="200" if sent else "500",
+            user_id=patient_user.user_id if patient_user else None,
+            patient_id=appt.patient_id_hash,
+            target_table="notifications",
+            target_id=appt.appointment_id,
+        )
         db.commit()
     except Exception as exc:
         logger.warning("예약 알림 기록 실패 (appointment_id=%s): %s", appt.appointment_id, exc)
@@ -400,6 +416,21 @@ def create_appointment(
     if body.type_code.lower() in ("initial", "first_visit", "outpatient_new"):
         raise HTTPException(status_code=400, detail="초진 예약은 온라인으로 신청할 수 없습니다.")
 
+    # 입원 예약: 희망 병실 유형의 가용 병상 확인 (SFR-035)
+    if body.type_code.lower() == "inpatient" and body.room_type_pref:
+        _ROOM_TYPE_MAP = {"1인실": "single", "2인실": "double", "다인실": "shared"}
+        rt = _ROOM_TYPE_MAP.get(body.room_type_pref)
+        if rt:
+            avail = db.query(SyncWard).filter(
+                SyncWard.room_type == rt,
+                SyncWard.available_beds > 0,
+            ).first()
+            if not avail:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"현재 {body.room_type_pref} 가용 병상이 없습니다. 다른 병실 유형을 선택하거나 원무과에 문의하세요.",
+                )
+
     # 예약 유형 검증
     appt_type = db.query(AppointmentType).filter(
         AppointmentType.type_code == body.type_code,
@@ -408,8 +439,9 @@ def create_appointment(
     if not appt_type:
         raise HTTPException(status_code=400, detail="유효하지 않은 예약 유형입니다.")
 
-    # 재진·입원·수술: 해당 진료과 이전 내원 이력 필수
-    if appt_type.requires_previous_visit:
+    # 입원·수술 전: 해당 진료과 이전 내원 이력 필수 (외래는 미적용)
+    _OUTPATIENT_CODES = {"outpatient_new", "outpatient_return"}
+    if appt_type.requires_previous_visit and body.type_code not in _OUTPATIENT_CODES:
         has_visit = db.query(SyncEncounter).filter(
             SyncEncounter.patient_id_hash == pid,
             SyncEncounter.department_code == body.department_code,
@@ -533,10 +565,11 @@ def update_appointment(
     except ValueError:
         raise HTTPException(status_code=422, detail="유효하지 않은 예약 ID입니다.")
 
+    # 수정 대상 행 먼저 잠금
     appt = db.query(Appointment).filter(
         Appointment.appointment_id  == appt_uuid,
         Appointment.patient_id_hash == pid,
-    ).first()
+    ).with_for_update().first()
     if not appt:
         raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
 
@@ -564,6 +597,26 @@ def update_appointment(
         except (ValueError, AttributeError):
             raise HTTPException(status_code=422, detail="시간 형식이 올바르지 않습니다. (HH:MM)")
 
+    # 변경된 날짜·시간 기준 중복 예약 검증 (자기 자신 제외)
+    if body.appointment_date is not None or body.appointment_time is not None:
+        conflict_q = (
+            db.query(Appointment)
+            .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
+            .filter(
+                Appointment.appointment_id  != appt_uuid,
+                Appointment.appointment_date == appt.appointment_date,
+                Appointment.appointment_time == appt.appointment_time,
+                ~AppointmentStatus.status_code.in_(["cancelled", "no_show"]),
+            )
+            .with_for_update(nowait=False)
+        )
+        if appt.doctor_id:
+            conflict_q = conflict_q.filter(Appointment.doctor_id == appt.doctor_id)
+        else:
+            conflict_q = conflict_q.filter(Appointment.department_code == appt.department_code)
+        if conflict_q.first():
+            raise HTTPException(status_code=409, detail="선택한 시간대에 이미 예약이 있습니다. 다른 시간을 선택해주세요.")
+
     if body.notes is not None:
         appt.notes = body.notes
 
@@ -588,7 +641,11 @@ def update_appointment(
     db.commit()
     db.refresh(appt)
 
-    _notify_patient(db, appt, "updated")
+    _notify_patient(
+        db, appt, "updated",
+        prev_date = str(prev_date),
+        prev_time = prev_time.strftime("%H:%M") if prev_time else None,
+    )
 
     return _appt_out(appt)
 
@@ -720,9 +777,10 @@ def update_my_profile(
 
 @router.get("/wards/availability")
 def get_wards_availability(
-    room_type:    Optional[str] = Query(default=None, description="single | double | shared"),
-    current_user: dict          = Depends(get_current_user),
-    db:           DbSession     = Depends(get_read_db),
+    room_type:       Optional[str] = Query(default=None, description="single | double | shared"),
+    department_code: Optional[str] = Query(default=None),
+    current_user:    dict          = Depends(get_current_user),
+    db:              DbSession     = Depends(get_read_db),
 ):
     """가용 병상이 있는 병동 목록 조회 — 입원 예약 병동 선택용 (SFR-035)."""
     q = db.query(SyncWard).filter(SyncWard.available_beds > 0)
@@ -730,6 +788,8 @@ def get_wards_availability(
         if room_type not in ("single", "double", "shared"):
             raise HTTPException(status_code=422, detail="room_type은 single | double | shared 중 하나여야 합니다.")
         q = q.filter(SyncWard.room_type == room_type)
+    if department_code:
+        q = q.filter(SyncWard.department_code == department_code)
 
     return [
         {
@@ -775,7 +835,7 @@ def get_my_records(
 
     record_audit(
         db, action_type="EMR_SELF_VIEW", result_code="200",
-        user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+        user_id=uuid_module.UUID(current_user["sub"]), patient_id=pid,
         target_table="sync_encounters",
     )
 
@@ -816,7 +876,7 @@ def get_encounter_detail(
     if enc.patient_id_hash != pid:
         record_audit(
             db, action_type="UNAUTHORIZED_ACCESS", result_code="403",
-            user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+            user_id=uuid_module.UUID(current_user["sub"]), patient_id=pid,
             target_table="sync_encounters",
         )
         db.commit()
@@ -834,7 +894,7 @@ def get_encounter_detail(
 
     record_audit(
         db, action_type="EMR_SELF_VIEW", result_code="200",
-        user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+        user_id=uuid_module.UUID(current_user["sub"]), patient_id=pid,
         target_table="sync_encounters",
     )
     db.commit()
@@ -903,6 +963,65 @@ def get_surgery_histories(
     ]
 
 
+# ── 수술 전 예약 맥락 조회 (비식별: 중증도 코드 + 카운트만) ────────────
+_PRE_EXAM_BY_DEPT: dict = {
+    "CARDIO":  ["심전도 (EKG)", "흉부 X-ray", "심장 초음파", "혈액 검사 (CBC·생화학)"],
+    "ORTHO":   ["X-ray", "MRI/CT", "혈액 응고 검사", "혈액 검사 (CBC·생화학)"],
+    "NEURO":   ["뇌 MRI", "신경전도 검사", "뇌파 검사 (EEG)", "혈액 검사 (CBC·생화학)"],
+    "GASTRO":  ["위내시경", "혈액 검사 (CBC·생화학)", "복부 초음파"],
+    "PULMO":   ["폐 기능 검사", "흉부 CT", "혈액 가스 분석", "혈액 검사 (CBC·생화학)"],
+    "_default": ["혈액 검사 (CBC·생화학)", "소변 검사", "흉부 X-ray", "심전도 (EKG)"],
+}
+
+
+@router.get("/pre-surgery-context")
+def get_pre_surgery_context(
+    department_code: Optional[str] = Query(default=None),
+    current_user:    dict          = Depends(get_current_user),
+    db:              DbSession     = Depends(get_read_db),
+):
+    """수술 전 예약 맥락 — 환자 안전 요약(비식별) + 진료과별 사전검사 목록 반환.
+
+    알레르기는 severity_code(HIGH/MEDIUM/LOW)만, 수술 이력은 건수+최근일만 반환.
+    환자명·알레르기명·수술명은 미포함 (SFR-035 최소 범위 원칙).
+    """
+    pid = _require_patient(current_user)
+
+    allergies = (
+        db.query(SyncAllergy.allergy_name, SyncAllergy.severity_code)
+        .filter(SyncAllergy.patient_id_hash == pid)
+        .all()
+    )
+    severity_summary: dict = {}
+    allergy_list: list = []
+    for (name, sev) in allergies:
+        key = (sev or "UNKNOWN").upper()
+        severity_summary[key] = severity_summary.get(key, 0) + 1
+        allergy_list.append({"name": name or "", "severity": key})
+
+    surgeries = (
+        db.query(SyncSurgery.surgery_date)
+        .filter(SyncSurgery.patient_id_hash == pid)
+        .order_by(SyncSurgery.surgery_date.desc())
+        .all()
+    )
+    surgery_count = len(surgeries)
+    last_surgery_date = str(surgeries[0][0]) if surgeries else None
+
+    pre_exams = (
+        _PRE_EXAM_BY_DEPT.get(department_code or "", None)
+        or _PRE_EXAM_BY_DEPT["_default"]
+    )
+
+    return {
+        "allergy_severity_summary": severity_summary,
+        "allergy_list":             allergy_list,
+        "surgery_count":            surgery_count,
+        "last_surgery_date":        last_surgery_date,
+        "pre_exam_requirements":    pre_exams,
+    }
+
+
 # ── 처방전 조회 (비식별: ICD 코드만 반환) ──────────────────────────
 @router.get("/prescriptions")
 def get_prescriptions(
@@ -921,7 +1040,7 @@ def get_prescriptions(
 
     record_audit(
         db, action_type="VIEW_PRESCRIPTIONS", result_code="200",
-        user_id=uuid_module.UUID(current_user["sub"]), patient_id_hash=pid,
+        user_id=uuid_module.UUID(current_user["sub"]), patient_id=pid,
         target_table="sync_diagnoses",
     )
 
