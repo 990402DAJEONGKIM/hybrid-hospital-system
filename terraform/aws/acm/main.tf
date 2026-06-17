@@ -177,3 +177,43 @@ resource "aws_acm_certificate_validation" "grafana" {
 #   certificate_arn         = aws_acm_certificate.admin.arn
 #   validation_record_fqdns = [for r in aws_route53_record.admin_validation : r.fqdn]
 # }
+
+
+
+# ─────────────────────────────────────────────────────────
+# 6. 모니터링 포털 인증서 (통합 ALB 추가 인증서) - 260617 김강환
+# monitoring.mzclinic.cloud → Keycloak + Grafana + Wazuh 통합 포털
+# ─────────────────────────────────────────────────────────
+resource "aws_acm_certificate" "monitoring" {
+  domain_name       = "monitoring.${var.base_domain}"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = { Name = "aws-acm-monitoring" }
+}
+
+resource "aws_route53_record" "monitoring_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.monitoring.domain_validation_options :
+    dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      record = dvo.resource_record_value
+    }
+  }
+
+  zone_id         = data.aws_route53_zone.main.zone_id
+  name            = each.value.name
+  type            = each.value.type
+  records         = [each.value.record]
+  ttl             = 60
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "monitoring" {
+  certificate_arn         = aws_acm_certificate.monitoring.arn
+  validation_record_fqdns = [for r in aws_route53_record.monitoring_validation : r.fqdn]
+}
