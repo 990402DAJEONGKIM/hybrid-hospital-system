@@ -55,15 +55,7 @@ resource "cloudflare_record" "grafana" {
 }
 
 
-# monitoring.mzclinic.cloud 서비스 레코드 - 추가 260617 김강환
-resource "cloudflare_record" "monitoring" {
-  zone_id = var.cloudflare_zone_id
-  name    = "monitoring"
-  type    = "CNAME"
-  content = "aws-hospital-alb-142886199.ap-south-2.elb.amazonaws.com"
-  ttl     = 60
-  proxied = false
-}
+
 # ── DR 레코드 ─────────────────────────────────────────────────────────────────
 
 resource "cloudflare_record" "dr" {
@@ -154,14 +146,3 @@ resource "cloudflare_record" "acm_grafana" {
   proxied = false
 }
 
-
-
-# ACM monitoring.mzclinic.cloud DNS 검증 CNAME - 추가 260617 김강환
-resource "cloudflare_record" "acm_monitoring_validation" {
-  zone_id = var.cloudflare_zone_id
-  name    = "_396928562534e35df52179ef9c777870.monitoring"
-  content = "_5784340bbfffea0c419e67eede13aa85.jkddzztszm.acm-validations.aws."
-  type    = "CNAME"
-  ttl     = 60
-  proxied = false
-}
