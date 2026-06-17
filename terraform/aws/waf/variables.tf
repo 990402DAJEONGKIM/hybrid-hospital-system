@@ -41,10 +41,3 @@ variable "staff_allowed_ips" {
   type        = list(string)
   default     = ["218.235.89.82/32", "221.164.19.186/32",  "175.199.193.165/32"] #집에서 접속해보려고  "175.199.193.165/32" 추가했습니다. 260601 박경수.
 }
-
-# 순차 삭제용 임시 변수 — ops_admin IPSet 삭제 후 제거
-variable "ops_admin_allowed_ips" {
-  description = "운영 모니터링 접근 허용 IP 목록 (CIDR)"
-  type        = list(string)
-  default     = ["218.235.89.82/32", "221.164.19.186/32", "175.199.193.165/32"]
-}
