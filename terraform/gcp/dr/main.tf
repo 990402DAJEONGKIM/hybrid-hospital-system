@@ -38,20 +38,20 @@ resource "google_storage_bucket_object" "monitor_script" {
   name   = "dr-monitor-install.sh"
   bucket = google_storage_bucket.artifact.name
   content = templatefile("${path.module}/scripts/startup-monitor.sh.tftpl", {
-    project_id          = var.project_id
-    zone                = var.zone
-    mig_name            = google_compute_instance_group_manager.dr_app.name
-    aws_healthcheck_url = var.aws_healthcheck_url
-    interval_seconds    = var.healthcheck_interval_seconds
-    failure_threshold   = var.failure_threshold
-    recovery_threshold  = var.recovery_threshold
-    cf_api_token_secret = var.cf_api_token_secret_name
-    cf_zone_id_secret   = var.cf_zone_id_secret_name
-    cf_record_name      = var.cf_record_name
-    gcp_cname_target    = var.gcp_cname_target
-    aws_record_content  = var.aws_record_content
-    failover_mode       = var.failover_mode
-    enable_ops_agent    = var.enable_ops_agent
+    project_id              = var.project_id
+    zone                    = var.zone
+    mig_name                = google_compute_instance_group_manager.dr_app.name
+    aws_healthcheck_url     = var.aws_healthcheck_url
+    interval_seconds        = var.healthcheck_interval_seconds
+    failure_threshold       = var.failure_threshold
+    recovery_threshold      = var.recovery_threshold
+    cf_api_token_secret     = var.cf_api_token_secret_name
+    cf_zone_id_secret       = var.cf_zone_id_secret_name
+    cf_record_name          = var.cf_record_name
+    gcp_cname_target        = var.gcp_cname_target
+    aws_record_content      = var.aws_record_content
+    failover_mode           = var.failover_mode
+    enable_ops_agent        = var.enable_ops_agent
   })
 }
 
@@ -498,7 +498,6 @@ resource "google_service_account_iam_member" "github_dr_deploy_token_creator" {
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/990402DAJEONGKIM/hybrid-hospital-system"
 }
-
 # ── Cloud Logging ──────────────────────────────────────────────────────────────
 
 resource "google_logging_project_bucket_config" "default" {
