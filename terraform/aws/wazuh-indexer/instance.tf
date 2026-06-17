@@ -1,5 +1,11 @@
 #instance.tf
 
+
+import {
+  to = aws_volume_attachment.aws-wazuh-indexer-data-att-01
+  id = "/dev/sdf:vol-037492407c274b46e:i-0bea7398475c74c27"
+}
+
 # EC2
 resource "aws_instance" "aws-wazuh-indexer" {
   ami                    = var.ami_id
