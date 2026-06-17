@@ -64,7 +64,7 @@ resource "aws_iam_role_policy" "vault_rotator_secrets" {
     Action = ["secretsmanager:GetSecretValue"]
     Resource = [
       aws_secretsmanager_secret.vault_lambda_approle_v2.arn,
-      "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:rds!cluster-1073d242*",
+      # 260617 박경수: rds!cluster 시크릿 읽기 권한 제거
       aws_secretsmanager_secret.jwt_secret_v2.arn,
     ]
   },
@@ -105,12 +105,10 @@ resource "aws_lambda_function" "vault_rotator" {
 
   environment {
     variables = {
+       # 260617 박경수: RDS 관련 env 제거 (vault_dbadmin 분리로 불필요)
       VAULT_APPROLE_SECRET_ID = aws_secretsmanager_secret.vault_lambda_approle_v2.name
-      RDS_SECRET_ID           = "rds!cluster-1073d242-a1f9-49fa-8855-054d05d6af5b"
       JWT_SECRET_ID           = aws_secretsmanager_secret.jwt_secret_v2.name  
-      VAULT_DB_CONFIG_PATH    = "database/config/rds-hospital"
       VAULT_AUTH_SECRET_PATH  = "secret/data/hospital-auth"    
-      RDS_HOST                = "aws-aurora-01.cluster-cjsaws8mcmwn.ap-south-2.rds.amazonaws.com"
       AWS_REGION_NAME         = var.aws_region
     }
   }
