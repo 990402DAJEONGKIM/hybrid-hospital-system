@@ -9,12 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db
-from core.security import get_current_user, get_client_ip, hash_password, verify_api_key
+from core.security import get_current_user, get_client_ip, hash_password, hash_phone, verify_api_key
 from routers.staff.auth import validate_password
 from models.db import (
-    AuditLog, Appointment, AppointmentStatus, LoginHistory, Menu, Notification,
-    OnpremDepartment, PasswordPolicy, Permission, Role, RoleMenu, RolePermission,
-    Session as SessionModel, User,
+    AuditLog, Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
+    LoginHistory, Menu, Notification,
+    PasswordPolicy, Permission, Role, RoleMenu, RolePermission,
+    Session as SessionModel, SyncDepartment, SyncDoctor, SyncPatient, SyncWard, User,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -25,11 +26,13 @@ ALLOWED_ROLES = ("patient", "doctor", "nurse", "admin")
 # ── 스키마 ─────────────────────────────────────────────────────
 
 class CreateUserRequest(BaseModel):
-    role_code:     str
-    password:      str
-    email:         Optional[str] = None          # 직원·의사 필수
-    member_number: Optional[str] = None          # 환자 필수
-    doctor_id:     Optional[str] = None          # 의사 계정 시
+    role_code:       str
+    password:        Optional[str] = None   # 직원 필수 (환자는 birth_date 사용)
+    email:           Optional[str] = None
+    member_number:   Optional[str] = None
+    doctor_id:       Optional[str] = None
+    birth_date:      Optional[str] = None   # 환자 필수: 초기 비밀번호 YYYYMMDD
+    patient_id_hash: Optional[str] = None   # 환자 필수: sync_patients 연결 키
 
 
 class UpdateUserRequest(BaseModel):
@@ -103,9 +106,9 @@ def list_departments_admin(
 ):
     """진료과 목록 (계정 생성 시 의사 부서 선택용)."""
     depts = (
-        db.query(OnpremDepartment)
-        .filter(OnpremDepartment.is_active == True)
-        .order_by(OnpremDepartment.department_code)
+        db.query(SyncDepartment)
+        .filter(SyncDepartment.is_active == True)
+        .order_by(SyncDepartment.department_code)
         .all()
     )
     return [
@@ -152,6 +155,31 @@ def next_member_number(
     return {"member_number": f"{prefix}{max_n + 1}"}
 
 
+# ── sync_patients 검색 (환자 계정 생성 전 hash 확인용) ──────────
+
+@router.get("/sync-patients/search")
+def search_sync_patients(
+    phone:        Optional[str] = Query(default=None),
+    db:           DbSession     = Depends(get_db),
+    _:            str           = Depends(verify_api_key),
+    current_user: dict          = Depends(require_admin),
+):
+    """전화번호로 sync_patients 검색 — 환자 계정 생성 시 patient_id_hash 확인용."""
+    if not phone:
+        raise HTTPException(status_code=400, detail="phone 파라미터가 필요합니다.")
+    phone_hash = hash_phone(phone)
+    patient = db.query(SyncPatient).filter(SyncPatient.phone_hash == phone_hash).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="해당 전화번호의 환자를 찾을 수 없습니다.")
+    existing = db.query(User).filter(User.patient_id_hash == patient.patient_id_hash).first()
+    return {
+        "patient_id_hash":    patient.patient_id_hash,
+        "birth_year":         patient.birth_year,
+        "gender_code":        patient.gender_code,
+        "already_registered": existing is not None,
+    }
+
+
 # ── 사용자 관리 (SFR-030) ─────────────────────────────────────
 
 @router.post("/users", status_code=201)
@@ -162,13 +190,15 @@ def create_user(
     _:            str       = Depends(verify_api_key),
     current_user: dict      = Depends(require_admin),
 ):
-    """계정 생성 — 직원(email 필수) / 환자(member_number 필수). SFR-030."""
+    """계정 생성 — 직원(password 필수) / 환자(birth_date·patient_id_hash 필수). SFR-030.
+
+    환자 계정:
+      - member_number: 원무과에서 부여한 회원번호 (로그인 ID)
+      - birth_date: 생년월일 YYYYMMDD (초기 비밀번호, 첫 로그인 시 변경 강제)
+      - patient_id_hash: sync_patients.patient_id_hash (전화번호 검색 후 확인)
+    """
     if body.role_code not in ALLOWED_ROLES:
         raise HTTPException(status_code=400, detail=f"role_code는 {ALLOWED_ROLES} 중 하나여야 합니다.")
-
-    pw_error = validate_password(body.password)
-    if pw_error:
-        raise HTTPException(status_code=400, detail=pw_error)
 
     role = db.query(Role).filter(Role.role_code == body.role_code, Role.is_active == True).first()
     if not role:
@@ -179,15 +209,36 @@ def create_user(
     if is_patient:
         if not body.member_number:
             raise HTTPException(status_code=400, detail="환자 계정은 member_number가 필수입니다.")
+        if not body.birth_date:
+            raise HTTPException(status_code=400, detail="환자 계정은 birth_date(YYYYMMDD)가 필수입니다.")
+        if not body.patient_id_hash:
+            raise HTTPException(status_code=400, detail="환자 계정은 patient_id_hash가 필수입니다.")
+
+        sync_p = db.query(SyncPatient).filter(SyncPatient.patient_id_hash == body.patient_id_hash).first()
+        if not sync_p:
+            raise HTTPException(status_code=400, detail="sync_patients에서 해당 patient_id_hash를 찾을 수 없습니다.")
         if db.query(User).filter(User.member_number == body.member_number).first():
             raise HTTPException(status_code=400, detail="이미 사용 중인 회원번호입니다.")
+        if db.query(User).filter(User.patient_id_hash == body.patient_id_hash).first():
+            raise HTTPException(status_code=400, detail="이미 이 환자와 연결된 계정이 존재합니다.")
+
+        # 생년월일을 초기 비밀번호로 설정 — 정책 검증 없이 허용 (최초 로그인 시 변경 강제)
+        initial_pw      = hash_password(body.birth_date)
+        patient_id_hash = body.patient_id_hash
     else:
+        if not body.password:
+            raise HTTPException(status_code=400, detail="직원 계정은 password가 필수입니다.")
+        pw_error = validate_password(body.password)
+        if pw_error:
+            raise HTTPException(status_code=400, detail=pw_error)
         if not body.member_number:
             raise HTTPException(status_code=400, detail="직원 계정은 직원번호(member_number)가 필수입니다.")
         if db.query(User).filter(User.member_number == body.member_number).first():
             raise HTTPException(status_code=400, detail="이미 사용 중인 직원번호입니다.")
         if body.email and db.query(User).filter(User.email == body.email).first():
             raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
+        initial_pw      = hash_password(body.password)
+        patient_id_hash = None
 
     doctor_uuid = None
     if body.doctor_id:
@@ -199,9 +250,10 @@ def create_user(
     user = User(
         email                = body.email if not is_patient else None,
         member_number        = body.member_number,
-        password_hash        = hash_password(body.password),
+        password_hash        = initial_pw,
         role_id              = role.role_id,
         doctor_id            = doctor_uuid,
+        patient_id_hash      = patient_id_hash,
         is_active            = True,
         must_change_password = True,
     )
@@ -228,16 +280,17 @@ def list_users(
     users = db.query(User).order_by(User.created_at.desc()).all()
     return [
         {
-            "user_id":       str(u.user_id),
-            "email":         u.email,
-            "member_number": u.member_number,
-            "role_code":     u.role_ref.role_code if u.role_ref else None,
-            "role_name":     u.role_ref.role_name if u.role_ref else None,
-            "is_active":     u.is_active,
-            "is_locked":     bool(u.locked_until and u.locked_until > now),
-            "locked_until":  u.locked_until.isoformat() if u.locked_until else None,
-            "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
-            "created_at":    u.created_at.isoformat() if u.created_at else None,
+            "user_id":           str(u.user_id),
+            "email":             u.email,
+            "member_number":     u.member_number,
+            "role_code":         u.role_ref.role_code if u.role_ref else None,
+            "role_name":         u.role_ref.role_name if u.role_ref else None,
+            "is_active":         u.is_active,
+            "is_locked":         bool(u.locked_until and u.locked_until > now),
+            "locked_until":      u.locked_until.isoformat() if u.locked_until else None,
+            "last_login_at":     u.last_login_at.isoformat() if u.last_login_at else None,
+            "created_at":        u.created_at.isoformat() if u.created_at else None,
+            "patient_id_hash":   u.patient_id_hash if hasattr(u, "patient_id_hash") else None,
         }
         for u in users
     ]
@@ -311,7 +364,7 @@ def lock_user(
 
     now = datetime.now(timezone.utc)
     if body.lock:
-        hours            = body.hours or 24
+        hours             = body.hours or 24
         user.locked_until = now + timedelta(hours=hours)
     else:
         user.locked_until     = None
@@ -322,8 +375,8 @@ def lock_user(
     db.refresh(user)
     _audit(db, current_user["sub"], "USER_LOCK", user.user_id, request)
     return {
-        "user_id":     str(user.user_id),
-        "is_locked":   bool(user.locked_until and user.locked_until > now),
+        "user_id":      str(user.user_id),
+        "is_locked":    bool(user.locked_until and user.locked_until > now),
         "locked_until": user.locked_until.isoformat() if user.locked_until else None,
     }
 
@@ -348,11 +401,9 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
 
-    # 소프트 삭제
-    user.is_active   = False
-    user.updated_at  = datetime.now(timezone.utc)
+    user.is_active  = False
+    user.updated_at = datetime.now(timezone.utc)
 
-    # 활성 세션 즉시 폐기
     db.query(SessionModel).filter(
         SessionModel.user_id    == uid,
         SessionModel.is_revoked == False,
@@ -391,7 +442,6 @@ def reset_password(
     user.password_changed_at  = datetime.now(timezone.utc)
     user.updated_at           = datetime.now(timezone.utc)
 
-    # 기존 세션 폐기 (다음 로그인 시 비밀번호 변경 강제)
     db.query(SessionModel).filter(
         SessionModel.user_id    == uid,
         SessionModel.is_revoked == False,
@@ -621,7 +671,6 @@ def get_dashboard(
     today = now.date()
     ago24 = now - timedelta(hours=24)
 
-    # 예약 현황 (상태별)
     appt_rows = (
         db.query(AppointmentStatus.status_code, func.count(Appointment.appointment_id).label("cnt"))
         .join(AppointmentStatus, Appointment.status_id == AppointmentStatus.status_id)
@@ -632,7 +681,6 @@ def get_dashboard(
     appt_by_status = {row.status_code: row.cnt for row in appt_rows}
     appt_total = sum(appt_by_status.values())
 
-    # 보안 이벤트 (24h, 타입별)
     SECURITY_TYPES = ["BREAK_GLASS", "USER_LOCK", "POLICY_UPDATE", "ACCOUNT_LOCKED", "USER_DELETE", "USER_CREATE"]
     sec_rows = (
         db.query(AuditLog.action_type, func.count(AuditLog.audit_log_id).label("cnt"))
@@ -646,20 +694,16 @@ def get_dashboard(
     security_events = {row.action_type: row.cnt for row in sec_rows}
     security_total  = sum(security_events.values())
 
-    # 잠금 계정 수
     locked_accounts = db.query(func.count(User.user_id)).filter(
         User.locked_until > now, User.is_active == True,
     ).scalar() or 0
 
-    # 미처리 알림 (status='pending')
     pending_notifications = db.query(func.count(Notification.notification_id)).filter(
         Notification.status == "pending",
     ).scalar() or 0
 
-    # 최근 감사 이벤트 10건
     recent_events = db.query(AuditLog).order_by(AuditLog.event_at.desc()).limit(10).all()
 
-    # 온프레미스 연결 상태
     onprem_status, onprem_detail = "unknown", ""
     try:
         import os, httpx
@@ -679,9 +723,9 @@ def get_dashboard(
             "by_status":   appt_by_status,
         },
         "security": {
-            "locked_accounts":  locked_accounts,
+            "locked_accounts":    locked_accounts,
             "security_total_24h": security_total,
-            "events_by_type":   security_events,
+            "events_by_type":     security_events,
         },
         "pending_notifications": pending_notifications,
         "system": {
@@ -698,3 +742,188 @@ def get_dashboard(
             for e in recent_events
         ],
     }
+
+
+# ── 입원 예약 관리 — 원무과 병동 배정 (SFR-035) ─────────────────────
+
+class WardAssignRequest(BaseModel):
+    ward_id:   str
+    confirm:   bool = True
+
+
+@router.get("/appointments/inpatient")
+def list_inpatient_appointments(
+    status:       Optional[str] = Query(default="pending", description="pending | confirmed | all"),
+    department:   Optional[str] = Query(default=None),
+    date_from:    Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    date_to:      Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    limit:        int           = Query(default=50, le=200),
+    offset:       int           = Query(default=0),
+    db:           DbSession     = Depends(get_db),
+    current_user: dict          = Depends(require_admin),
+    _:            str           = Depends(verify_api_key),
+):
+    """입원 예약 목록 — 원무과 병동 배정 화면용."""
+    inpatient_type = db.query(AppointmentType).filter(
+        AppointmentType.type_code == "inpatient"
+    ).first()
+    if not inpatient_type:
+        return []
+
+    q = (
+        db.query(Appointment)
+        .filter(Appointment.type_id == inpatient_type.type_id)
+    )
+    if status and status != "all":
+        st = db.query(AppointmentStatus).filter(AppointmentStatus.status_code == status).first()
+        if st:
+            q = q.filter(Appointment.status_id == st.status_id)
+    if department:
+        q = q.filter(Appointment.department_code == department)
+    if date_from:
+        from datetime import date as _date
+        q = q.filter(Appointment.appointment_date >= _date.fromisoformat(date_from))
+    if date_to:
+        from datetime import date as _date
+        q = q.filter(Appointment.appointment_date <= _date.fromisoformat(date_to))
+
+    total = q.count()
+    appts = q.order_by(Appointment.appointment_date.asc(), Appointment.created_at.asc()).offset(offset).limit(limit).all()
+
+    _ROOM_KO = {"single": "1인실", "double": "2인실", "shared": "다인실"}
+
+    result = []
+    for a in appts:
+        ward_name = None
+        if a.ward_id:
+            w = db.query(SyncWard).filter(SyncWard.ward_id == a.ward_id).first()
+            ward_name = w.ward_name if w else None
+        patient_name = None
+        sp = db.query(SyncPatient).filter(SyncPatient.patient_id_hash == a.patient_id_hash).first()
+        if sp:
+            patient_name = sp.patient_name
+        doctor_name = None
+        if a.doctor_id:
+            doc = db.query(SyncDoctor).filter(SyncDoctor.doctor_id == a.doctor_id).first()
+            doctor_name = doc.doctor_name if doc else None
+        result.append({
+            "appointment_id":       str(a.appointment_id),
+            "patient_name":         patient_name,
+            "patient_id_hash":      a.patient_id_hash,
+            "department_code":      a.department_code,
+            "doctor_name":          doctor_name,
+            "appointment_date":     str(a.appointment_date),
+            "room_type_pref":       a.room_type_pref,
+            "has_chronic_condition": a.has_chronic_condition,
+            "ward_id":              str(a.ward_id) if a.ward_id else None,
+            "ward_name":            ward_name,
+            "status_code":          a.appt_status.status_code if a.appt_status else None,
+            "notes":                a.notes,
+            "created_at":           a.created_at.isoformat() if a.created_at else None,
+        })
+
+    return {"total": total, "items": result}
+
+
+@router.patch("/appointments/{appointment_id}/ward")
+def assign_ward(
+    appointment_id: str,
+    body:           WardAssignRequest,
+    db:             DbSession = Depends(get_db),
+    current_user:   dict      = Depends(require_admin),
+    _:              str       = Depends(verify_api_key),
+):
+    """병동 배정 — 입원 예약에 ward_id 지정 및 상태 확정 (SFR-035).
+
+    available_beds 감소 처리 포함.
+    """
+    try:
+        appt_uuid = _uuid.UUID(appointment_id)
+        ward_uuid = _uuid.UUID(body.ward_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="유효하지 않은 UUID 형식입니다.")
+
+    appt = db.query(Appointment).filter(Appointment.appointment_id == appt_uuid).with_for_update().first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    inpatient_type = db.query(AppointmentType).filter(AppointmentType.type_code == "inpatient").first()
+    if not inpatient_type or appt.type_id != inpatient_type.type_id:
+        raise HTTPException(status_code=400, detail="입원 예약에만 병동을 배정할 수 있습니다.")
+
+    ward = db.query(SyncWard).filter(SyncWard.ward_id == ward_uuid).with_for_update().first()
+    if not ward:
+        raise HTTPException(status_code=404, detail="병동을 찾을 수 없습니다.")
+    if ward.available_beds is not None and ward.available_beds <= 0:
+        raise HTTPException(status_code=409, detail=f"{ward.ward_name}의 가용 병상이 없습니다.")
+
+    # 기존 병동 배정 해제 시 beds 복원
+    if appt.ward_id and appt.ward_id != ward_uuid:
+        old_ward = db.query(SyncWard).filter(SyncWard.ward_id == appt.ward_id).first()
+        if old_ward and old_ward.available_beds is not None:
+            old_ward.available_beds += 1
+
+    appt.ward_id = ward_uuid
+    if ward.available_beds is not None:
+        ward.available_beds -= 1
+
+    now = datetime.now(timezone.utc)
+    if body.confirm:
+        confirmed_status = db.query(AppointmentStatus).filter(
+            AppointmentStatus.status_code == "confirmed"
+        ).first()
+        if confirmed_status and appt.status_id != confirmed_status.status_id:
+            prev_status_id = appt.status_id
+            appt.status_id    = confirmed_status.status_id
+            appt.confirmed_at = now
+            appt.confirmed_by = _uuid.UUID(current_user["sub"])
+            db.add(AppointmentHistory(
+                appointment_id = appt.appointment_id,
+                changed_by     = _uuid.UUID(current_user["sub"]),
+                prev_status_id = prev_status_id,
+                new_status_id  = confirmed_status.status_id,
+                new_date       = appt.appointment_date,
+                new_time       = appt.appointment_time,
+                change_reason  = f"병동 배정: {ward.ward_name}",
+            ))
+
+    _audit(db, current_user["sub"], "WARD_ASSIGN", target_id=appt_uuid)
+    db.commit()
+    db.refresh(appt)
+
+    return {
+        "appointment_id": str(appt.appointment_id),
+        "ward_id":        str(appt.ward_id),
+        "ward_name":      ward.ward_name,
+        "available_beds": ward.available_beds,
+        "status_code":    appt.appt_status.status_code if appt.appt_status else None,
+    }
+
+
+@router.get("/wards")
+def list_wards(
+    room_type:    Optional[str] = Query(default=None, description="single | double | shared"),
+    available_only: bool        = Query(default=False),
+    db:           DbSession     = Depends(get_db),
+    current_user: dict          = Depends(require_admin),
+    _:            str           = Depends(verify_api_key),
+):
+    """병동 목록 — 원무과 병상 현황 조회."""
+    q = db.query(SyncWard)
+    if room_type:
+        q = q.filter(SyncWard.room_type == room_type)
+    if available_only:
+        q = q.filter(SyncWard.available_beds > 0)
+    wards = q.order_by(SyncWard.room_type, SyncWard.ward_name).all()
+    _ROOM_KO = {"single": "1인실", "double": "2인실", "shared": "다인실"}
+    return [
+        {
+            "ward_id":        str(w.ward_id),
+            "ward_name":      w.ward_name,
+            "room_type":      w.room_type,
+            "room_type_ko":   _ROOM_KO.get(w.room_type, w.room_type),
+            "total_beds":     w.total_beds,
+            "available_beds": w.available_beds,
+        }
+        for w in wards
+    ]

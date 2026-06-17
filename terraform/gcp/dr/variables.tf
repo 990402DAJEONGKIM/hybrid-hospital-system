@@ -185,3 +185,11 @@ variable "cookie_secure" {
   type        = bool
   default     = true
 }
+
+
+
+variable "dr_app_object_name" {
+  description = "GitHub Actions가 업로드하는 DR 앱 아티팩트 GCS object 이름"
+  type        = string
+  default     = "dr-app/latest.zip"
+}
