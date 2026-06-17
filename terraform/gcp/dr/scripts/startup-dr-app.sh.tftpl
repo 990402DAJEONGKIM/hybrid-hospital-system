@@ -25,6 +25,30 @@ rm /tmp/dr-app.zip
 
 
 
+# ── Python runtime 확인: baked image venv 우선, 없을 때만 fallback ─────────────
+echo "[startup] Python runtime 확인 중..."
+
+BAKED_VENV="/opt/gcp-dr-venv"
+RUNTIME_VENV="$APP_DIR/venv"
+
+if [ -x "$BAKED_VENV/bin/python" ] && "$BAKED_VENV/bin/python" -c "import uvicorn" >/dev/null 2>&1; then
+  echo "[startup] baked venv 사용: $BAKED_VENV"
+elif [ -f "$APP_DIR/backend/requirements.txt" ]; then
+  echo "[startup] baked venv 없음. runtime fallback venv 생성 중..."
+
+  if ! python3 -m venv "$RUNTIME_VENV"; then
+    apt-get update
+    apt-get install -y python3-venv
+    python3 -m venv "$RUNTIME_VENV"
+  fi
+
+  "$RUNTIME_VENV/bin/pip" install --upgrade pip
+  "$RUNTIME_VENV/bin/pip" install -r "$APP_DIR/backend/requirements.txt"
+else
+  echo "[startup] ERROR: baked venv도 없고 requirements.txt도 없음"
+  exit 1
+fi
+
 # ── Runtime secret runner 생성: secret 값을 디스크 .env에 저장하지 않음 ───────
 echo "[startup] FastAPI runtime runner 생성 중..."
 
@@ -68,7 +92,11 @@ PY
 
 cd "\$APP_DIR/backend"
 
-if [ -x "\$APP_DIR/venv/bin/python" ]; then
+BAKED_VENV="/opt/gcp-dr-venv"
+
+if [ -x "\$BAKED_VENV/bin/python" ] && "\$BAKED_VENV/bin/python" -c "import uvicorn" >/dev/null 2>&1; then
+  PYTHON="\$BAKED_VENV/bin/python"
+elif [ -x "\$APP_DIR/venv/bin/python" ]; then
   PYTHON="\$APP_DIR/venv/bin/python"
 else
   PYTHON="\$(command -v python3)"
@@ -120,7 +148,7 @@ import sys
 api_key = sys.argv[1].replace("\\", "\\\\").replace('"', '\\"')
 
 with open("/run/gcp-dr-app/api-key-header.conf", "w") as f:
-    f.write(f'include /run/gcp-dr-app/api-key-header.conf;\n')
+    f.write(f'proxy_set_header X-API-Key "{api_key}";\n')
 PY
 
 chmod 0600 /run/gcp-dr-app/api-key-header.conf
