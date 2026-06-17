@@ -65,6 +65,13 @@ data "aws_acm_certificate" "grafana" {
 #   most_recent = true
 # }
 
+# ACM 인증서 (monitoring.mzclinic.cloud) — 통합 포털 ALB SNI 추가 - 260617 김강환
+data "aws_acm_certificate" "monitoring" {
+  domain      = "monitoring.${var.base_domain}"
+  statuses    = ["ISSUED"]
+  most_recent = true
+}
+
 
 
 
@@ -110,3 +117,6 @@ data "terraform_remote_state" "monitoring" {
     workspaces = { name = "TC-aws-monitoring" }
   }
 }
+
+
+
