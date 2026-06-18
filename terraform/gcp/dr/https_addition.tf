@@ -88,13 +88,15 @@ resource "google_certificate_manager_certificate_map_entry" "dr_mzclinic" {
 
 # HTTPS Target Proxy
 resource "google_compute_target_https_proxy" "dr_app" {
-  name             = "gcp-dr-reservation-https-proxy"
-  url_map          = google_compute_url_map.dr_app.id
+  name    = "gcp-dr-reservation-https-proxy"
+  url_map = google_compute_url_map.dr_app.id
 
-  # 1차 적용에서는 기존 classic SSL 인증서를 유지한다.
-  # Certificate Manager 리소스와 DNS authorization을 먼저 만든 뒤,
-  # 인증서가 ACTIVE가 되면 2차 적용에서 certificate_map으로 전환한다.
-  ssl_certificates = [google_compute_managed_ssl_certificate.dr_app.id]
+  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.dr_app.id}"
+
+  depends_on = [
+    google_certificate_manager_certificate_map_entry.mzclinic_root,
+    google_certificate_manager_certificate_map_entry.dr_mzclinic,
+  ]
 }
 
 # HTTPS Forwarding Rule (443)
