@@ -59,6 +59,12 @@ resource "google_certificate_manager_certificate" "dr_app" {
       google_certificate_manager_dns_authorization.dr_mzclinic.id,
     ]
   }
+
+  # 인증서 이름 변경 시 기존 cert가 certificate map entry에 물려 있어도
+  # 새 cert를 먼저 만든 뒤 map entry를 갱신하고 기존 cert를 삭제하도록 순서 보장
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "google_certificate_manager_certificate_map" "dr_app" {
