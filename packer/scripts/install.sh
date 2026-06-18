@@ -4,14 +4,16 @@
 # 시크릿 조회 및 서비스 시작은 startup script에서 수행
 set -euo pipefail
 
-echo "[install] Python venv 생성 및 의존성 설치"
+echo "[install] Python baked venv 생성 및 의존성 설치"
 sudo mkdir -p /opt/gcp-dr-app/backend
 sudo mkdir -p /opt/gcp-dr-app/frontend
 
-# requirements.txt 기반 설치 (venv)
-sudo python3 -m venv /opt/gcp-dr-app/backend/venv
-sudo /opt/gcp-dr-app/backend/venv/bin/pip install --no-cache-dir \
+# requirements.txt 기반 설치: 웜스타트용 baked venv
+sudo python3 -m venv /opt/gcp-dr-venv
+sudo /opt/gcp-dr-venv/bin/pip install --upgrade pip
+sudo /opt/gcp-dr-venv/bin/pip install --no-cache-dir \
   -r /tmp/dr-backend/requirements.txt
+sudo /opt/gcp-dr-venv/bin/python -c "import uvicorn; print('baked uvicorn ok')"
 
 echo "[install] 앱 코드 복사"
 sudo cp -r /tmp/dr-backend/. /opt/gcp-dr-app/backend/
@@ -31,7 +33,7 @@ Wants=network-online.target
 [Service]
 WorkingDirectory=/opt/gcp-dr-app/backend
 EnvironmentFile=/opt/gcp-dr-app/backend/.env
-ExecStart=/opt/gcp-dr-app/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers
+ExecStart=/opt/gcp-dr-venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers
 Restart=always
 RestartSec=3
 
@@ -42,8 +44,9 @@ UNIT
 echo "[install] nginx 기본 설정 제거 + 서비스 등록"
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo systemctl daemon-reload
-# enable만 — start는 startup script에서 시크릿 주입 후 수행
-sudo systemctl enable gcp-dr-app
+# nginx는 부팅 시 자동 기동, gcp-dr-app은 startup script가 runtime 설정 후 시작
+# gcp-dr-app은 startup script가 Secret Manager 기반 runtime 설정을 만든 뒤 시작한다.
+# 이미지 단계에서 enable하면 .env 부재로 부팅 초기에 실패 로그가 남을 수 있다.
 sudo systemctl enable nginx
 
 echo "[install] 완료"
