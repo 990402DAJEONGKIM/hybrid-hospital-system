@@ -206,6 +206,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // 로그인 상태로 index.html 방문 시 나의 예약 페이지로 이동
+    if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+        window.location.href = 'my-appointments.html';
+        return;
+    }
+
     const header           = document.querySelector('.sass-header');
     const mobileMenuBtn    = document.getElementById('sassMobileMenuBtn');
     const mobileMenuClose  = document.getElementById('sassMobileMenuClose');
