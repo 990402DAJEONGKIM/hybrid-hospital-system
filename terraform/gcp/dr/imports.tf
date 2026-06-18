@@ -19,11 +19,6 @@ import {
 }
 
 import {
-  to = google_compute_target_https_proxy.dr_app
-  id = "projects/gcp-project-496802/global/targetHttpsProxies/gcp-dr-reservation-https-proxy"
-}
-
-import {
   to = google_compute_global_forwarding_rule.dr_app_https
   id = "projects/gcp-project-496802/global/forwardingRules/gcp-dr-reservation-https"
 }

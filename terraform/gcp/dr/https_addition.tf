@@ -88,7 +88,9 @@ resource "google_certificate_manager_certificate_map_entry" "dr_mzclinic" {
 
 # HTTPS Target Proxy
 resource "google_compute_target_https_proxy" "dr_app" {
-  name    = "gcp-dr-reservation-https-proxy"
+  # 기존 proxy는 ssl_certificates -> certificate_map in-place 전환에서 GCP 412가 발생하므로
+  # 새 target HTTPS proxy를 만들고 forwarding rule을 새 proxy로 전환한다.
+  name    = "gcp-dr-reservation-https-proxy-v2"
   url_map = google_compute_url_map.dr_app.id
 
   certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.dr_app.id}"
@@ -97,6 +99,10 @@ resource "google_compute_target_https_proxy" "dr_app" {
     google_certificate_manager_certificate_map_entry.mzclinic_root,
     google_certificate_manager_certificate_map_entry.dr_mzclinic,
   ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # HTTPS Forwarding Rule (443)
