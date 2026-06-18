@@ -9,7 +9,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session as DbSession
 
 from core.database import get_db, get_read_db
-from core.security import get_current_user, record_audit
+from core.security import get_current_user, get_optional_user, record_audit
 from core.ses import send_appointment_notification
 from models.db import (
     Appointment, AppointmentHistory, AppointmentStatus, AppointmentType,
@@ -184,9 +184,9 @@ def get_appointment_types(
 
 @router.get("/departments")
 def get_departments(
-    visited_only: bool     = Query(default=False),
-    current_user: dict     = Depends(get_current_user),
-    db:           DbSession = Depends(get_read_db),
+    visited_only: bool          = Query(default=False),
+    current_user: dict | None   = Depends(get_optional_user),
+    db:           DbSession     = Depends(get_read_db),
 ):
     query = db.query(SyncDepartment).filter(SyncDepartment.is_active == True)
 

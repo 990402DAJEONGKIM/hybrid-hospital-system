@@ -164,6 +164,23 @@ async function requireLogin() {
 // ── DOMContentLoaded ──────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // 진료과 드롭다운 — 인증과 무관하게 항상 로드
+    const deptDropdown = document.getElementById('deptDropdown');
+    if (deptDropdown) {
+        try {
+            const r = await fetch(`${BASE_URL}/portal/departments`, {
+                credentials: 'include',
+                headers: { 'X-API-Key': API_KEY },
+            });
+            if (r && r.ok) {
+                const depts = await r.json();
+                deptDropdown.innerHTML = depts.length
+                    ? depts.map(d => `<a href="department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`).join('')
+                    : '<a class="sass-dropdown-link text-gray-400">진료과 없음</a>';
+            }
+        } catch (_) {}
+    }
+
     // 소프트 인증: 미로그인 시 리다이렉트 대신 UI 분기
     let me = null;
     try {
@@ -465,20 +482,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (manageAppointmentsBtn)   manageAppointmentsBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'my-appointments.html'; });
     if (navHome)                 navHome.addEventListener('click', async (e) => { e.preventDefault(); closeMenuIfOpen(); });
     if (mobileNavHome)           mobileNavHome.addEventListener('click', async (e) => { e.preventDefault(); closeMenuIfOpen(); });
-
-    // ── 진료과 드롭다운 동적 로드 ────────────────────────────
-    const deptDropdown = document.getElementById('deptDropdown');
-    if (deptDropdown) {
-        try {
-            const r = await apiCall('/portal/departments');
-            if (r && r.ok) {
-                const depts = await r.json();
-                deptDropdown.innerHTML = depts.map(d =>
-                    `<a href="department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`
-                ).join('');
-            }
-        } catch (_) { /* 드롭다운 실패 시 무시 */ }
-    }
 
     // ── 초기 로드 ────────────────────────────────────────────
     await loadAppointments();
