@@ -180,7 +180,7 @@
                     document.getElementById('internalLinkBox').style.display = 'block';
                     document.getElementById('loginForm').style.display = 'none';
                 } else {
-                    // 환자: 비밀번호 만료 확인 후 포털로 이동
+                    // 환자: 비밀번호 만료 확인 후 나의 예약 페이지(index.html)로 이동
                     window.location.href = (pwExpired || mustChange)
                         ? 'change-password.html'
                         : 'index.html';
