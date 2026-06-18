@@ -45,10 +45,10 @@
 
     <!-- 예약 버튼 -->
     <div class="text-center">
-        <a href="appointment.html"
+        <button onclick="goToAppointment()"
            class="inline-flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md">
             <i class="fas fa-calendar-plus"></i> 이 진료과 예약하기
-        </a>
+        </button>
     </div>
 
 </div>
@@ -182,6 +182,23 @@
         document.title = `${document.getElementById('deptName').textContent} - 김이박 클리닉`;
 
         if (typeof renderNavbar === 'function') renderNavbar();
+    }
+
+    async function goToAppointment() {
+        try {
+            const res = await fetch(`${BASE_URL}/auth/me`, {
+                credentials: 'include',
+                headers: { 'X-API-Key': API_KEY },
+            });
+            if (res.ok) {
+                const me = await res.json();
+                if (me.role === 'patient') {
+                    window.location.href = 'appointment.html';
+                    return;
+                }
+            }
+        } catch (_) {}
+        window.location.href = 'login.html';
     }
 
     init();
