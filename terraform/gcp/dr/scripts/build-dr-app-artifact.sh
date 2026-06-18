@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 
 SOURCE_BACKEND="$REPO_ROOT/app/combined/backend"
-SOURCE_FRONTEND="$REPO_ROOT/app/patient/frontend"
+SOURCE_FRONTEND="$REPO_ROOT/app/dr-frontend"
 
 DR_APP_DIR="$REPO_ROOT/app/dr-app"
 DR_BACKEND="$DR_APP_DIR/backend"
@@ -31,7 +31,7 @@ rsync -a --delete \
   --exclude='*:Zone.Identifier' \
   "$SOURCE_BACKEND/" "$DR_BACKEND/"
 
-echo "[3/6] Sync frontend: app/patient/frontend -> app/dr-app/frontend"
+echo "[3/6] Sync frontend: app/dr-frontend -> app/dr-app/frontend"
 rsync -a --delete \
   --exclude='__pycache__/' \
   --exclude='*.pyc' \
@@ -59,7 +59,7 @@ git_sha=${GITHUB_SHA:-local}
 branch=${GITHUB_REF_NAME:-local}
 built_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 source_backend=app/combined/backend
-source_frontend=app/patient/frontend
+source_frontend=app/dr-frontend
 artifact_root=app/dr-app
 META
 

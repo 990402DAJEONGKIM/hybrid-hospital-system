@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>예약 조회 및 변경 - 김이박 클리닉</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         body { background: #f0f4f8; margin: 0; }
         .appt-card {
@@ -54,6 +54,19 @@
         .modal-btn-row button { flex: 1; padding: 10px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
         .btn-confirm-cancel { background: #e53935; color: #fff; }
         .btn-modal-close    { background: #eceff1; color: #546e7a; }
+        /* 입원 현황 카드 */
+        .admission-card {
+            background: #fff; border-radius: 12px; padding: 18px 20px;
+            margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+            border-left: 4px solid var(--primary, #1976d2);
+        }
+        .admission-card h4 { margin: 0 0 10px; font-size: 15px; font-weight: 700; color: #263238; }
+        .admission-card .info-row { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 13px; color: #607d8b; margin-top: 6px; }
+        .admission-card .info-row span i { margin-right: 4px; color: var(--primary, #1976d2); }
+        .adm-status { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+        .adm-pending          { background: #fff8e1; color: #f57f17; }
+        .adm-admitted         { background: #e8f5e9; color: #2e7d32; }
+        .adm-discharge_ordered{ background: #fce4ec; color: #c62828; }
     </style>
 </head>
 <body>
@@ -70,6 +83,18 @@
         <p style="font-size:13px;color:#90a4ae;margin-bottom:24px;">
             * 완료·취소된 예약은 변경·취소가 불가합니다. 취소 시 회원번호 본인 확인이 필요합니다.
         </p>
+
+        <!-- 입원 현황 섹션 -->
+        <div id="admissionSection" style="display:none;">
+            <div class="section-title"><i class="fas fa-hospital-user" style="margin-right:6px;"></i>입원 현황</div>
+            <div id="admissionList"></div>
+        </div>
+
+        <!-- 퇴원 완료 섹션 -->
+        <div id="dischargeSection" style="display:none;">
+            <div class="section-title"><i class="fas fa-door-open" style="margin-right:6px;"></i>퇴원 완료 내역</div>
+            <div id="dischargeList"></div>
+        </div>
 
         <div id="loadingMsg" style="text-align:center;padding:40px;color:#90a4ae;">
             <i class="fas fa-spinner fa-spin" style="font-size:24px;"></i>
@@ -110,8 +135,8 @@
     </div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
 <script>
     let _cancelTargetId = null;
 
@@ -185,12 +210,15 @@
         const warn = document.getElementById('cancelWarn');
         if (!memberNumber) { warn.textContent='회원번호를 입력해주세요.'; return; }
         const btn = document.getElementById('confirmCancelBtn');
-        btn.disabled = true; warn.textContent = '';
+        _setBtnLoading(btn, true); warn.textContent = '';
         const params = new URLSearchParams({ member_number: memberNumber });
         const res = await apiCall(`/portal/appointments/${_cancelTargetId}?${params}`, { method: 'DELETE' });
-        btn.disabled = false;
         if (res&&res.ok) { closeCancelModal(); alert('예약이 취소되었습니다.'); loadAppointments(); }
-        else { const err=await res?.json().catch(()=>({})); warn.textContent=err.detail||'취소 처리 중 오류가 발생했습니다.'; }
+        else {
+            const err=await res?.json().catch(()=>({}));
+            warn.textContent=err.detail||'취소 처리 중 오류가 발생했습니다.';
+            _setBtnLoading(btn, false, '예약 취소');
+        }
     }
 
     async function loadAppointments() {
@@ -215,8 +243,69 @@
         container.style.display = 'block';
     }
 
+    const ADM_STATUS_LABEL = { PENDING: '배정 대기', ADMITTED: '입원 중', DISCHARGE_ORDERED: '퇴원 예정' };
+    const ADM_STATUS_CLASS = { PENDING: 'adm-pending', ADMITTED: 'adm-admitted', DISCHARGE_ORDERED: 'adm-discharge_ordered' };
+
+    function renderAdmissionCard(a) {
+        const statusLabel = ADM_STATUS_LABEL[a.status] || a.status;
+        const statusClass = ADM_STATUS_CLASS[a.status] || '';
+        const admittedAt  = a.admitted_at  ? a.admitted_at.replace('T',' ').slice(0,16)  : '-';
+        const expectedDis = a.expected_discharge_date || '-';
+        return `
+        <div class="admission-card">
+            <span class="adm-status ${statusClass}">${statusLabel}</span>
+            <h4><i class="fas fa-hospital" style="margin-right:6px;color:var(--primary);"></i>${a.ward_name || '-'}</h4>
+            <div class="info-row">
+                <span><i class="fas fa-bed"></i>호실: ${a.room_number || '-'}</span>
+                <span><i class="fas fa-tag"></i>병실 유형: ${a.room_type || '-'}</span>
+                <span><i class="fas fa-calendar-check"></i>입원일: ${admittedAt}</span>
+                <span><i class="fas fa-calendar-minus"></i>퇴원 예정일: ${expectedDis}</span>
+            </div>
+            ${a.notes ? `<p style="font-size:12px;color:#90a4ae;margin-top:8px;"><i class="fas fa-comment-alt" style="margin-right:4px;"></i>${a.notes}</p>` : ''}
+        </div>`;
+    }
+
+    function renderDischargeCard(a) {
+        const dischargedAt = a.discharged_at ? a.discharged_at.replace('T',' ').slice(0,16) : '-';
+        const admittedAt   = a.admitted_at   ? a.admitted_at.replace('T',' ').slice(0,10)   : '-';
+        return `
+        <div class="admission-card" style="border-left-color:#90a4ae;">
+            <span class="adm-status" style="background:#f5f5f5;color:#78909c;">퇴원 완료</span>
+            <h4><i class="fas fa-hospital" style="margin-right:6px;color:#90a4ae;"></i>${a.ward_name || '-'}</h4>
+            <div class="info-row">
+                <span><i class="fas fa-bed"></i>호실: ${a.room_number || '-'}</span>
+                <span><i class="fas fa-calendar-check"></i>입원일: ${admittedAt}</span>
+                <span><i class="fas fa-sign-out-alt"></i>퇴원일: ${dischargedAt}</span>
+            </div>
+        </div>`;
+    }
+
+    async function loadAdmissions() {
+        const [curRes, histRes] = await Promise.all([
+            apiCall('/portal/admissions/me'),
+            apiCall('/portal/admissions/me/history'),
+        ]);
+
+        if (curRes && curRes.ok) {
+            const list = await curRes.json();
+            if (list.length) {
+                document.getElementById('admissionList').innerHTML = list.map(renderAdmissionCard).join('');
+                document.getElementById('admissionSection').style.display = 'block';
+            }
+        }
+
+        if (histRes && histRes.ok) {
+            const list = await histRes.json();
+            if (list.length) {
+                document.getElementById('dischargeList').innerHTML = list.map(renderDischargeCard).join('');
+                document.getElementById('dischargeSection').style.display = 'block';
+            }
+        }
+    }
+
     renderSidebar('my-appointments.html');
     loadAppointments();
+    loadAdmissions();
 </script>
 </body>
 </html>

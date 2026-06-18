@@ -28,26 +28,25 @@
 
                 <nav class="hidden md:block">
                     <ul class="flex items-center space-x-4">
-                        <li><a href="#" id="nav-home" class="sass-nav-link">홈</a></li>
+                        <li><a href="index.html" id="nav-home" class="sass-nav-link">홈</a></li>
                         <li class="sass-dropdown">
                             <a href="#" class="sass-nav-link">진료과 <i class="fas fa-chevron-down text-xs"></i></a>
                             <div class="sass-dropdown-content" id="deptDropdown">
                                 <a href="#" class="sass-dropdown-link text-gray-400">불러오는 중...</a>
                             </div>
                         </li>
-                        <li class="sass-dropdown">
-                            <a href="#" class="sass-nav-link">환자 <i class="fas fa-chevron-down text-xs"></i></a>
+                        <li id="nav-appointment-wrap" class="sass-dropdown hidden">
+                            <a href="#" class="sass-nav-link">예약 <i class="fas fa-chevron-down text-xs"></i></a>
                             <div class="sass-dropdown-content">
-                                <a href="#" id="nav-new-appointment" class="sass-dropdown-link">예약</a>
-                                <a href="#" id="nav-manage-appointments" class="sass-dropdown-link">예약조회 및 변경</a>
-                                <a href="#" id="nav-my-records" class="sass-dropdown-link">진료기록</a>
-                                <a href="#" id="nav-mypage" class="sass-dropdown-link">내 정보</a>
-                                <a href="#" id="nav-change-password" class="sass-dropdown-link">비밀번호 변경</a>
+                                <a href="appointment.html" id="nav-new-appointment" class="sass-dropdown-link">예약 신청</a>
+                                <a href="my-appointments.html" id="nav-manage-appointments" class="sass-dropdown-link">예약조회·변경</a>
+                                <a href="my-records.html" id="nav-my-records" class="sass-dropdown-link">진료기록</a>
+                                <a href="mypage.html" id="nav-mypage" class="sass-dropdown-link">내 정보</a>
+                                <a href="change-password.html" id="nav-change-password" class="sass-dropdown-link">비밀번호 변경</a>
                             </div>
                         </li>
-                        <li id="userWelcomeItem" class="hidden flex items-center"><span id="userWelcome" class="text-sm font-semibold text-gray-700 mr-2"></span></li>
-                        <li><button id="logoutBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold hover:bg-gray-300 transition-colors hidden">로그아웃</button></li>
                         <li id="nav-login-btn-wrap" class="hidden"><a href="login.html" class="sass-appointment-btn" style="background:#2563eb;color:#fff;padding:8px 20px;border-radius:20px;font-weight:700;text-decoration:none;">로그인</a></li>
+                        <li id="nav-logout-wrap" class="hidden"><button id="logoutBtn" onclick="logout()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold hover:bg-gray-300 transition-colors">로그아웃</button></li>
                     </ul>
                 </nav>
 
@@ -64,13 +63,13 @@
             <button id="sassMobileMenuClose" class="text-2xl">&times;</button>
         </div>
         <nav class="flex flex-col space-y-4 mt-8">
-            <a href="#" id="mobile-nav-home" class="text-lg font-medium">홈</a>
+            <a href="index.html" class="text-lg font-medium">홈</a>
             <a href="#" class="text-lg font-medium">진료과</a>
-            <a href="#" class="text-lg font-medium">환자</a>
+            <a id="mobile-nav-appointment" href="appointment.html" class="text-lg font-medium hidden">예약</a>
         </nav>
     </div>
 
-    <main class="pt-20 pb-4 px-6 w-full main-content" style="max-width:100%;">
+    <main class="pt-36 pb-4 px-6 w-full main-content" style="max-width:100%;">
 
         <!-- 미로그인 랜딩 섹션 -->
         <section id="landing-section" class="hidden">
@@ -106,9 +105,9 @@
         </section>
 
         <!-- 예약 스케줄 달력 섹션 (로그인 후) -->
-        <section id="appointment-section" class="bg-white rounded-2xl shadow-lg p-5 flex flex-col" style="height: calc(100vh - 120px); min-height: 480px; max-height: 780px;">
+        <section id="appointment-section" class="bg-white rounded-2xl shadow-lg p-5 flex-col hidden" style="height: 560px; min-height: 420px; max-height: 560px;">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold text-blue-900">예약 스케줄</h2>
+                <h2 class="text-xl font-bold text-blue-900">나의 예약</h2>
                 <div class="flex items-center space-x-4">
                     <button id="prevMonth" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-chevron-left"></i></button>
                     <h3 id="currentMonthYear" class="text-xl font-semibold"></h3>
@@ -171,5 +170,38 @@
         </div>
     </div>
 
+
+    <div id="drNoticeModal" class="fixed inset-0 z-[5000] hidden items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-lg w-full mx-4 border-t-4 border-yellow-500">
+            <div class="flex items-center mb-4">
+                <div class="bg-yellow-100 text-yellow-600 p-3 rounded-full mr-4">
+                    <i class="fas fa-exclamation-triangle text-2xl"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800">시스템 긴급 점검 안내</h3>
+            </div>
+            
+            <div class="text-gray-600 space-y-3 mb-6 leading-relaxed">
+                <p>안녕하세요. MZ클리닉입니다.</p>
+                <p>현재 보다 안정적인 서비스 제공을 위해 <strong>내부 시스템 긴급 점검 및 네트워크 안정화 작업</strong>이 진행 중입니다.</p>
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mt-2">
+                    <ul class="list-disc list-inside text-sm text-red-500 font-medium space-y-1">
+                        <li>일반 외래 진료 예약 및 조회: <span class="text-gray-700">이용 가능 (단, 처리가 지연될 수 있습니다)</span></li>
+                        <li>입원 병상 및 수술 예약 기능: <span class="text-gray-700">일시 중단</span></li>
+                    </ul>
+                </div>
+                <p class="text-sm mt-3">서비스 이용에 불편을 드려 진심으로 죄송합니다. 조속히 작업을 완료하여 정상적인 서비스를 제공하겠습니다.</p>
+            </div>
+            
+            <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
+                <label class="flex items-center text-sm text-gray-500 cursor-pointer hover:text-gray-700">
+                    <input type="checkbox" id="hideDrModalToday" class="mr-2 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                    오늘 하루 보지 않기
+                </label>
+                <button id="closeDrModalBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition-colors">
+                    확인
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

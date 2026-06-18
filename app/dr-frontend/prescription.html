@@ -79,7 +79,7 @@
         (async () => {
             const res = await fetch(`${BASE_URL}/auth/me`, {
                 credentials: 'include',
-                headers: {},
+                headers: { 'X-API-Key': API_KEY },
             });
             if (!res.ok) { window.location.href = 'login.html'; return; }
             const me = await res.json();
@@ -102,7 +102,7 @@
             const end   = document.getElementById('endDate').value;
             const res   = await fetch(`${BASE_URL}/portal/prescriptions?start_date=${start}&end_date=${end}`, {
                 credentials: 'include',
-                headers: {},
+                headers: { 'X-API-Key': API_KEY },
             });
             const container = document.getElementById('prescList');
 
@@ -143,7 +143,7 @@
         async function doLogout() {
             await fetch(`${BASE_URL}/auth/logout`, {
                 method: 'POST', credentials: 'include',
-                headers: {},
+                headers: { 'X-API-Key': API_KEY },
             }).catch(() => {});
             window.location.href = 'login.html';
         }
