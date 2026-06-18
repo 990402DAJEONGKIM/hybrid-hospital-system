@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>입원 예약 - MZ Clinic</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         .appt-form-wrap { max-width:560px; margin:100px auto 40px; padding:0 16px; }
         .step-indicator { display:flex; gap:8px; margin-bottom:28px; }
@@ -59,12 +59,13 @@
         </div>
         <div class="form-group">
             <label for="roomTypePref">희망 병실 유형</label>
-            <select id="roomTypePref">
+            <select id="roomTypePref" onchange="onRoomTypeChange()">
                 <option value="">선택 안함</option>
                 <option value="1인실">1인실</option>
                 <option value="2인실">2인실</option>
                 <option value="다인실">다인실</option>
             </select>
+            <div id="wardAvailBox" style="display:none;margin-top:8px;padding:10px 12px;border-radius:6px;font-size:13px;"></div>
         </div>
         <div class="form-group">
             <label>기저질환 유무 *</label>
@@ -86,10 +87,6 @@
             <label for="apptDate">입원 희망일 *</label>
             <input type="date" id="apptDate">
         </div>
-        <div class="form-group">
-            <label for="apptNote">메모 (선택)</label>
-            <input type="text" id="apptNote" placeholder="특이사항이나 요청 사항을 간단히 적어주세요">
-        </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="goToStep(1)">뒤로</button>
             <button class="btn-primary" onclick="goToStep(3)">다음</button>
@@ -108,9 +105,37 @@
     </div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/script.js"></script>
+<script src="js/config.js"></script>
+<script src="js/script.js"></script>
 <script>
+    const ROOM_TYPE_MAP = { '1인실': 'single', '2인실': 'double', '다인실': 'shared' };
+
+    async function onRoomTypeChange() {
+        const pref     = document.getElementById('roomTypePref').value;
+        const deptCode = document.getElementById('deptSelect').value;
+        const box      = document.getElementById('wardAvailBox');
+        if (!pref || !deptCode) { box.style.display = 'none'; return; }
+
+        const rt  = ROOM_TYPE_MAP[pref] || '';
+        const res = await apiCall(`/portal/wards/availability?room_type=${rt}&department_code=${deptCode}`);
+        box.style.display = 'block';
+        if (!res || !res.ok) {
+            box.style.background = '#fff3e0';
+            box.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#f57c00;margin-right:6px;"></i>병상 현황을 확인할 수 없습니다.';
+            return;
+        }
+        const wards = await res.json();
+        const totalAvail = wards.reduce((s, w) => s + (w.available_beds || 0), 0);
+        if (totalAvail === 0) {
+            box.style.background = '#ffebee';
+            box.innerHTML = `<i class="fas fa-bed" style="color:#e53935;margin-right:6px;"></i><strong>${pref}</strong> 해당 진료과 가용 병상 없음 — 다른 유형을 선택하거나 원무과에 문의하세요.`;
+        } else {
+            box.style.background = '#e8f5e9';
+            const wardList = wards.map(w => `${w.ward_name} (${w.available_beds}병상)`).join(', ');
+            box.innerHTML = `<i class="fas fa-bed" style="color:#43a047;margin-right:6px;"></i><strong>${pref}</strong> 가용 병상 <strong>${totalAvail}개</strong> — ${wardList}`;
+        }
+    }
+
     let selectedDept = null, selectedDoctor = null;
 
     async function init() {
@@ -142,6 +167,8 @@
             const docSel = document.getElementById('doctorSelect');
             docSel.innerHTML = '<option value="">담당의 선택 안함 (배정)</option>';
             docSel.disabled = !code;
+            // 진료과 바뀌면 병상 현황 재조회
+            onRoomTypeChange();
             if (!code) return;
             const dr = await apiCall(`/portal/doctors?department_code=${code}`);
             if (!dr || !dr.ok) return;
@@ -176,14 +203,16 @@
             const docName  = selectedDoctor ? selectedDoctor.doctor_name : '미지정 (배정)';
             const roomPref = document.getElementById('roomTypePref').value || '선택 안함';
             const chronic  = document.getElementById('c_yes').checked ? '있음' : '없음';
+            const availBox = document.getElementById('wardAvailBox');
+            const availNote = (roomPref !== '선택 안함' && availBox && availBox.style.display !== 'none')
+                ? `<br><div style="margin-top:6px;padding:8px 10px;border-radius:5px;font-size:12px;background:#f5f5f5;">${availBox.innerHTML}</div>` : '';
             document.getElementById('confirmBox').innerHTML =
                 `<strong>예약 유형</strong>: 입원<br>
                  <strong>진료과</strong>: ${deptName}<br>
                  <strong>담당의</strong>: ${docName}<br>
                  <strong>입원 희망일</strong>: ${date}<br>
-                 <strong>희망 병실</strong>: ${roomPref}<br>
-                 <strong>기저질환</strong>: ${chronic}<br>
-                 <strong>메모</strong>: ${document.getElementById('apptNote').value || '없음'}`;
+                 <strong>희망 병실</strong>: ${roomPref}${availNote}<br>
+                 <strong>기저질환</strong>: ${chronic}`;
             document.getElementById('errMsg').textContent = '';
         }
         [1, 2, 3].forEach(i => {
@@ -194,34 +223,54 @@
 
     async function submitAppointment() {
         const btn = document.getElementById('submitBtn');
-        btn.disabled = true;
+        _setBtnLoading(btn, true);
         document.getElementById('errMsg').textContent = '';
 
         const roomPref = document.getElementById('roomTypePref').value;
-        const body = {
+        const roomType = ROOM_TYPE_MAP[roomPref] || null;  // 'single'/'double'/'shared' or null
+
+        const apptBody = {
             type_code:             'inpatient',
             department_code:       document.getElementById('deptSelect').value,
             appointment_date:      document.getElementById('apptDate').value,
             appointment_time:      '14:00',
             has_chronic_condition: document.getElementById('c_yes').checked,
-            notes:                 document.getElementById('apptNote').value || null,
         };
-        if (roomPref) body.room_type_pref = roomPref;
-        if (selectedDoctor) body.doctor_id = selectedDoctor.doctor_id;
+        if (roomPref)       apptBody.room_type_pref = roomPref;
+        if (selectedDoctor) apptBody.doctor_id      = selectedDoctor.doctor_id;
 
-        const res = await apiCall('/portal/appointments', {
+        // Step 1: 예약 생성
+        const apptRes = await apiCall('/portal/appointments', {
             method: 'POST',
-            body: JSON.stringify(body),
+            body:   JSON.stringify(apptBody),
         });
-
-        if (res && res.ok) {
-            alert('입원 신청이 접수되었습니다.\n원무과 확정 후 알림을 보내드립니다.');
-            location.href = 'my-appointments.html';
-        } else {
-            const err = await res?.json().catch(() => ({}));
+        if (!apptRes || !apptRes.ok) {
+            const err = await apptRes?.json().catch(() => ({}));
             document.getElementById('errMsg').textContent = err.detail || '예약 처리 중 오류가 발생했습니다.';
-            btn.disabled = false;
+            _setBtnLoading(btn, false, '입원 신청');
+            return;
         }
+        const appt = await apptRes.json();
+
+        // Step 2: 병실 유형 선택 시 병상 배정 (admissions INSERT)
+        if (roomType) {
+            const admRes = await apiCall('/portal/admissions/request', {
+                method: 'POST',
+                body:   JSON.stringify({ appointment_id: appt.appointment_id, room_type: roomType }),
+            });
+            if (!admRes || !admRes.ok) {
+                const err = await admRes?.json().catch(() => ({}));
+                document.getElementById('errMsg').textContent =
+                    `예약은 접수됐으나 병상 배정 실패: ${err.detail || '잠시 후 다시 시도해주세요.'}`;
+                _setBtnLoading(btn, false, '입원 신청');
+                return;
+            }
+        }
+
+        alert(roomType
+            ? '입원 신청 및 병상 배정이 완료되었습니다.'
+            : '입원 신청이 접수되었습니다.\n원무과 확정 후 알림을 보내드립니다.');
+        location.href = 'my-appointments.html';
     }
 
     renderSidebar('appointment.html');

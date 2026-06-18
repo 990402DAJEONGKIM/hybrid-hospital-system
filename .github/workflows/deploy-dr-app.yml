@@ -9,6 +9,7 @@ on:
       - 'app/combined/**'
       - 'app/patient/**'
       - 'app/dr-app/**'
+      - 'app/dr-frontend/**'
       - 'terraform/gcp/dr/scripts/build-dr-app-artifact.sh'
       - '.github/workflows/deploy-dr-app.yml'
 

@@ -87,25 +87,53 @@ async function extendSession() {
     }
 }
 
+const _API_TIMEOUT_MS = 10000;
+const _TIMEOUT_RESPONSE = () => new Response(
+    JSON.stringify({ detail: '요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.' }),
+    { status: 408, headers: { 'Content-Type': 'application/json' } }
+);
+
+async function _fetchWithTimeout(url, opts) {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), _API_TIMEOUT_MS);
+    try {
+        const res = await fetch(url, { ...opts, signal: ctrl.signal });
+        clearTimeout(tid);
+        return res;
+    } catch (e) {
+        clearTimeout(tid);
+        if (e.name === 'AbortError') return _TIMEOUT_RESPONSE();
+        throw e;
+    }
+}
+
 async function apiCall(path, options = {}) {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const merged = {
         ..._fetchDefaults,
         ...options,
         headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
-    });
+    };
+    const res = await _fetchWithTimeout(`${BASE_URL}${path}`, merged);
     if (res && res.headers.get('X-Session-Expiring-Soon') === 'true') {
         _showSessionWarning(parseInt(res.headers.get('X-Session-Remaining-Seconds') || '300'));
     }
     if (res.status === 401) {
         const ok = await _refreshTokens();
         if (!ok) { logout(); return null; }
-        return fetch(`${BASE_URL}${path}`, {
-            ..._fetchDefaults,
-            ...options,
-            headers: { ..._fetchDefaults.headers, ...(options.headers || {}) },
-        });
+        return _fetchWithTimeout(`${BASE_URL}${path}`, merged);
     }
     return res;
+}
+
+function _setBtnLoading(btn, isLoading, originalText) {
+    if (isLoading) {
+        btn.disabled   = true;
+        btn._origText  = btn.innerHTML;
+        btn.innerHTML  = '<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>처리 중...';
+    } else {
+        btn.disabled  = false;
+        btn.innerHTML = originalText !== undefined ? originalText : (btn._origText || btn.innerHTML);
+    }
 }
 
 async function logout() {
@@ -120,8 +148,10 @@ async function requireLogin() {
         const me = await res.json();
         if (me.role !== 'patient') { window.location.href = 'login.html'; return null; }
         // must_change_password=true 또는 비밀번호 만료 시 변경 페이지 강제 이동 (SFR-038)
-        if ((me.must_change_password || me.password_expired) && !window.location.pathname.includes('change-password')) {
-            window.location.href = 'change-password.html';
+        if (me.must_change_password || me.password_expired) {
+            if (!window.location.pathname.includes('change-password.html')) {
+                window.location.href = 'change-password.html';
+            }
             return null;
         }
         return me;
@@ -133,6 +163,23 @@ async function requireLogin() {
 
 // ── DOMContentLoaded ──────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+
+    // 진료과 드롭다운 — 인증과 무관하게 항상 로드
+    const deptDropdown = document.getElementById('deptDropdown');
+    if (deptDropdown) {
+        try {
+            const r = await fetch(`${BASE_URL}/portal/departments`, {
+                credentials: 'include',
+                headers: { 'X-API-Key': API_KEY },
+            });
+            if (r && r.ok) {
+                const depts = await r.json();
+                deptDropdown.innerHTML = depts.length
+                    ? depts.map(d => `<a href="department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`).join('')
+                    : '<a class="sass-dropdown-link text-gray-400">진료과 없음</a>';
+            }
+        } catch (_) {}
+    }
 
     // 소프트 인증: 미로그인 시 리다이렉트 대신 UI 분기
     let me = null;
@@ -147,15 +194,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch {}
 
-    // 로그인 버튼 vs 사용자 정보 전환
-    const loginBtnWrap = document.getElementById('nav-login-btn-wrap');
-    const appointmentBtnWrap = document.getElementById('nav-appointment-btn-wrap');
+    // 로그인 버튼 vs 예약·로그아웃 탭 전환
+    const loginBtnWrap      = document.getElementById('nav-login-btn-wrap');
+    const appointmentWrap   = document.getElementById('nav-appointment-wrap');
+    const logoutWrap        = document.getElementById('nav-logout-wrap');
+    const mobileAppointment = document.getElementById('mobile-nav-appointment');
     if (me) {
-        if (loginBtnWrap)       loginBtnWrap.classList.add('hidden');
-        if (appointmentBtnWrap) appointmentBtnWrap.classList.remove('hidden');
+        if (loginBtnWrap)      loginBtnWrap.classList.add('hidden');
+        if (appointmentWrap)   appointmentWrap.classList.remove('hidden');
+        if (logoutWrap)        logoutWrap.classList.remove('hidden');
+        if (mobileAppointment) mobileAppointment.classList.remove('hidden');
     } else {
-        if (loginBtnWrap)       loginBtnWrap.classList.remove('hidden');
-        if (appointmentBtnWrap) appointmentBtnWrap.classList.add('hidden');
+        if (loginBtnWrap)      loginBtnWrap.classList.remove('hidden');
+        if (appointmentWrap)   appointmentWrap.classList.add('hidden');
+        if (logoutWrap)        logoutWrap.classList.add('hidden');
+        if (mobileAppointment) mobileAppointment.classList.add('hidden');
     }
 
     // 미로그인 시: 랜딩 섹션만 표시하고 종료
@@ -168,7 +221,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // must_change_password 또는 비밀번호 만료 시 변경 페이지 강제 이동 (SFR-038)
-    if ((me.must_change_password || me.password_expired) && !window.location.pathname.includes('change-password')) { window.location.href = 'change-password.html'; return; }
+    // 이미 change-password.html이면 리다이렉트 생략 (무한루프 방지)
+    if (me.must_change_password || me.password_expired) {
+        if (!window.location.pathname.includes('change-password.html')) {
+            window.location.href = 'change-password.html';
+        }
+        return;
+    }
 
     const header           = document.querySelector('.sass-header');
     const mobileMenuBtn    = document.getElementById('sassMobileMenuBtn');
@@ -244,6 +303,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (userWelcomeItem) userWelcomeItem.classList.remove('hidden');
     if (logoutBtn)       logoutBtn.classList.remove('hidden');
     if (logoutBtn)       logoutBtn.addEventListener('click', logout);
+    if (appointmentSection) { appointmentSection.classList.remove('hidden'); appointmentSection.classList.add('flex'); }
 
     // ── 달력 ────────────────────────────────────────────────
     let currentDate   = new Date();
@@ -304,7 +364,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const appts = appointmentsMap[dateString];
             if (appts && appts.length > 0) {
                 const badge = document.createElement('div');
-                badge.className = 'mt-1 w-full text-[10px] px-2 py-1 bg-blue-100 text-blue-700 rounded-md font-bold truncate';
+                badge.className = 'mt-1 w-full text-[8px] px-2 bg-blue-100 text-blue-700 rounded-md font-bold truncate';
+                badge.style.paddingTop = '2px';
+                badge.style.paddingBottom = '2px';
                 badge.innerText = `예약 ${appts.length}건`;
                 dayCell.appendChild(badge);
             }
@@ -421,21 +483,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (navHome)                 navHome.addEventListener('click', async (e) => { e.preventDefault(); closeMenuIfOpen(); });
     if (mobileNavHome)           mobileNavHome.addEventListener('click', async (e) => { e.preventDefault(); closeMenuIfOpen(); });
 
-    // ── 진료과 드롭다운 동적 로드 ────────────────────────────
-    const deptDropdown = document.getElementById('deptDropdown');
-    if (deptDropdown) {
-        try {
-            const r = await apiCall('/portal/departments');
-            if (r && r.ok) {
-                const depts = await r.json();
-                deptDropdown.innerHTML = depts.map(d =>
-                    `<a href="/department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`
-                ).join('');
-            }
-        } catch (_) { /* 드롭다운 실패 시 무시 */ }
-    }
-
     // ── 초기 로드 ────────────────────────────────────────────
     await loadAppointments();
     renderCalendar();
+});
+
+
+    // ── DR 모달 ─────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+    // DR 모달 관련 요소 선택
+    const drModal = document.getElementById('drNoticeModal');
+    const btnCloseDrModal = document.getElementById('closeDrModalBtn');
+    const chkHideToday = document.getElementById('hideDrModalToday');
+
+    // 모달이 존재할 때만 실행
+    if (drModal && btnCloseDrModal) {
+        // 로컬 스토리지에서 하루 안보기 만료 시간 확인
+        const hideUntil = localStorage.getItem('hideDrNoticeUntil');
+        const now = new Date().getTime();
+
+        // 만료 시간이 없거나, 현재 시간이 만료 시간을 지났다면 팝업 노출
+        // (주의: 평상시에는 팝업이 안 뜨도록 DR 환경에서만 이 로직이 실행되게 config.js 등에서 분기 처리를 추천합니다)
+        if (!hideUntil || now > parseInt(hideUntil, 10)) {
+            drModal.classList.remove('hidden');
+            drModal.classList.add('flex');
+        }
+
+        // 닫기 버튼 클릭 이벤트
+        btnCloseDrModal.addEventListener('click', () => {
+            if (chkHideToday && chkHideToday.checked) {
+                // 체크박스 선택 시: 현재 시간 + 24시간을 밀리초로 계산하여 저장
+                const tomorrow = now + (24 * 60 * 60 * 1000);
+                localStorage.setItem('hideDrNoticeUntil', tomorrow.toString());
+            }
+            // 모달 닫기
+            drModal.classList.remove('flex');
+            drModal.classList.add('hidden');
+        });
+    }
 });
