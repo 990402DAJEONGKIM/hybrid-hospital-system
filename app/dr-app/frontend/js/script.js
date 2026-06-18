@@ -478,3 +478,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadAppointments();
     renderCalendar();
 });
+    // ── DR 모달 관련 ─────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+    // DR 모달 관련 요소 선택
+    const drModal = document.getElementById('drNoticeModal');
+    const btnCloseDrModal = document.getElementById('closeDrModalBtn');
+    const chkHideToday = document.getElementById('hideDrModalToday');
+
+    // 모달이 존재할 때만 실행
+    if (drModal && btnCloseDrModal) {
+        // 로컬 스토리지에서 하루 안보기 만료 시간 확인
+        const hideUntil = localStorage.getItem('hideDrNoticeUntil');
+        const now = new Date().getTime();
+
+        // 만료 시간이 없거나, 현재 시간이 만료 시간을 지났다면 팝업 노출
+        // (주의: 평상시에는 팝업이 안 뜨도록 DR 환경에서만 이 로직이 실행되게 config.js 등에서 분기 처리를 추천합니다)
+        if (!hideUntil || now > parseInt(hideUntil, 10)) {
+            drModal.classList.remove('hidden');
+            drModal.classList.add('flex');
+        }
+
+        // 닫기 버튼 클릭 이벤트
+        btnCloseDrModal.addEventListener('click', () => {
+            if (chkHideToday && chkHideToday.checked) {
+                // 체크박스 선택 시: 현재 시간 + 24시간을 밀리초로 계산하여 저장
+                const tomorrow = now + (24 * 60 * 60 * 1000);
+                localStorage.setItem('hideDrNoticeUntil', tomorrow.toString());
+            }
+            // 모달 닫기
+            drModal.classList.remove('flex');
+            drModal.classList.add('hidden');
+        });
+    }
+});
+
