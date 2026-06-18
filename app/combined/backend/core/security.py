@@ -108,6 +108,18 @@ def get_current_user(
     return decode_access_token(access_token)
 
 
+def get_optional_user(
+    access_token: str | None = Cookie(default=None),
+    _: str = Depends(verify_api_key),
+) -> dict | None:
+    if not access_token:
+        return None
+    try:
+        return decode_access_token(access_token)
+    except Exception:
+        return None
+
+
 def has_permission(user_id: str, permission_code: str, db: Session) -> bool:
     """사용자의 역할이 특정 권한 코드를 가지고 있는지 확인 (ISMS-P 2.5.4)"""
     return db.query(Permission).join(RolePermission).join(Role).join(User).\
