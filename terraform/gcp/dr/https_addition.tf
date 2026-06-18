@@ -45,7 +45,7 @@ resource "google_certificate_manager_dns_authorization" "dr_mzclinic" {
 }
 
 resource "google_certificate_manager_certificate" "dr_app" {
-  name        = "gcp-dr-app-cert"
+  name        = "gcp-dr-app-cert-v2"
   description = "DR HTTPS certificate for mzclinic.cloud and dr.mzclinic.cloud"
 
   managed {
