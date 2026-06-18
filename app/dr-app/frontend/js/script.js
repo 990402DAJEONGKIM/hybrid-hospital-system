@@ -164,6 +164,23 @@ async function requireLogin() {
 // ── DOMContentLoaded ──────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // 진료과 드롭다운 — 인증과 무관하게 항상 로드
+    const deptDropdown = document.getElementById('deptDropdown');
+    if (deptDropdown) {
+        try {
+            const r = await fetch(`${BASE_URL}/portal/departments`, {
+                credentials: 'include',
+                headers: { 'X-API-Key': API_KEY },
+            });
+            if (r && r.ok) {
+                const depts = await r.json();
+                deptDropdown.innerHTML = depts.length
+                    ? depts.map(d => `<a href="department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`).join('')
+                    : '<a class="sass-dropdown-link text-gray-400">진료과 없음</a>';
+            }
+        } catch (_) {}
+    }
+
     // 소프트 인증: 미로그인 시 리다이렉트 대신 UI 분기
     let me = null;
     try {
@@ -177,15 +194,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch {}
 
-    // 로그인 버튼 vs 사용자 정보 전환
-    const loginBtnWrap = document.getElementById('nav-login-btn-wrap');
-    const appointmentBtnWrap = document.getElementById('nav-appointment-btn-wrap');
+    // 로그인 버튼 vs 예약·로그아웃 탭 전환
+    const loginBtnWrap      = document.getElementById('nav-login-btn-wrap');
+    const appointmentWrap   = document.getElementById('nav-appointment-wrap');
+    const logoutWrap        = document.getElementById('nav-logout-wrap');
+    const mobileAppointment = document.getElementById('mobile-nav-appointment');
     if (me) {
-        if (loginBtnWrap)       loginBtnWrap.classList.add('hidden');
-        if (appointmentBtnWrap) appointmentBtnWrap.classList.remove('hidden');
+        if (loginBtnWrap)      loginBtnWrap.classList.add('hidden');
+        if (appointmentWrap)   appointmentWrap.classList.remove('hidden');
+        if (logoutWrap)        logoutWrap.classList.remove('hidden');
+        if (mobileAppointment) mobileAppointment.classList.remove('hidden');
     } else {
-        if (loginBtnWrap)       loginBtnWrap.classList.remove('hidden');
-        if (appointmentBtnWrap) appointmentBtnWrap.classList.add('hidden');
+        if (loginBtnWrap)      loginBtnWrap.classList.remove('hidden');
+        if (appointmentWrap)   appointmentWrap.classList.add('hidden');
+        if (logoutWrap)        logoutWrap.classList.add('hidden');
+        if (mobileAppointment) mobileAppointment.classList.add('hidden');
     }
 
     // 미로그인 시: 랜딩 섹션만 표시하고 종료
@@ -460,25 +483,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (navHome)                 navHome.addEventListener('click', async (e) => { e.preventDefault(); closeMenuIfOpen(); });
     if (mobileNavHome)           mobileNavHome.addEventListener('click', async (e) => { e.preventDefault(); closeMenuIfOpen(); });
 
-    // ── 진료과 드롭다운 동적 로드 ────────────────────────────
-    const deptDropdown = document.getElementById('deptDropdown');
-    if (deptDropdown) {
-        try {
-            const r = await apiCall('/portal/departments');
-            if (r && r.ok) {
-                const depts = await r.json();
-                deptDropdown.innerHTML = depts.map(d =>
-                    `<a href="department.html?code=${d.department_code}" class="sass-dropdown-link">${d.department_name}</a>`
-                ).join('');
-            }
-        } catch (_) { /* 드롭다운 실패 시 무시 */ }
-    }
-
     // ── 초기 로드 ────────────────────────────────────────────
     await loadAppointments();
     renderCalendar();
 });
-    // ── DR 모달 관련 ─────────────────────────────────────────
+
+
+    // ── DR 모달 ─────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
     // DR 모달 관련 요소 선택
     const drModal = document.getElementById('drNoticeModal');
@@ -511,4 +522,3 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 });
-
