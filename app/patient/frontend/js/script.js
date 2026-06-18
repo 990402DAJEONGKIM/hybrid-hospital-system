@@ -194,17 +194,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch {}
 
-    // 로그인 버튼 vs 예약 탭 전환
+    // 로그인 버튼 vs 예약·로그아웃 탭 전환
     const loginBtnWrap      = document.getElementById('nav-login-btn-wrap');
     const appointmentWrap   = document.getElementById('nav-appointment-wrap');
+    const logoutWrap        = document.getElementById('nav-logout-wrap');
     const mobileAppointment = document.getElementById('mobile-nav-appointment');
     if (me) {
         if (loginBtnWrap)      loginBtnWrap.classList.add('hidden');
         if (appointmentWrap)   appointmentWrap.classList.remove('hidden');
+        if (logoutWrap)        logoutWrap.classList.remove('hidden');
         if (mobileAppointment) mobileAppointment.classList.remove('hidden');
     } else {
         if (loginBtnWrap)      loginBtnWrap.classList.remove('hidden');
         if (appointmentWrap)   appointmentWrap.classList.add('hidden');
+        if (logoutWrap)        logoutWrap.classList.add('hidden');
         if (mobileAppointment) mobileAppointment.classList.add('hidden');
     }
 
