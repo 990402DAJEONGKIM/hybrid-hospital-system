@@ -24,11 +24,70 @@ resource "google_compute_managed_ssl_certificate" "dr_app" {
   }
 }
 
+
+# ─────────────────────────────────────────────────────────────
+# Certificate Manager for DR HTTPS
+# - dr.mzclinic.cloud: DR 전용 도메인
+# - mzclinic.cloud: 장애 전환 시 사용자가 실제로 접속하는 원 서비스 도메인
+#
+# mzclinic.cloud는 평상시 AWS ALB를 바라보므로,
+# GCP LB 기반 managed SSL 검증보다 DNS authorization 기반 Certificate Manager가 안전하다.
+# ─────────────────────────────────────────────────────────────
+
+resource "google_certificate_manager_dns_authorization" "mzclinic_root" {
+  name   = "mzclinic-root-dns-auth"
+  domain = "mzclinic.cloud"
+}
+
+resource "google_certificate_manager_dns_authorization" "dr_mzclinic" {
+  name   = "dr-mzclinic-dns-auth"
+  domain = "dr.mzclinic.cloud"
+}
+
+resource "google_certificate_manager_certificate" "dr_app" {
+  name        = "gcp-dr-app-cert"
+  description = "DR HTTPS certificate for mzclinic.cloud and dr.mzclinic.cloud"
+
+  managed {
+    domains = [
+      "mzclinic.cloud",
+      "dr.mzclinic.cloud",
+    ]
+
+    dns_authorizations = [
+      google_certificate_manager_dns_authorization.mzclinic_root.id,
+      google_certificate_manager_dns_authorization.dr_mzclinic.id,
+    ]
+  }
+}
+
+resource "google_certificate_manager_certificate_map" "dr_app" {
+  name        = "gcp-dr-app-cert-map"
+  description = "Certificate map for DR HTTPS proxy"
+}
+
+resource "google_certificate_manager_certificate_map_entry" "mzclinic_root" {
+  name         = "mzclinic-root-entry"
+  map          = google_certificate_manager_certificate_map.dr_app.name
+  hostname     = "mzclinic.cloud"
+  certificates = [google_certificate_manager_certificate.dr_app.id]
+}
+
+resource "google_certificate_manager_certificate_map_entry" "dr_mzclinic" {
+  name         = "dr-mzclinic-entry"
+  map          = google_certificate_manager_certificate_map.dr_app.name
+  hostname     = "dr.mzclinic.cloud"
+  certificates = [google_certificate_manager_certificate.dr_app.id]
+}
+
 # HTTPS Target Proxy
 resource "google_compute_target_https_proxy" "dr_app" {
-  name             = "gcp-dr-reservation-https-proxy"
-  url_map          = google_compute_url_map.dr_app.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.dr_app.id]
+  name    = "gcp-dr-reservation-https-proxy"
+  url_map = google_compute_url_map.dr_app.id
+
+  # Certificate Manager certificate map 사용
+  # mzclinic.cloud / dr.mzclinic.cloud 모두 HTTPS 인증서 매칭
+  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.dr_app.id}"
 }
 
 # HTTPS Forwarding Rule (443)
