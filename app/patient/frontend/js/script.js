@@ -194,15 +194,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch {}
 
-    // 로그인 버튼 vs 사용자 정보 전환
-    const loginBtnWrap = document.getElementById('nav-login-btn-wrap');
-    const appointmentBtnWrap = document.getElementById('nav-appointment-btn-wrap');
+    // 로그인 버튼 vs 예약 탭 전환
+    const loginBtnWrap      = document.getElementById('nav-login-btn-wrap');
+    const appointmentWrap   = document.getElementById('nav-appointment-wrap');
+    const mobileAppointment = document.getElementById('mobile-nav-appointment');
     if (me) {
-        if (loginBtnWrap)       loginBtnWrap.classList.add('hidden');
-        if (appointmentBtnWrap) appointmentBtnWrap.classList.remove('hidden');
+        if (loginBtnWrap)      loginBtnWrap.classList.add('hidden');
+        if (appointmentWrap)   appointmentWrap.classList.remove('hidden');
+        if (mobileAppointment) mobileAppointment.classList.remove('hidden');
     } else {
-        if (loginBtnWrap)       loginBtnWrap.classList.remove('hidden');
-        if (appointmentBtnWrap) appointmentBtnWrap.classList.add('hidden');
+        if (loginBtnWrap)      loginBtnWrap.classList.remove('hidden');
+        if (appointmentWrap)   appointmentWrap.classList.add('hidden');
+        if (mobileAppointment) mobileAppointment.classList.add('hidden');
     }
 
     // 미로그인 시: 랜딩 섹션만 표시하고 종료

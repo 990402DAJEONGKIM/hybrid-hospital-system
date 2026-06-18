@@ -28,12 +28,14 @@
 
                 <nav class="hidden md:block">
                     <ul class="flex items-center space-x-4">
+                        <li><a href="index.html" id="nav-home" class="sass-nav-link">홈</a></li>
                         <li class="sass-dropdown">
                             <a href="#" class="sass-nav-link">진료과 <i class="fas fa-chevron-down text-xs"></i></a>
                             <div class="sass-dropdown-content" id="deptDropdown">
                                 <a href="#" class="sass-dropdown-link text-gray-400">불러오는 중...</a>
                             </div>
                         </li>
+                        <li id="nav-appointment-wrap" class="hidden"><a href="appointment.html" id="nav-new-appointment" class="sass-nav-link">예약</a></li>
                         <li id="nav-login-btn-wrap" class="hidden"><a href="login.html" class="sass-appointment-btn" style="background:#2563eb;color:#fff;padding:8px 20px;border-radius:20px;font-weight:700;text-decoration:none;">로그인</a></li>
                     </ul>
                 </nav>
@@ -51,7 +53,9 @@
             <button id="sassMobileMenuClose" class="text-2xl">&times;</button>
         </div>
         <nav class="flex flex-col space-y-4 mt-8">
+            <a href="index.html" class="text-lg font-medium">홈</a>
             <a href="#" class="text-lg font-medium">진료과</a>
+            <a id="mobile-nav-appointment" href="appointment.html" class="text-lg font-medium hidden">예약</a>
         </nav>
     </div>
 
