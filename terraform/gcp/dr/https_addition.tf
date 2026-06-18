@@ -88,6 +88,12 @@ resource "google_compute_target_https_proxy" "dr_app" {
   # Certificate Manager certificate map 사용
   # mzclinic.cloud / dr.mzclinic.cloud 모두 HTTPS 인증서 매칭
   certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.dr_app.id}"
+
+  # Target HTTPS Proxy가 빈 certificate map을 먼저 참조하지 않도록 순서 보장
+  depends_on = [
+    google_certificate_manager_certificate_map_entry.mzclinic_root,
+    google_certificate_manager_certificate_map_entry.dr_mzclinic,
+  ]
 }
 
 # HTTPS Forwarding Rule (443)
