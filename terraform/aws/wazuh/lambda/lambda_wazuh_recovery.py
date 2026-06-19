@@ -10,8 +10,9 @@ PROFILE_NAME  = os.environ['INSTANCE_PROFILE']
 PRIVATE_IP    = os.environ['FIXED_PRIVATE_IP']
 PLAYBOOK_PATH = os.environ.get('PLAYBOOK_PATH', '/etc/ansible/wazuh')
 
-ec2  = boto3.client('ec2',  region_name=REGION)
-ssm  = boto3.client('ssm',  region_name=REGION)
+ec2 = boto3.client('ec2', region_name=REGION)
+ssm = boto3.client('ssm', region_name=REGION)
+
 
 def _get_instance_id_by_private_ip(private_ip):
     resp = ec2.describe_instances(
@@ -27,14 +28,12 @@ def _get_instance_id_by_private_ip(private_ip):
     return None
 
 
-
 def lambda_handler(event, context):
     print(f"[INFO] 트리거 수신: {event}")
 
-    # EventBridge EC2 상태변화 이벤트 파싱
-    detail = event.get('detail', {})
+    detail      = event.get('detail', {})
     instance_id = detail.get('instance-id', '')
-    state = detail.get('state', '')
+    state       = detail.get('state', '')
 
     print(f"[INFO] EC2 상태변화: {instance_id} → {state}")
 
@@ -42,15 +41,16 @@ def lambda_handler(event, context):
         print("[INFO] stopped/terminated 아님. 종료.")
         return {"status": "SKIPPED"}
 
-    # EC2 중지/종료 → 무조건 재구축
-    target_id = _get_instance_id_by_private_ip(PRIVATE_IP)
-
-    if target_id is None:
-        print("[ACTION] 인스턴스 없음 → 재구축 진입")
+    # 수정 260619 김강환
+    # terminated: 외부 강제종료 포함, IP로 찾을 인스턴스가 없으므로 바로 재구축
+    if state == 'terminated':
+        print("[ACTION] terminated 감지 → 즉시 재구축")
         _scenario1_rebuild(None)
         return {"status": "SUCCESS"}
 
-    print("[ACTION] EC2 중지/종료 감지 → 재구축")
+    # stopped: IP로 기존 인스턴스 찾아서 terminate 후 재구축
+    target_id = _get_instance_id_by_private_ip(PRIVATE_IP)
+    print(f"[ACTION] stopped 감지 → 재구축 (target: {target_id})")
     _scenario1_rebuild(target_id)
     return {"status": "SUCCESS"}
 
@@ -63,7 +63,6 @@ def _scenario1_rebuild(target_id):
         except ClientError as e:
             print(f"[WARN] 종료 실패 (이미 종료됐을 수 있음): {e}")
 
-        # 종료 완료 대기
         print("[ACTION] 종료 완료 대기 중...")
         waiter = ec2.get_waiter('instance_terminated')
         waiter.wait(
@@ -72,7 +71,6 @@ def _scenario1_rebuild(target_id):
         )
         print("[SUCCESS] 기존 인스턴스 종료 완료")
 
-    # AMI로 새 EC2 생성
     ami_id = _get_latest_ami()
     print(f"[ACTION] AMI {ami_id}로 새 EC2 생성 중...")
     resp = ec2.run_instances(
@@ -103,10 +101,14 @@ def _scenario1_rebuild(target_id):
     new_id = resp['Instances'][0]['InstanceId']
     print(f"[SUCCESS] 새 EC2 생성: {new_id}")
 
-    # SSM Online 대기
-    _wait_ssm_online(new_id)
+    # 수정 260619 김강환 - SSM 실패 시 고아 인스턴스 정리
+    try:
+        _wait_ssm_online(new_id)
+    except RuntimeError as e:
+        print(f"[ERROR] SSM 대기 실패, 생성된 인스턴스 정리: {new_id}")
+        ec2.terminate_instances(InstanceIds=[new_id])
+        raise
 
-    # AMI에 모든 게 구워져 있으니 서비스 재시작만
     _run_ssm(new_id, [
         "systemctl restart wazuh-manager",
         "sleep 30",
@@ -117,9 +119,8 @@ def _scenario1_rebuild(target_id):
 
 
 def _scenario2_restart_service(target_id):
-    # SSM으로 서비스 태그만 실행
     _run_ssm(target_id, [
-       "systemctl restart wazuh-manager",
+        "systemctl restart wazuh-manager",
         "sleep 30",
         "systemctl restart filebeat",
         "systemctl restart wazuh-dashboard"
@@ -127,7 +128,8 @@ def _scenario2_restart_service(target_id):
     print("[SUCCESS] 시나리오 2 복구 완료")
 
 
-def _wait_ssm_online(instance_id, max_attempts=24):
+# 수정 260619 김강환 - max_attempts 24→42 (4분→7분)
+def _wait_ssm_online(instance_id, max_attempts=42):
     print(f"[ACTION] SSM Online 대기: {instance_id}")
     for i in range(max_attempts):
         time.sleep(10)
@@ -142,23 +144,22 @@ def _wait_ssm_online(instance_id, max_attempts=24):
         except ClientError:
             pass
         print(f"[INFO] SSM 대기 중... ({i+1}/{max_attempts})")
-    raise RuntimeError("SSM Agent가 4분 내에 Online 되지 않았습니다.")
+    raise RuntimeError("SSM Agent가 7분 내에 Online 되지 않았습니다.")
 
 
 def _run_ssm(instance_id, commands):
-    print(f"[ACTION] SSM 인프라 스크립트 실행 명령 주입: {instance_id}")
+    print(f"[ACTION] SSM 명령 주입: {instance_id}")
     resp = ssm.send_command(
         InstanceIds=[instance_id],
         DocumentName='AWS-RunShellScript',
         Parameters={'commands': commands},
-        TimeoutSeconds=600 # SSM 내부 타임아웃도 10분으로 동기화
+        TimeoutSeconds=600
     )
     cmd_id = resp['Command']['CommandId']
     print(f"[INFO] CommandId: {cmd_id}")
 
     time.sleep(2)
 
-    # 공식 문서 기준 기본값(100초)을 깨고 10분(600초) 복구 타임라인 완벽 커버
     waiter = ssm.get_waiter('command_executed')
     try:
         waiter.wait(
@@ -168,25 +169,27 @@ def _run_ssm(instance_id, commands):
             WaiterConfig={'Delay': 10, 'MaxAttempts': 60}
         )
     except Exception as e:
-        print(f"[ERROR] SSM Waiter 10분 제한 초과 또는 가동 지연: {e}")
+        print(f"[ERROR] SSM Waiter 초과: {e}")
         raise
 
     result = ssm.get_command_invocation(CommandId=cmd_id, InstanceId=instance_id)
-    print(f"[RESULT] SSM 가동 최종 상태: {result['Status']}")
-    
+    print(f"[RESULT] SSM 최종 상태: {result['Status']}")
+
     if result['Status'] != 'Success':
-        print(f"[STDERR 로그 추출]:\n{result.get('StandardErrorContent', '')}")
-        raise RuntimeError(f"Wazuh 내부 서비스 정상화 명령 수행 실패: {result['Status']}")
+        print(f"[STDERR]:\n{result.get('StandardErrorContent', '')}")
+        raise RuntimeError(f"서비스 정상화 실패: {result['Status']}")
+
 
 # 최신 Wazuh Golden AMI 자동 조회 - 260609 김강환
-# AMI 이름 패턴: aws-wazuh-ami* (날짜 포함)
 def _get_latest_ami():
     resp = ec2.describe_images(
         Filters=[
-            {'Name': 'name', 'Values': ['aws-wazuh-ami']},
+            {'Name': 'name', 'Values': ['aws-wazuh-ami*']},
             {'Name': 'owner-id', 'Values': ['476293896981']},
             {'Name': 'state', 'Values': ['available']}
         ]
     )
     images = sorted(resp['Images'], key=lambda x: x['CreationDate'], reverse=True)
+    if not images:
+        raise RuntimeError("사용 가능한 Wazuh AMI가 없습니다.")
     return images[0]['ImageId']
