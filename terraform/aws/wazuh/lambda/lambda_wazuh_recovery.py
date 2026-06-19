@@ -71,7 +71,6 @@ def _scenario1_rebuild(target_id):
             WaiterConfig={'Delay': 5, 'MaxAttempts': 24}
         )
         print("[SUCCESS] 기존 인스턴스 종료 완료")
-        # 추가 260619 김강환 - IP 반납 대기
         print("[ACTION] IP 반납 대기 중... (30초)")
         time.sleep(30)
 
@@ -105,7 +104,15 @@ def _scenario1_rebuild(target_id):
     new_id = resp['Instances'][0]['InstanceId']
     print(f"[SUCCESS] 새 EC2 생성: {new_id}")
 
-    # 수정 260619 김강환 - SSM 실패 시 고아 인스턴스 정리
+    # 추가 260619 김강환 - running 상태 대기 후 SSM 조회
+    print("[ACTION] EC2 running 상태 대기 중...")
+    waiter = ec2.get_waiter('instance_running')
+    waiter.wait(
+        InstanceIds=[new_id],
+        WaiterConfig={'Delay': 5, 'MaxAttempts': 24}
+    )
+    print("[SUCCESS] EC2 running 확인")
+
     try:
         _wait_ssm_online(new_id)
     except RuntimeError as e:
