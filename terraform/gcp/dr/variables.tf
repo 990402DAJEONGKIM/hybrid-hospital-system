@@ -172,7 +172,7 @@ variable "enable_ops_agent" {
 variable "failover_mode" {
   description = "automatic이면 DNS/MIG 자동 전환, manual이면 장애/복구 감지만 로그로 남김"
   type        = string
-  default     = "automatic"
+  default     = "manual"
 
   validation {
     condition     = contains(["manual", "automatic"], var.failover_mode)
