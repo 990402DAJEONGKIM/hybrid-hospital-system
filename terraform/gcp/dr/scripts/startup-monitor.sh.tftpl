@@ -131,7 +131,7 @@ failover_to_gcp() {
 }
 
 return_to_aws() {
-  if [[ "${AUTO_FAILBACK_ENABLED:-false}" != "true" ]]; then
+  if [[ "$${AUTO_FAILBACK_ENABLED:-false}" != "true" ]]; then
     # 자동 failback 금지:
     # DR 중 GCP Cloud SQL에 생성된 예약/변경 데이터가 원본 AWS RDS로 자동 역동기화되지 않는다.
     # 따라서 AWS health가 회복되어도 DNS와 MIG를 자동 원복하지 않고,
