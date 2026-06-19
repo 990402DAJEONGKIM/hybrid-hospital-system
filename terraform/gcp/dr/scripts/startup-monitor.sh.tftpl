@@ -28,6 +28,7 @@ CF_RECORD_NAME="${cf_record_name}"
 GCP_CNAME_TARGET="${gcp_cname_target}"
 AWS_CNAME_TARGET="${aws_record_content}"
 FAILOVER_MODE="${failover_mode}"
+AUTO_FAILBACK_ENABLED="${auto_failback_enabled}"
 
 STATE_FILE="/var/lib/gcp-dr-failover/state"
 EVENT_FILE="/var/lib/gcp-dr-failover/events.log"
@@ -113,6 +114,8 @@ resize_mig() {
 
 # ── Failover / Recovery ────────────────────────────────────────────────────────
 failover_to_gcp() {
+  rm -f "$RECOVERY_NOTICE_FILE"
+
   send_slack "🚨 *DR Failover* — AWS 장애 감지. GCP로 전환합니다.\n도메인: $CF_RECORD_NAME → $GCP_CNAME_TARGET"
   log_event "aws_unhealthy" "failure_threshold=$FAILURE_THRESHOLD"
 
@@ -121,7 +124,6 @@ failover_to_gcp() {
     return
   fi
 
-  rm -f "$RECOVERY_NOTICE_FILE"
   resize_mig 1
   cf_dns_switch "$GCP_CNAME_TARGET"
   write_state "gcp"
@@ -129,18 +131,29 @@ failover_to_gcp() {
 }
 
 return_to_aws() {
-  # 자동 failback 금지:
-  # DR 중 GCP Cloud SQL에 생성된 예약/변경 데이터가 원본 AWS RDS로 자동 역동기화되지 않는다.
-  # 따라서 AWS health가 회복되어도 DNS와 MIG를 자동 원복하지 않고,
-  # 운영자가 DR 데이터 정합성 확인/수동 병합 후 런북으로 failback한다.
-  if [[ -f "$RECOVERY_NOTICE_FILE" ]]; then
+  if [[ "${AUTO_FAILBACK_ENABLED:-false}" != "true" ]]; then
+    # 자동 failback 금지:
+    # DR 중 GCP Cloud SQL에 생성된 예약/변경 데이터가 원본 AWS RDS로 자동 역동기화되지 않는다.
+    # 따라서 AWS health가 회복되어도 DNS와 MIG를 자동 원복하지 않고,
+    # 운영자가 DR 데이터 정합성 확인/수동 병합 후 런북으로 failback한다.
+    if [[ -f "$RECOVERY_NOTICE_FILE" ]]; then
+      return
+    fi
+
+    send_slack "⚠️ *AWS Recovered — Manual Failback Required*\nAWS health check가 회복되었습니다.\n하지만 DR 중 생성된 예약 데이터 정합성 확인 전까지 자동 복구는 수행하지 않습니다.\n수동 런북으로 GCP Cloud SQL → AWS RDS 반영 후 DNS/MIG를 원복하세요."
+    log_event "aws_recovered_manual_failback_required" "recovery_threshold=$RECOVERY_THRESHOLD; automatic failback disabled to protect DR write consistency"
+
+    touch "$RECOVERY_NOTICE_FILE"
     return
   fi
 
-  send_slack "⚠️ *AWS Recovered — Manual Failback Required*\nAWS health check가 회복되었습니다.\n하지만 DR 중 생성된 예약 데이터 정합성 확인 전까지 자동 복구는 수행하지 않습니다.\n수동 런북으로 GCP Cloud SQL → AWS RDS 반영 후 DNS/MIG를 원복하세요."
-  log_event "aws_recovered_manual_failback_required" "recovery_threshold=$RECOVERY_THRESHOLD; automatic failback disabled to protect DR write consistency"
+  send_slack "✅ *DR Recovery* — AWS 복구됨. AWS로 복귀합니다.\n도메인: $CF_RECORD_NAME → $AWS_CNAME_TARGET"
+  log_event "aws_recovered" "recovery_threshold=$RECOVERY_THRESHOLD"
 
-  touch "$RECOVERY_NOTICE_FILE"
+  cf_dns_switch "$AWS_CNAME_TARGET"
+  resize_mig 0
+  write_state "aws"
+  log_event "return_to_aws" "mig_size=0 dns=$CF_RECORD_NAME→$AWS_CNAME_TARGET"
 }
 
 # ── 메인 루프 ──────────────────────────────────────────────────────────────────

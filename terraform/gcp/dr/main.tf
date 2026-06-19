@@ -51,6 +51,7 @@ resource "google_storage_bucket_object" "monitor_script" {
     gcp_cname_target    = var.gcp_cname_target
     aws_record_content  = var.aws_record_content
     failover_mode       = var.failover_mode
+    auto_failback_enabled = var.auto_failback_enabled ? "true" : "false"
     enable_ops_agent    = var.enable_ops_agent
   })
 }
