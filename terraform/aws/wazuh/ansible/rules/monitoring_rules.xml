@@ -21,9 +21,6 @@
        수집: journald grafana-server.service
        ========================================================= -->
 
-
-
-
   <!-- Grafana 로그인 실패 탐지 -->
   <rule id="100802" level="5">
     <if_sid>1002</if_sid>
@@ -72,6 +69,16 @@
     <group>monitoring,nginx,brute_force,</group>
     <mitre><id>T1110</id></mitre>
   </rule>
+
+  <!-- /auth/refresh 401 억제 — 세션 만료 정상 흐름 추가 260618 김강환 -->
+  <rule id="100823" level="0">
+    <if_sid>100821</if_sid>
+    <field name="data.url">/auth/refresh</field>
+    <description>토큰 갱신 실패 — 정상 세션 만료 억제</description>
+    <group>noise,</group>
+  </rule>
+
+
 
   <!-- =========================================================
        Keycloak 탐지
@@ -123,14 +130,13 @@
     <description>OAuth2-Proxy ELB 헬스체크 억제</description>
   </rule>
 
-  <!-- OAuth2-Proxy 베이스룰 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
-  <rule id="100861" level="3">
+  <!-- OAuth2-Proxy 인증 실패 카운터 — 단건 억제, 브루트포스 카운터 역할 수정 260618 김강환 -->
+  <rule id="100861" level="0">
     <field name="container_name">monitoring-portal-oauth2-proxy</field>
     <field name="message">401</field>
-    <description>OAuth2-Proxy 인증 실패 — $(message)</description>
+    <description>OAuth2-Proxy 인증 실패 카운터</description>
     <group>oauth2_proxy,authentication_failed,</group>
   </rule>
-
   <!-- OAuth2-Proxy 브루트포스 - ISMS-P 2.9.1 - 추가 260615 김강환 -->
   <rule id="100862" level="12" frequency="8" timeframe="120" ignore="60">
     <if_matched_sid>100861</if_matched_sid>

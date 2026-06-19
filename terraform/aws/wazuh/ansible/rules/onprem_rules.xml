@@ -232,6 +232,33 @@
   </rule>
 
 
+  <!-- 배포 임시 파일 FIM 억제 추가 260618 김강환 -->
+  <rule id="100064" level="0">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">\.tmp\.</field>
+    <description>배포 임시 파일 변경 — 무시</description>
+    <group>noise,</group>
+  </rule>
+
+
+  <!-- UFW 비활성화 탐지 — 방화벽 우회 의심 추가 260618 김강환 -->
+  <rule id="100068" level="15">
+    <if_sid>100001</if_sid>
+    <match>ufw disable|ufw stop|iptables -F|iptables --flush</match>
+    <description>방화벽 비활성화 탐지 — 사용자: $(srcuser) 명령: $(command)</description>
+    <group>onprem,firewall,defense_evasion,</group>
+    <mitre><id>T1562.004</id></mitre>
+  </rule>
+
+
+  <!-- USB 데이터 유출 탐지 — sudo cp/mv to /media /mnt 추가 260618 김강환 -->
+  <rule id="100069" level="15">
+    <if_sid>100001</if_sid>
+    <regex type="pcre2">COMMAND=.*\b(cp|mv)\b.*(/media|/mnt)</regex>
+    <description>USB 데이터 유출 의심 — 사용자: $(srcuser) 명령: $(command)</description>
+    <group>onprem,usb,data_exfiltration,</group>
+    <mitre><id>T1052.001</id></mitre>
+  </rule>
 
 
 </group>

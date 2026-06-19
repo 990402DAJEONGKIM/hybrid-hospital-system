@@ -4,7 +4,7 @@
   <!-- WAF 기본 차단 이벤트 탐지 (부모 룰)       -->
   <!-- S3 wodle로 수집된 Firehose 저장 로그      -->
   <!-- ──────────────────────────────────────── -->
-  <rule id="100400" level="6">
+  <rule id="100400" level="0">
     <decoded_as>json</decoded_as>
     <action>BLOCK</action>
     <description>WAF 요청 차단 — IP: $(httpRequest.clientIp) 국가: $(httpRequest.country)</description>
@@ -15,7 +15,7 @@
   <!-- IP 평판 목록 차단 — 알려진 악성 IP       -->
   <!-- level 8: 대시보드 가시성, Slack 안 감     -->
   <!-- ──────────────────────────────────────── -->
-  <rule id="100401" level="8">
+  <rule id="100401" level="0">
     <if_sid>100400</if_sid>
     <field name="terminatingRuleId">AWSManagedRulesAmazonIpReputationList</field>
     <description>WAF 악성 IP 차단 — IP: $(httpRequest.clientIp) 국가: $(httpRequest.country)</description>
@@ -57,7 +57,6 @@
 
   <!-- ──────────────────────────────────────── -->
   <!-- Rate Limit 차단 — 브루트포스 의심         -->
-  <!-- level 12: Slack 알림 (즉각 대응 필요)    -->
   <!-- ──────────────────────────────────────── -->
   <rule id="100405" level="8">
     <if_sid>100400</if_sid>
@@ -65,5 +64,25 @@
     <description>WAF Rate Limit 차단 — 브루트포스 의심 IP: $(httpRequest.clientIp)</description>
     <group>waf,block,bruteforce,</group>
   </rule>
+
+  <!-- WAF 단건 차단 카운터 — 억제, 반복 탐지용 수정 260618 김강환 -->
+  <rule id="80442" level="0" overwrite="yes">
+    <if_sid>80440</if_sid>
+    <field name="aws.action">BLOCK</field>
+    <options>no_full_log</options>
+    <description>WAF 단건 차단 — 억제</description>
+    <group>aws_waf,</group>
+  </rule>
+
+  <!-- WAF 동일 IP 반복 차단 — Slack 수정 260618 김강환 -->
+  <rule id="80443" level="12" frequency="20" timeframe="60" ignore="300" overwrite="yes">
+    <if_matched_sid>80442</if_matched_sid>
+    <same_field>aws.httpRequest.clientIp</same_field>
+    <options>no_full_log</options>
+    <description>WAF 동일 IP 반복 차단 — 공격 IP: $(aws.httpRequest.clientIp) 국가: $(aws.httpRequest.country) 룰: $(aws.terminatingRuleId)</description>
+    <group>aws_waf,aws_waf_block,</group>
+  </rule>
+
+
 
 </group>

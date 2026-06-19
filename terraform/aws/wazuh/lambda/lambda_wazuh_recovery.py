@@ -179,11 +179,11 @@ def _run_ssm(instance_id, commands):
         raise RuntimeError(f"Wazuh 내부 서비스 정상화 명령 수행 실패: {result['Status']}")
 
 # 최신 Wazuh Golden AMI 자동 조회 - 260609 김강환
-# AMI 이름 패턴: aws-wazuh-* (날짜 포함)
+# AMI 이름 패턴: aws-wazuh-ami* (날짜 포함)
 def _get_latest_ami():
     resp = ec2.describe_images(
         Filters=[
-            {'Name': 'name', 'Values': ['aws-wazuh-*']},
+            {'Name': 'name', 'Values': ['aws-wazuh-ami']},
             {'Name': 'owner-id', 'Values': ['476293896981']},
             {'Name': 'state', 'Values': ['available']}
         ]

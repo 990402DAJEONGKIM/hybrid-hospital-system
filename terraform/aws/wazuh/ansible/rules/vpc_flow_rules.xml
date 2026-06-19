@@ -1,0 +1,49 @@
+<!-- =========================================================
+     vpc_flow_rules.xml
+     AWS VPC Flow Log 보안 탐지 룰
+
+     룰 ID 범위: 100910~100929
+     수집 경로: S3 wodle → aws-k2p-storage-01/flowlogs/
+
+     ISMS-P 2.9.1 로그 관리
+     추가 260618 김강환
+     ========================================================= -->
+
+<group name="vpc,aws,network,">
+
+  <!-- REJECT 단건 카운터 — 억제 추가 260618 김강환 -->
+  <rule id="100910" level="0">
+    <if_sid>80402</if_sid>
+    <description>VPC Flow REJECT 카운터 — 억제</description>
+    <group>vpc,reject,</group>
+  </rule>
+
+  <!-- 포트스캔 심각 — 동일 IP 1분 내 50회 이상 REJECT → Slack 추가 260618 김강환 -->
+  <rule id="100912" level="12" frequency="50" timeframe="60">
+    <if_matched_sid>100910</if_matched_sid>
+    <same_field>aws.srcaddr</same_field>
+    <description>VPC 포트스캔 심각 — 출발지 IP: $(aws.srcaddr) 대규모 스캔 탐지</description>
+    <group>vpc,portscan,attack,</group>
+    <mitre><id>T1046</id></mitre>
+  </rule>
+
+  <!-- VPC Flow ACCEPT 억제 — 정상동작 추가 260618 김강환 -->
+  <rule id="80401" level="0" overwrite="yes">
+    <if_sid>80400</if_sid>
+    <field name="aws.action">ACCEPT</field>
+    <options>no_full_log</options>
+    <description>AWS VPC Flow ACCEPT — 억제</description>
+    <group>aws_vpcflow,noise,</group>
+  </rule>
+
+  <!-- VPC Flow REJECT 단건 억제 — 카운터 역할 추가 260618 김강환 -->
+  <rule id="80402" level="0" overwrite="yes">
+    <if_sid>80400</if_sid>
+    <field name="aws.action">REJECT</field>
+    <options>no_full_log</options>
+    <description>AWS VPC Flow REJECT 단건 — 억제</description>
+    <group>aws_vpcflow,</group>
+  </rule>
+
+
+</group>

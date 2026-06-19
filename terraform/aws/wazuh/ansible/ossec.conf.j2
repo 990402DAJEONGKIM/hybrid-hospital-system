@@ -264,7 +264,14 @@
       <regions>{{ aws_region }}</regions>
     </service>
 
-
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-monitoring-lambda-recovery</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
+    <service type="cloudwatchlogs">
+      <aws_log_groups>/aws/lambda/aws-lambda-unused-resources</aws_log_groups>
+      <regions>{{ aws_region }}</regions>
+    </service>
 
     <!-- CloudTrail -->
     <bucket type="cloudtrail">
