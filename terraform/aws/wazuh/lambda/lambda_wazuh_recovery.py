@@ -44,7 +44,8 @@ def lambda_handler(event, context):
     # 수정 260619 김강환
     # terminated: 외부 강제종료 포함, IP로 찾을 인스턴스가 없으므로 바로 재구축
     if state == 'terminated':
-        print("[ACTION] terminated 감지 → 즉시 재구축")
+        print("[ACTION] terminated 감지 → IP 반납 대기 (30초)")
+        time.sleep(30)
         _scenario1_rebuild(None)
         return {"status": "SUCCESS"}
 
@@ -70,6 +71,9 @@ def _scenario1_rebuild(target_id):
             WaiterConfig={'Delay': 5, 'MaxAttempts': 24}
         )
         print("[SUCCESS] 기존 인스턴스 종료 완료")
+        # 추가 260619 김강환 - IP 반납 대기
+        print("[ACTION] IP 반납 대기 중... (30초)")
+        time.sleep(30)
 
     ami_id = _get_latest_ami()
     print(f"[ACTION] AMI {ami_id}로 새 EC2 생성 중...")

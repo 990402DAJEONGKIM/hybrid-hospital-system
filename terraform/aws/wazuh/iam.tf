@@ -326,7 +326,10 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-recovery-policy" {
         Sid    = "IAMPassRole"
         Effect = "Allow"
         Action = ["iam:PassRole"]
-        Resource = aws_iam_role.aws-wazuh-ssm-role.arn
+        Resource = [
+          aws_iam_role.aws-wazuh-ssm-role.arn,
+          aws_iam_instance_profile.aws-wazuh-profile.arn  # 추가 260619 김강환
+        ]
       }
     ]
   })
