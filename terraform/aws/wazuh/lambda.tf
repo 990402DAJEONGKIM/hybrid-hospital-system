@@ -127,6 +127,7 @@ resource "aws_lambda_function" "aws-wazuh-lambda-recovery" {
   timeout          = 900
   filename         = data.archive_file.aws-wazuh-lambda-recovery.output_path
   source_code_hash = data.archive_file.aws-wazuh-lambda-recovery.output_base64sha256
+  reserved_concurrent_executions = 1
 
   environment {
     variables = {
@@ -182,3 +183,7 @@ resource "aws_lambda_permission" "aws-wazuh-manager-ec2-stop-eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.aws-wazuh-manager-ec2-stop.arn
 }
 
+resource "aws_lambda_function_event_invoke_config" "aws-wazuh-lambda-recovery" {
+  function_name          = aws_lambda_function.aws-wazuh-lambda-recovery.function_name
+  maximum_retry_attempts = 0
+}
