@@ -323,6 +323,18 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-recovery-policy" {
         Resource = "*"
       },
       {
+        Sid    = "KMSForEC2"
+        Effect = "Allow"
+        Action = [
+          "kms:CreateGrant",
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"  # 수정 260619 김강환 - aws/ebs 기본 키는 ARN 특정 불가
+      },
+
+      {
         Sid    = "IAMPassRole"
         Effect = "Allow"
         Action = ["iam:PassRole"]
