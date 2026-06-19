@@ -194,15 +194,26 @@
             mode: '0755'
             force: yes
 
-        - name: wazuh-wui API 비밀번호 설정
-          shell: >
-            bash /tmp/wazuh-passwords-tool.sh --api
-            -u wazuh-wui
-            -p '{{ wazuh_wui_password }}'
-            -au wazuh
-            -ap '{{ wazuh_api_password }}'
+        - name: wazuh API 비밀번호 vault 값으로 변경
+          shell: |
+            CURRENT_PASS=$(grep "api_username: 'wazuh'" \
+              /tmp/wazuh-install-files/wazuh-passwords.txt -A1 \
+              | grep api_password | awk -F"'" '{print $2}')
+            bash /tmp/wazuh-passwords-tool.sh --api \
+              -u wazuh \
+              -p '{{ wazuh_api_password }}' \
+              -au wazuh \
+              -ap "$CURRENT_PASS"
           no_log: true
 
+        - name: wazuh-wui API 비밀번호 vault 값으로 변경
+          shell: |
+            bash /tmp/wazuh-passwords-tool.sh --api \
+              -u wazuh-wui \
+              -p '{{ wazuh_wui_password }}' \
+              -au wazuh \
+              -ap '{{ wazuh_api_password }}'
+          no_log: true
 
 
       rescue:
@@ -293,10 +304,21 @@
         - waf_rules.xml
         - ecs_rules.xml
         - lambda_rules.xml
-        - local_decoder.xml
         - monitoring_rules.xml
+        - alb_rules.xml
+        - vpc_flow_rules.xml
       tags: config
 
+
+    - name: 커스텀 디코더 배포
+      copy:
+        src: rules/local_decoder.xml
+        dest: /var/ossec/etc/decoders/local_decoder.xml
+        owner: root
+        group: wazuh
+        mode: '0640'
+      tags: config
+      
     # 1. ecs-ec2 그룹 생성
     - name: ecs-ec2 Agent 그룹 생성
       shell: |
@@ -730,10 +752,28 @@
     - meta: flush_handlers
       tags: always
 
-    - name: Dashboard keystore 기반 secret 주입 비활성화 # [2026-06-10 박경수] 현재 Wazuh Dashboard는 yml 런타임 주입 방식으로 안정화
-      debug:
-        msg: "Wazuh Dashboard secrets are injected into opensearch_dashboards.yml at runtime. Keystore injection is intentionally skipped."
+    # - name: Dashboard keystore 기반 secret 주입 비활성화 # [2026-06-10 박경수] 현재 Wazuh Dashboard는 yml 런타임 주입 방식으로 안정화
+    #   debug:
+    #     msg: "Wazuh Dashboard secrets are injected into opensearch_dashboards.yml at runtime. Keystore injection is intentionally skipped."
+    #   tags: config
+
+
+     # keystore가 설정 파일보다 우선순위가 높아서 잘못된 값이 남아있으면 계속 인증 실패 2026-06-18 김강환 추가
+    - name: Dashboard opensearch.password keystore 업데이트
+      shell: |
+        echo '{{ wazuh_indexer_credentials_effective.password | default(kibanaserver_password) }}' | \
+        /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
+        add opensearch.password --stdin --allow-root --force
+      no_log: true
       tags: config
+
+    - name: Dashboard opensearch.username keystore 업데이트
+      shell: |
+        echo 'kibanaserver' | \
+        /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore \
+        add opensearch.username --stdin --allow-root --force
+      tags: config
+
 
 
     - name: wazuh.yml 디렉토리 생성

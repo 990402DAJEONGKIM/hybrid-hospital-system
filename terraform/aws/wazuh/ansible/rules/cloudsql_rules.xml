@@ -1,9 +1,9 @@
 <group name="cloudsql,audit,gcp,">
 
 
-    <!-- Cloud SQL 감사 로그 베이스 룰 - 수정 260614 김강환 -->
-    <!-- location 조건 제거 — logtest/analysisd에서 location 매칭 불안정 확인 -->
-    <!-- decoded_as json + action_type 필드 존재로 cloudsql 로그 식별 -->
+    <!-- 수정 260618 김강환: patient_id_hash 조건 제거 -->
+    <!-- cloudsql 로그 식별: decoded_as json + action_type만으로 -->
+    <!-- onprem db_audit과 구분은 100650이 audit_log_id로 먼저 잡음 -->
     <rule id="100199" level="0">
         <decoded_as>json</decoded_as>
         <field name="action_type">^LOGIN$|^LOGOUT$|^ADMIN_|^UNKNOWN$</field>
@@ -37,10 +37,11 @@
         <description>Cloud SQL 관리자 작업 탐지 — action: $(action_type)</description>
         <group>cloudsql,admin,</group>
     </rule>
-    <!-- 예상치 못한 외부 IP 접속 (보안 이벤트) -->
+
+    <!-- 수정 260618 김강환: 정상 접속 대역 정의 후 외부 IP 탐지 -->
     <rule id="100203" level="12">
         <if_sid>100200</if_sid>
-        <field name="source_ip" negate="yes">^127\.|^172\.29\.|^10\.10\.1\.|^10\.0\.</field>
+        <field name="source_ip" negate="yes">^127\.|^10\.10\.1\.|^172\.29\.|^10\.0\.</field>
         <description>Cloud SQL 외부 IP 접속 탐지 — source_ip: $(source_ip)</description>
         <group>cloudsql,login,suspicious,</group>
     </rule>
@@ -81,6 +82,22 @@
         <match>ADMIN_AUTOMATEDBACKU</match>
         <description>Cloud SQL 자동 백업 — 무시</description>
         <group>cloudsql,noise,</group>
+    </rule>
+
+
+    <!-- Cloud SQL PSA 내부 헬스체크 억제 추가 260618 김강환 -->
+    <rule id="100209" level="0">
+      <if_sid>100200</if_sid>
+      <field name="source_ip">^172\.29\.</field>
+      <description>Cloud SQL PSA 내부 연결 — 무시</description>
+      <group>cloudsql,noise,</group>
+    </rule>
+
+    <rule id="100210" level="0">
+      <if_sid>100201</if_sid>
+      <field name="source_ip">^172\.29\.</field>
+      <description>Cloud SQL PSA 내부 연결 종료 — 무시</description>
+      <group>cloudsql,noise,</group>
     </rule>
 
 </group>

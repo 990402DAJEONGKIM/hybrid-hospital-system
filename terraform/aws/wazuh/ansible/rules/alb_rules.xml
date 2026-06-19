@@ -26,7 +26,6 @@
     <description>Lambda 타임아웃</description>
     <group>lambda,timeout,aws,</group>
   </rule>
-
   <!-- Bedrock InvokeModel 실패 → 대시보드만 수정 260618 김강환 -->
   <rule id="100840" level="7">
     <if_sid>100830</if_sid>

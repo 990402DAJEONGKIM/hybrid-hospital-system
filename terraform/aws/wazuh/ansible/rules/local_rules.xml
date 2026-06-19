@@ -1,4 +1,3 @@
-$ sudo cat /var/ossec/etc/rules/local_rules.xml
 #local_rules.xml
 <group name="local,sudo,after_hours,fim,">
 
@@ -34,6 +33,26 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <if_sid>5700</if_sid>
     <description>SSH 로그인 성공 억제</description>
   </rule>
+
+  <!-- 온프레미스 SSH 억제 — 나중에 SSH/인터넷 차단 예정 추가 260618 김강환 -->
+  <rule id="5710" level="0" overwrite="yes">
+    <if_sid>5700</if_sid>
+    <description>SSH 존재하지 않는 계정 — 억제</description>
+    <group>noise,</group>
+  </rule>
+
+  <rule id="5760" level="0" overwrite="yes">
+    <if_sid>5700</if_sid>
+    <description>SSH 인증 실패 — 억제</description>
+    <group>noise,</group>
+  </rule>
+
+  <rule id="5503" level="0" overwrite="yes">
+    <if_sid>5500</if_sid>
+    <description>PAM 로그인 실패 — 억제</description>
+    <group>noise,</group>
+  </rule>
+
 
   <!-- ───────────────────────────────────── -->
   <!-- sudo 사용 탐지 -->
@@ -383,20 +402,18 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
   <!-- 경로 제한 제거: FIM 감시 대상(/etc, /home/mspadmin) 전체에서 -->
   <!-- 60초 내 100회 이상 파일 추가 = 대량 암호화 패턴으로 판단 -->
   <!-- 대량 파일 암호화 — 랜섬웨어 핵심 패턴 - 수정 260616 김강환 -->
-  <rule id="100508" level="15" frequency="100" timeframe="60">
+  <rule id="100508" level="15" frequency="100" timeframe="60" ignore="300">
     <if_matched_sid>550</if_matched_sid>
     <description>랜섬웨어 의심 — 대량 파일 암호화/변조 탐지</description>
     <group>ransomware,malware,critical,</group>
     <mitre><id>T1486</id></mitre>
   </rule>
 
-
   <!-- /tmp, /dev/shm 실행파일 생성 — 드롭퍼 의심 -->
   <rule id="100509" level="14">
     <if_sid>554</if_sid>
-    <field name="file" type="pcre2">^/(tmp|dev/shm)/</field>
-    <field name="perm" type="pcre2">x</field>
-    <description>임시 디렉토리 실행파일 생성 — 랜섬웨어/드롭퍼 의심</description>
+    <field name="file" type="pcre2">\.sh$</field>
+    <description>쉘스크립트 파일 생성 — 드로퍼 의심: $(file)</description>
     <group>ransomware,malware,persistence</group>
     <mitre><id>T1059</id></mitre>
   </rule>
@@ -446,6 +463,9 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <mitre><id>T1595</id></mitre>
   </rule>
 
+
+
+
   <!-- 비정상 HTTP 메서드 -->
   <rule id="100513" level="10">
     <if_sid>31103</if_sid>
@@ -471,13 +491,38 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>noise</group>
   </rule>
 
+
+  <!-- 실행권한 부여 탐지 — 드로퍼 의심 추가 260618 김강환 -->
+  <rule id="100515" level="14">
+    <if_sid>553</if_sid>
+    <field name="syscheck.perm_after" type="pcre2">x</field>
+    <description>파일 실행권한 부여 탐지 — 드로퍼 의심: $(file)</description>
+    <group>ransomware,malware,persistence</group>
+    <mitre><id>T1059</id></mitre>
+  </rule>
+
+
+
+
   <!-- 대량 파일 삭제 — 랜섬웨어 원본삭제 패턴 - 추가 260616 김강환 -->
   <rule id="100516" level="15" frequency="100" timeframe="60">
     <if_matched_sid>553</if_matched_sid>
-    <description>랜섬웨어 의심 — 대량 파일 삭제 탐지</description>
+    <description>대량 파일 삭제 탐지</description>
     <group>ransomware,malware,critical,</group>
     <mitre><id>T1486</id></mitre>
   </rule>
+
+
+  <!-- 대량 확장자 변경 — 랜섬웨어 패턴 추가 260619 김강환 -->
+  <rule id="100518" level="15" frequency="100" timeframe="60">
+    <if_matched_sid>554</if_matched_sid>
+    <field name="file" type="pcre2">\.l0ck3d$</field>
+    <description>랜섬웨어 의심 — 대량 파일 확장자 변경 탐지 (.l0ck3d)</description>
+    <group>ransomware,malware,critical,</group>
+    <mitre><id>T1486</id></mitre>
+  </rule>
+
+
 
 
   <!-- CRON PAM 세션 억제 - 추가 260611 김강환 -->
@@ -534,7 +579,7 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
 
 
   <!-- AWS ALB WAF 차단 한글 표시 - 추가 260612 김강환 -->
-  <rule id="80328" level="5" overwrite="yes">
+  <rule id="80328" level="0" overwrite="yes">
     <if_sid>80325</if_sid>
     <field name="aws.elb_status_code">403</field>
     <options>no_full_log</options>
@@ -542,13 +587,29 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <group>aws_alb,</group>
   </rule>
 
-  <!-- AWS CloudTrail 이벤트 한글 표시 - 추가 260613 김강환 -->
-  <rule id="80202" level="3" overwrite="yes">
-    <if_sid>80200</if_sid>
-    <field name="aws.source">cloudtrail</field>
-    <list field="aws.eventName" lookup="match_key">etc/lists/amazon/aws-eventnames</list>
-    <options>no_full_log</options>
-    <description>AWS CloudTrail 이벤트 — 서비스: $(aws.eventSource) 작업: $(aws.eventName)</description>
+  <!-- ECS 자동 NIC/ALB/Snapshot 작업 억제 — 정상 인프라 동작 추가 260618 김강환 -->
+  <rule id="80210" level="0">
+    <if_sid>80202</if_sid>
+    <field name="aws.eventName" type="pcre2">^AttachNetworkInterface$|^DetachNetworkInterface$|^CreateNetworkInterface$|^DeleteNetworkInterface$|^RegisterTargets$|^DeregisterTargets$|^DeleteSnapshot$</field>
+    <description>ECS 자동 인프라 작업 — 억제</description>
+    <group>noise,</group>
+  </rule>
+
+  <!-- DLM 자동 스냅샷 태그 억제 — 정상 AWS 자동화 추가 260618 김강환 -->
+  <rule id="80211" level="0">
+    <if_sid>80202</if_sid>
+    <field name="aws.userAgent">dlm.amazonaws.com</field>
+    <description>DLM 자동 스냅샷 태그 — 억제</description>
+    <group>noise,</group>
+  </rule>
+
+
+  <!-- AWS 콘솔 로그인 성공 억제 — CloudTrail에서 보존됨 추가 260618 김강환 -->
+  <rule id="80253" level="0" overwrite="yes">
+    <if_sid>80202</if_sid>
+    <field name="aws.eventName">ConsoleLogin</field>
+    <description>AWS 콘솔 로그인 성공 — 억제 (CloudTrail 보존)</description>
+    <group>noise,</group>
   </rule>
 
   <!-- AWS GuardDuty 탐지 룰 한글 overwrite - 추가 260613 김강환 -->
@@ -613,34 +674,16 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
   </rule>
 
 
-  <!-- AWS WAF 차단 한글 표시 - 추가 260614 김강환 -->
-  <rule id="80442" level="3" overwrite="yes">
-    <if_sid>80440</if_sid>
-    <field name="aws.action">BLOCK</field>
-    <options>no_full_log</options>
-    <description>WAF 차단 — IP: $(aws.httpRequest.clientIp) 국가: $(aws.httpRequest.country) 메서드: $(aws.httpRequest.httpMethod) URI: $(aws.httpRequest.uri) 룰: $(aws.terminatingRuleId)</description>
-    <group>aws_waf,aws_waf_block,</group>
-  </rule>
 
-  <!-- AWS WAF 동일 IP 반복 차단 한글 표시 - 추가 260614 김강환 -->
-  <rule id="80443" level="12" frequency="8" timeframe="120" ignore="60" overwrite="yes">
-    <if_matched_sid>80442</if_matched_sid>
-    <same_field>aws.httpRequest.clientIp</same_field>
-    <options>no_full_log</options>
-    <description>WAF 동일 IP 반복 차단 — 공격 IP: $(aws.httpRequest.clientIp) 국가: $(aws.httpRequest.country) 룰: $(aws.terminatingRuleId)</description>
-    <group>aws_waf,aws_waf_block,</group>
-  </rule>
-
-
-
-
-  <!-- FIM 파일 변조 상세 표시 - 추가 260611 김강환 -->
-  <rule id="550" level="7" overwrite="yes">
-    <if_sid>500</if_sid>
-    <match>Integrity checksum changed</match>
+  <!-- FIM 파일 변조 상세 표시 수정 260619 김강환 -->
+  <rule id="550" level="12" overwrite="yes">
+    <category>ossec</category>
+    <decoded_as>syscheck_integrity_changed</decoded_as>
     <description>파일 무결성 변조 감지 — 경로: $(file) 변경 항목: $(changed_fields)</description>
     <group>ossec,syscheck,syscheck_entry_modified,syscheck_file,</group>
   </rule>
+
+
 
 <!-- Wazuh 서버 시작 한글 표시 - 추가 260612 김강환 -->
   <rule id="502" level="3" overwrite="yes">
@@ -649,5 +692,22 @@ $ sudo cat /var/ossec/etc/rules/local_rules.xml
     <description>Wazuh 매니저 시작</description>
     <group>pci_dss_10.6.1,gpg13_10.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
-</group>
 
+
+  <!-- 로그 파일 rotate 억제 수정 260618 김강환 — 조건 추가 -->
+  <rule id="591" level="0" overwrite="yes">
+    <if_sid>500</if_sid>
+    <match>^ossec: File rotated</match>
+    <description>로그 파일 rotate — 억제</description>
+    <group>noise,</group>
+  </rule>
+
+  <!-- 취약점 탐지 Slack 억제 — 일일 보고서로 대체 - 추가 260617 김강환 -->
+  <rule id="100066" level="0" overwrite="yes">
+    <if_sid>23506</if_sid>
+    <description>취약점 탐지 — Slack 억제 (일일 보고서로 대체)</description>
+    <group>noise,</group>
+  </rule>
+
+
+</group>

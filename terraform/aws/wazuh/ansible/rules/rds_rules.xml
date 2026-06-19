@@ -229,6 +229,15 @@
     <group>noise</group>
   </rule>
 
+
+  <!-- ECS 태스크/RDS Proxy/바스티온 정상 접속 억제 추가 260618 김강환 -->
+  <rule id="100139" level="0">
+    <if_sid>100113</if_sid>
+    <match type="pcre2">host=10\.0\.(11|21|22|23|1)\.</match>
+    <description>ECS/RDS/바스티온 정상 RDS 접속 — 무시</description>
+    <group>noise,</group>
+  </rule>
+
   <!-- Vault 동적 역할 DB 인증 실패 탐지 - 수정 260614 김강환 -->
   <!-- 기존: if_sid>2502 → decoded_as windows-date-format으로 변경 -->
   <!-- 이유: Vault 동적 역할 인증 실패 로그도 RDS pgaudit와 동일 포맷으로 -->
@@ -242,6 +251,15 @@
     <mitre><id>T1078</id></mitre>
   </rule>
 
+  <!-- GCP rds-proxy pglogical CREATE EXTENSION 억제 추가 260618 김강환 -->
+  <rule id="100141" level="0">
+    <if_sid>100101</if_sid>
+    <match>pglogical</match>
+    <description>GCP DR 복제용 pglogical DDL — 무시</description>
+    <group>noise,</group>
+  </rule>
+
+
   <!-- Keycloak RDS 연결 끊김 억제 - 수정 260614 김강환 -->
   <!-- 기존: if_sid>2502 → decoded_as windows-date-format으로 변경 -->
   <!-- 이유: Keycloak 연결 끊김 로그가 windows-date-format으로 디코딩되어 -->
@@ -252,6 +270,15 @@
     <match>keycloak@keycloak</match>
     <description>Keycloak RDS 연결 끊김 — 무시</description>
     <group>noise</group>
+  </rule>
+
+
+  <!-- GCP rds-proxy pglogical GRANT 억제 추가 260618 김강환 -->
+  <rule id="100143" level="0">
+    <if_sid>100108</if_sid>
+    <match>pglogical</match>
+    <description>GCP DR 복제용 pglogical GRANT — 무시</description>
+    <group>noise,</group>
   </rule>
 
   <!-- 대량 RDS WRITE 탐지 - 추가 260612 김강환 -->

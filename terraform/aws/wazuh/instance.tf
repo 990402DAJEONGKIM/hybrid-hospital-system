@@ -11,7 +11,7 @@ resource "aws_key_pair" "aws-wazuh-key" {
 }
 
 resource "aws_instance" "aws-wazuh-01" {
-  ami                    = "ami-0eab39170eb2844c5"
+  ami                    = "ami-04b89ed6456e4186e"
   instance_type          = "t3.large"
   subnet_id              = data.aws_subnet.aws-app-sub-2a.id
   vpc_security_group_ids = [aws_security_group.aws-wazuh-sg.id]

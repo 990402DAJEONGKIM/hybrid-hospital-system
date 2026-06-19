@@ -1,10 +1,10 @@
+<!-- =========================================================
   - id         - event id
   - url        - url of the event
   - action     - event action (deny, drop, accept, etc)
   - status     - event status (success, failure, etc)
   - extra_data - Any extra data
--->
-
+========================================================= -->
 <decoder name="local_decoder_example">
     <program_name>local_decoder_example</program_name>
 </decoder>
@@ -23,4 +23,10 @@
   <prematch>UFW BLOCK</prematch>
   <regex>SRC=(\S+) DST=(\S+) \.+ PROTO=(\w+)</regex>
   <order>srcip,dstip,protocol</order>
+</decoder>
+
+
+<!-- Lambda 타임아웃 디코더 추가 260618 김강환 -->
+<decoder name="lambda-timeout">
+  <prematch>Task timed out after</prematch>
 </decoder>
