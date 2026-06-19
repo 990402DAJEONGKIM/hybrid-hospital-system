@@ -148,7 +148,6 @@ resource "aws_lambda_function" "aws-wazuh-lambda-recovery" {
 resource "aws_cloudwatch_event_rule" "aws-wazuh-manager-ec2-stop" {
   name        = "aws-wazuh-manager-ec2-stop"
   description = "Wazuh Manager EC2 중지/종료 즉시 감지 — Lambda 재구축 트리거"
-  state       = "DISABLED"  # 추가
 
   event_pattern = jsonencode({
     source      = ["aws.ec2"]
