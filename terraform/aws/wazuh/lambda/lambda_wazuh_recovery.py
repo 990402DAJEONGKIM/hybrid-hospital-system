@@ -92,14 +92,6 @@ def _scenario1_rebuild(target_id):
                 {'Key': 'Owner', 'Value': 'st2'}
             ]
         }],
-        BlockDeviceMappings=[{
-            'DeviceName': '/dev/sda1',
-            'Ebs': {
-                'VolumeSize': 50,
-                'VolumeType': 'gp3',
-                'Encrypted': True
-            }
-        }]
     )
     new_id = resp['Instances'][0]['InstanceId']
     print(f"[SUCCESS] 새 EC2 생성: {new_id}")
