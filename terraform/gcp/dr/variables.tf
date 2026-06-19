@@ -172,13 +172,21 @@ variable "enable_ops_agent" {
 variable "failover_mode" {
   description = "automatic이면 DNS/MIG 자동 전환, manual이면 장애/복구 감지만 로그로 남김"
   type        = string
-  default     = "manual"
+  default     = "automatic"
 
   validation {
     condition     = contains(["manual", "automatic"], var.failover_mode)
     error_message = "failover_mode는 manual 또는 automatic이어야 합니다."
   }
 }
+
+variable "auto_failback_enabled" {
+  description = "Whether the DR monitor automatically returns DNS and scales down the DR MIG after AWS recovers. Keep false for hospital DR demo/manual recovery."
+  type        = bool
+  default     = false
+}
+
+
 
 variable "cookie_secure" {
   description = "COOKIE_SECURE 환경변수. HTTPS 적용 전 false, 적용 후 true로 변경"
