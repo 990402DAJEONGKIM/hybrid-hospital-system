@@ -117,34 +117,10 @@
             - /tmp/wazuh-install-files
             - /tmp/wazuh-install-files.tar
 
-        - name: 다중 노드 config.yml 작성
-          copy:
-            dest: /tmp/config.yml
-            content: |
-              nodes:
-                indexer:
-                  - name: node-1
-                    ip: "{{ ansible_default_ipv4.address }}"
-                server:
-                  - name: wazuh-1
-                    ip: "{{ wazuh_manager1_ip }}"
-                    node_type: master
-                dashboard:
-                  - name: dashboard-1
-                    ip: "{{ wazuh_manager1_ip }}"
-
-        - name: 인증서 생성
-          shell: bash /tmp/wazuh-install.sh --generate-config-files
-          args:
-            chdir: /tmp/
-          async: 600
-          poll: 30
-
-        - name: wazuh-install-files.tar S3 업로드 (Manager EC2들이 사용)
+        - name: wazuh-install-files.tar S3 다운로드 (기존 인증서 재사용)
           shell: >
-            aws s3 cp /tmp/wazuh-install-files.tar
-            s3://aws-k2p-storage-01/wazuh/wazuh-install-files.tar
-            --region {{ ansible_env.AWS_DEFAULT_REGION | default('ap-south-2') }}
+            aws s3 cp s3://aws-k2p-storage-01/wazuh/wazuh-install-files.tar
+            /tmp/wazuh-install-files.tar --region ap-south-2
           environment:
             AWS_DEFAULT_REGION: "ap-south-2"
 
@@ -213,7 +189,7 @@
       async: 600
       poll: 30
       ignore_errors: yes
-
+      tags: never  # 추가
 
     - name: JVM 힙 메모리 설정
       replace:
@@ -351,17 +327,7 @@
       retries: 5
       delay: 10
 
-    - name: kibanaserver 비밀번호 고정
-      shell: >
-        timeout 60
-        /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh
-        -u kibanaserver -p '{{ kibanaserver_password }}'
-      no_log: true
-      changed_when: false
-      register: kibana_pwd_change
-      until: kibana_pwd_change.rc == 0
-      retries: 5
-      delay: 10
+
 
     # ──────────────────────────────────────────
     # Keycloak OIDC JWT role mapping for Wazuh Dashboard SSO
@@ -471,6 +437,73 @@
       changed_when: "'Done with success' in securityadmin_apply.stdout"
       failed_when: securityadmin_apply.rc != 0 or ('Done with success' not in securityadmin_apply.stdout)
       tags: oidc
+
+
+    - name: kibanaserver 비밀번호 고정
+      shell: >
+        timeout 60
+        /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh
+        -u kibanaserver -p '{{ kibanaserver_password }}'
+      no_log: true
+      changed_when: false
+      register: kibana_pwd_change
+      until: kibana_pwd_change.rc == 0
+      retries: 5
+      delay: 10
+      tags: oidc
+
+
+# kibana_server 롤이 static이라 수정 불가 — custom 롤로 권한 보완 추가 260618 김강환
+    - name: kibana_server_custom 롤 생성
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:9200/_plugins/_security/api/roles/kibana_server_custom"
+        method: PUT
+        user: admin
+        password: "{{ wazuh_admin_password }}"
+        validate_certs: no
+        body_format: json
+        status_code: [200, 201]
+        body:
+          description: "kibana_server static 롤 권한 보완"
+          cluster_permissions:
+            - "cluster_monitor"
+            - "cluster_composite_ops"
+            - "manage_point_in_time"
+            - "indices:admin/template*"
+            - "indices:admin/index_template*"
+            - "indices:data/read/scroll*"
+          index_permissions:
+            - index_patterns: ["*"]
+              allowed_actions:
+                - "indices:admin/aliases*"
+                - "indices:data/read/scroll*"
+                - "indices:monitor/stats"
+                - "indices:monitor/settings/get"
+            - index_patterns:
+                - ".kibana"
+                - ".opensearch_dashboards"
+                - ".kibana-*"
+                - ".opensearch_dashboards-*"
+              allowed_actions:
+                - "indices_all"
+      tags: oidc
+
+    - name: kibana_server_custom 롤 kibanaserver 유저 매핑 추가 260618 김강환
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:9200/_plugins/_security/api/rolesmapping/kibana_server_custom"
+        method: PUT
+        user: admin
+        password: "{{ wazuh_admin_password }}"
+        validate_certs: no
+        body_format: json
+        status_code: [200, 201]
+        body:
+          users:
+            - "kibanaserver"
+      tags: oidc
+
+
+
 
     # ──────────────────────────────────────────
     # Grafana Alloy 설치

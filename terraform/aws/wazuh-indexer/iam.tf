@@ -53,6 +53,31 @@ resource "aws_iam_role_policy" "aws-wazuh-indexer-s3-policy" {
         Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
         Resource = data.terraform_remote_state.kms.outputs.s3_kms_key_arn
       },
+
+      {
+        Sid    = "KMSForEC2"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = data.terraform_remote_state.kms.outputs.ebs_kms_key_arn
+      },
+      {
+        Sid    = "KMSCreateGrantForEC2"
+        Effect = "Allow"
+        Action = ["kms:CreateGrant"]
+        Resource = data.terraform_remote_state.kms.outputs.ebs_kms_key_arn
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
+      },
+
       {
         Sid      = "CloudWatchMetrics"
         Effect   = "Allow"
