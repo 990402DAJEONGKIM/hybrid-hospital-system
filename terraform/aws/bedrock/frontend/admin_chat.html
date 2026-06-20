@@ -733,6 +733,9 @@ window.COST_REPORT_URL    = "%%COST_REPORT_URL%%";
   const statusText = document.getElementById('status-text');
   const statusDot  = document.getElementById('status-dot');
 
+  let conversationHistory = [];
+  const MAX_HISTORY = 20; // 최대 20개 메시지 (10턴)
+
   questionEl.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
   });
@@ -843,6 +846,11 @@ window.COST_REPORT_URL    = "%%COST_REPORT_URL%%";
     if (!apiUrl)  { alert('API 엔드포인트를 입력하세요.'); return; }
     if (!question) return;
 
+    conversationHistory.push({ role: 'user', content: question });
+    if (conversationHistory.length > MAX_HISTORY) {
+      conversationHistory = conversationHistory.slice(-MAX_HISTORY);
+    }
+
     appendMessage('user', question);
     questionEl.value = '';
     questionEl.style.height = 'auto';
@@ -857,21 +865,24 @@ window.COST_REPORT_URL    = "%%COST_REPORT_URL%%";
       const resp = await fetch(apiUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ messages: conversationHistory }),
       });
 
       const data = await resp.json();
       removeThinking();
 
       if (!resp.ok) {
+        conversationHistory.pop();
         const b = appendMessage('bot', data.error || '오류가 발생했습니다.');
         b.classList.add('error');
         setStatus('error');
       } else {
+        conversationHistory.push({ role: 'assistant', content: data.answer });
         appendMessage('bot', data.answer, data.sources);
         setStatus('connected');
       }
     } catch (err) {
+      conversationHistory.pop();
       removeThinking();
       const b = appendMessage('bot', `네트워크 오류: ${err.message}`);
       b.classList.add('error');

@@ -15,18 +15,201 @@ from email.mime.text import MIMEText
 
 import boto3
 
-BEDROCK_REGION = os.environ["BEDROCK_REGION"]
-CHUNKS_BUCKET  = os.environ["CHUNKS_BUCKET"]
-ADMIN_EMAIL    = os.environ["ADMIN_EMAIL"]
-FROM_EMAIL     = os.environ.get("FROM_EMAIL", ADMIN_EMAIL)
-SES_REGION     = os.environ["SES_REGION"]
-CHUNKS_PREFIX  = "cost/cost-chunks"
+BEDROCK_REGION    = os.environ["BEDROCK_REGION"]
+STORAGE_BUCKET    = os.environ["STORAGE_BUCKET"]
+ADMIN_EMAIL       = os.environ["ADMIN_EMAIL"]
+FROM_EMAIL        = os.environ.get("FROM_EMAIL", ADMIN_EMAIL)
+SES_REGION        = os.environ["SES_REGION"]
+ANNUAL_BUDGET_KRW = int(os.environ.get("ANNUAL_BUDGET_KRW", "30000000"))
+SSM_EXIM_API_KEY  = os.environ.get("SSM_EXIM_API_KEY", "")
+RAW_PREFIX        = "cost/cost-raw"
+EMBED_MODEL_ID    = "amazon.titan-embed-text-v2:0"
+_RATE_CACHE_PARAM = "/mzclinic/cost/exim/usd-krw-cache"
+_rate_cache: dict = {}
 
 S3      = boto3.client("s3")
+SSM     = boto3.client("ssm")
 BEDROCK = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
 SES     = boto3.client("ses", region_name=SES_REGION)
 
 MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+
+# ── 환율 ──────────────────────────────────────────────────────────────────
+
+def _get_usd_krw_rate() -> float:
+    today_str = date.today().isoformat()
+    if _rate_cache.get("date") == today_str:
+        return _rate_cache["rate"]
+    try:
+        val = SSM.get_parameter(Name=_RATE_CACHE_PARAM)["Parameter"]["Value"]
+        rate_str, cached_date = val.rsplit(":", 1)
+        if cached_date == today_str:
+            rate = float(rate_str)
+            _rate_cache.update({"rate": rate, "date": today_str})
+            return rate
+    except Exception:
+        pass
+    if not SSM_EXIM_API_KEY:
+        return 1400.0
+    try:
+        api_key = SSM.get_parameter(Name=SSM_EXIM_API_KEY, WithDecryption=True)["Parameter"]["Value"]
+    except Exception:
+        return 1400.0
+    import urllib.request
+    today = date.today()
+    for delta in range(7):
+        d = today - timedelta(days=delta)
+        url = (
+            "https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON"
+            f"?authkey={api_key}&searchdate={d.strftime('%Y%m%d')}&data=AP01"
+        )
+        try:
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                items = json.loads(resp.read())
+            usd = next((x for x in items if x.get("cur_unit") == "USD"), None)
+            if usd:
+                rate = float(usd["deal_bas_r"].replace(",", ""))
+                try:
+                    SSM.put_parameter(Name=_RATE_CACHE_PARAM, Value=f"{rate}:{today_str}", Type="String", Overwrite=True)
+                except Exception:
+                    pass
+                _rate_cache.update({"rate": rate, "date": today_str})
+                return rate
+        except Exception:
+            continue
+    return 1400.0
+
+
+# ── cost-raw/ 직접 읽기 ────────────────────────────────────────────────────
+
+def _read_aws(year: str, month: str) -> list[dict]:
+    import csv as csv_mod
+    key = f"{RAW_PREFIX}/aws/{year}/{month}/aws_cost.csv"
+    try:
+        body = S3.get_object(Bucket=STORAGE_BUCKET, Key=key)["Body"].read().decode("utf-8")
+        return list(csv_mod.DictReader(io.StringIO(body)))
+    except Exception:
+        return []
+
+
+def _read_gcp(year: str, month: str) -> list[dict]:
+    import csv as csv_mod
+    key = f"{RAW_PREFIX}/gcp/{year}/{month}/gcp_cost.csv"
+    try:
+        body = S3.get_object(Bucket=STORAGE_BUCKET, Key=key)["Body"].read().decode("utf-8")
+        return list(csv_mod.DictReader(io.StringIO(body)))
+    except Exception:
+        return []
+
+
+def _read_onprem(year: str, month: str) -> dict:
+    key = f"{RAW_PREFIX}/onprem/{year}/{month}/onprem_cost.json"
+    try:
+        return json.loads(S3.get_object(Bucket=STORAGE_BUCKET, Key=key)["Body"].read())
+    except Exception:
+        return {}
+
+
+def _load_raw_costs() -> str:
+    usd_to_krw = _get_usd_krw_rate()
+    today = date.today()
+    texts = []
+
+    # 전전월, 전월, 당월 순서로 처리
+    for delta in [2, 1, 0]:
+        first = today.replace(day=1)
+        for _ in range(delta):
+            first = (first - timedelta(days=1)).replace(day=1)
+        year  = str(first.year)
+        month = f"{first.month:02d}"
+        label = {2: "전전월 (비교 기준)", 1: "전월 (보고 대상)", 0: "당월 (집계 중)"}[delta]
+
+        lines = [f"[{year}년 {int(month)}월 비용 — {label}]"]
+
+        # AWS
+        aws_rows = _read_aws(year, month)
+        if aws_rows:
+            aws_by_svc: dict[str, float] = {}
+            for r in aws_rows:
+                name = r.get("ProductName", "")
+                if name:
+                    aws_by_svc[name] = aws_by_svc.get(name, 0) + float(r.get("UnblendedCost", 0))
+            aws_total = sum(aws_by_svc.values()) * usd_to_krw
+            lines.append(f"AWS 합계: {round(aws_total):,}원")
+            for svc, usd in sorted(aws_by_svc.items(), key=lambda x: -x[1])[:5]:
+                lines.append(f"  {svc}: {round(usd * usd_to_krw):,}원")
+        else:
+            lines.append("AWS: 데이터 없음")
+            aws_total = 0
+
+        # GCP
+        gcp_rows = _read_gcp(year, month)
+        if gcp_rows:
+            def _to_krw(r: dict) -> float:
+                c = float(r.get("total_cost", 0))
+                return c if r.get("currency") == "KRW" else c * usd_to_krw
+            gcp_total = sum(_to_krw(r) for r in gcp_rows)
+            lines.append(f"GCP 합계: {round(gcp_total):,}원")
+            for r in sorted(gcp_rows, key=lambda x: -float(x.get("total_cost", 0)))[:5]:
+                lines.append(f"  {r.get('service', '')}: {round(_to_krw(r)):,}원")
+        else:
+            lines.append("GCP: 데이터 없음")
+            gcp_total = 0
+
+        # 온프레미스
+        onprem = _read_onprem(year, month)
+        onprem_total = onprem.get("total_krw", 0)
+        if onprem_total:
+            lines.append(f"온프레미스 합계: {onprem_total:,}원")
+        else:
+            lines.append("온프레미스: 데이터 없음")
+
+        total = aws_total + gcp_total + onprem_total
+        lines.append(f"전체 합계: {round(total):,}원")
+
+        # 예산 집행률 (당월 기준)
+        if delta == 0 and ANNUAL_BUDGET_KRW:
+            pct = round(total / ANNUAL_BUDGET_KRW * 100, 1)
+            lines.append(f"연간 예산({ANNUAL_BUDGET_KRW:,}원) 대비 집행률: {pct}%")
+
+        texts.append("\n".join(lines))
+
+    return "\n\n---\n\n".join(texts)
+
+
+# ── DIY 벡터 RAG ──────────────────────────────────────────────────────────
+
+def _embed(text: str) -> list[float]:
+    resp = BEDROCK.invoke_model(
+        modelId=EMBED_MODEL_ID,
+        body=json.dumps({"inputText": text[:8000], "dimensions": 512, "normalize": True}),
+    )
+    return json.loads(resp["body"].read())["embedding"]
+
+
+def _save_vectors(year: str, month: str, report_text: str):
+    sections = re.split(r"\n(?=## )", report_text.strip())
+    chunks = []
+    for i, section in enumerate(sections):
+        section = section.strip()
+        if not section:
+            continue
+        chunks.append({
+            "id":        f"{year}-{month}-{i}",
+            "year":      year,
+            "month":     month,
+            "text":      section,
+            "embedding": _embed(section),
+        })
+    s3_key = f"cost/cost-vectors/{year}/{month}/vectors.json"
+    S3.put_object(
+        Bucket=STORAGE_BUCKET,
+        Key=s3_key,
+        Body=json.dumps(chunks, ensure_ascii=False),
+        ContentType="application/json",
+    )
+    print(f"Vectors saved: {s3_key} ({len(chunks)} chunks)")
 
 
 # ── 날짜 유틸 ──────────────────────────────────────────────────────────────
@@ -41,20 +224,6 @@ def _get_target_month() -> tuple[str, str]:
 def _is_third_monday() -> bool:
     today = date.today()
     return today.weekday() == 0 and 15 <= today.day <= 21
-
-
-# ── S3 chunks 로딩 ─────────────────────────────────────────────────────────
-
-def _load_chunks() -> str:
-    paginator = S3.get_paginator("list_objects_v2")
-    texts = []
-    for page in paginator.paginate(Bucket=CHUNKS_BUCKET, Prefix=CHUNKS_PREFIX + "/"):
-        for obj in sorted(page.get("Contents", []), key=lambda x: x["Key"]):
-            if not obj["Key"].endswith(".txt"):
-                continue
-            body = S3.get_object(Bucket=CHUNKS_BUCKET, Key=obj["Key"])["Body"].read().decode("utf-8")
-            texts.append(body)
-    return "\n\n---\n\n".join(texts)
 
 
 # ── Bedrock 리포트 생성 ────────────────────────────────────────────────────
@@ -468,7 +637,7 @@ def lambda_handler(event, context):
 
         if not send_email:
             # 미리보기: 텍스트만 반환 (PDF 생략)
-            cost_context = _load_chunks()
+            cost_context = _load_raw_costs()
             report_text  = _generate_report(year, month, cost_context)
             return _api_response(200, {"report": report_text, "year": year, "month": month})
 
@@ -492,7 +661,7 @@ def lambda_handler(event, context):
 
     year, month = _get_target_month()
 
-    cost_context = _load_chunks()
+    cost_context = _load_raw_costs()
     report_text  = _generate_report(year, month, cost_context)
     html_body    = _build_html(year, month, report_text)
     pdf_bytes    = _generate_pdf(year, month, report_text)
@@ -500,15 +669,19 @@ def lambda_handler(event, context):
     # PDF → S3 보관
     s3_key = f"cost/cost-reports/{year}/{month}/infra_report_{year}_{month}.pdf"
     S3.put_object(
-        Bucket=CHUNKS_BUCKET,
+        Bucket=STORAGE_BUCKET,
         Key=s3_key,
         Body=pdf_bytes,
         ContentType="application/pdf",
     )
+    print(f"Report saved: s3://{STORAGE_BUCKET}/{s3_key} ({len(pdf_bytes)//1024}KB)")
+
+    # 보고서 텍스트 → 벡터 생성 후 S3 저장 (DIY RAG)
+    try:
+        _save_vectors(year, month, report_text)
+    except Exception as e:
+        print(f"Vector save failed (non-fatal): {e}")
 
     _send_email(year, month, html_body, pdf_bytes)
-    return {"status": "ok", "year": year, "month": month, "s3_key": s3_key}
-
-    print(f"Report saved: s3://{CHUNKS_BUCKET}/{s3_key} ({len(pdf_bytes)//1024}KB)")
     print(f"Report sent: {year}-{month} → {ADMIN_EMAIL}")
     return {"status": "ok", "year": year, "month": month, "pdf_kb": len(pdf_bytes)//1024, "s3_key": s3_key}

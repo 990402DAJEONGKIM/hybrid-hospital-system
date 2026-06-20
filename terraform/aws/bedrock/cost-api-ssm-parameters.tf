@@ -18,6 +18,18 @@ resource "aws_ssm_parameter" "cost_chat_api_key" {
   tags = merge(local.common_tags, { Name = "aws-ssm-cost-chat-api-key" })
 }
 
+resource "aws_ssm_parameter" "usd_krw_rate_cache" {
+  name        = "/mzclinic/cost/exim/usd-krw-cache"
+  description = "USD/KRW 환율 일별 캐시 — Lambda가 자동 갱신 (형식: 환율:YYYY-MM-DD)"
+  type        = "String"
+  value       = "1400.0:1970-01-01"
+  tags        = merge(local.common_tags, { Name = "aws-ssm-cost-usd-krw-cache" })
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 resource "aws_ssm_parameter" "msp_monthly_fee" {
   name        = "/mzclinic/cost/msp/monthly-fee"
   description = "MSP 운영 대행 월 계약금 (원) — AWS/GCP/온프레미스 통합 관리"
