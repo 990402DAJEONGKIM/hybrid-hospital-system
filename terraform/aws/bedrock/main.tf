@@ -54,7 +54,7 @@ resource "aws_iam_role_policy" "lambda_exec" {
       {
         Sid    = "SSMParameters"
         Effect = "Allow"
-        Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
+        Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath", "ssm:PutParameter"]
         Resource = [
           "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/cost/*",
           "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/mzclinic/gcp/*",
@@ -230,42 +230,6 @@ resource "aws_lambda_function" "onprem_cost_calculator" {
 # ---------------------------------------------------------
 # Lambda — Cost to Knowledge Base
 # ---------------------------------------------------------
-data "archive_file" "cost_to_kb" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda/cost_to_kb"
-  output_path = "${path.module}/lambda/cost_to_kb.zip"
-}
-
-resource "aws_cloudwatch_log_group" "cost_to_kb" {
-  name              = "/aws/lambda/aws-lambda-cost-to-kb"
-  retention_in_days = 30
-  tags              = merge(local.common_tags, { Name = "aws-cwl-cost-to-kb" })
-}
-
-resource "aws_lambda_function" "cost_to_kb" {
-  function_name    = "aws-lambda-cost-to-kb"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "handler.lambda_handler"
-  runtime          = "python3.12"
-  timeout          = 300
-  memory_size      = 256
-  filename         = data.archive_file.cost_to_kb.output_path
-  source_code_hash = data.archive_file.cost_to_kb.output_base64sha256
-
-  environment {
-    variables = {
-      RAW_BUCKET        = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      CHUNKS_BUCKET     = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      ANNUAL_BUDGET_KRW = tostring(var.annual_budget_krw)
-      SSM_EXIM_API_KEY  = "/mzclinic/cost/exim/api-key"
-      SSM_MSP_FEE       = aws_ssm_parameter.msp_monthly_fee.name
-    }
-  }
-
-  depends_on = [aws_cloudwatch_log_group.cost_to_kb]
-  tags       = merge(local.common_tags, { Name = "aws-lambda-cost-to-kb" })
-}
-
 # ---------------------------------------------------------
 # Lambda — Monthly Report
 # ---------------------------------------------------------
@@ -294,11 +258,13 @@ resource "aws_lambda_function" "monthly_report" {
 
   environment {
     variables = {
-      CHUNKS_BUCKET  = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      BEDROCK_REGION = var.bedrock_region
-      ADMIN_EMAIL    = var.admin_email
-      FROM_EMAIL     = "no-reply@mzclinic.cloud"
-      SES_REGION     = var.aws_region
+      STORAGE_BUCKET    = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      BEDROCK_REGION    = var.bedrock_region
+      ADMIN_EMAIL       = var.admin_email
+      FROM_EMAIL        = "no-reply@mzclinic.cloud"
+      SES_REGION        = var.aws_region
+      ANNUAL_BUDGET_KRW = tostring(var.annual_budget_krw)
+      SSM_EXIM_API_KEY  = "/mzclinic/cost/exim/api-key"
     }
   }
 
@@ -333,8 +299,11 @@ resource "aws_lambda_function" "cost_chat" {
 
   environment {
     variables = {
-      CHUNKS_BUCKET  = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      BEDROCK_REGION = var.bedrock_region
+      RAW_BUCKET        = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      VECTORS_BUCKET    = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      BEDROCK_REGION    = var.bedrock_region
+      ANNUAL_BUDGET_KRW = tostring(var.annual_budget_krw)
+      SSM_EXIM_API_KEY  = "/mzclinic/cost/exim/api-key"
     }
   }
 
@@ -369,12 +338,13 @@ resource "aws_lambda_function" "anomaly_detector" {
 
   environment {
     variables = {
-      BUCKET             = data.terraform_remote_state.s3.outputs.storage_bucket_name
-      ALERT_EMAIL        = var.alert_email
-      FROM_EMAIL         = "no-reply@mzclinic.cloud"
-      SES_REGION         = var.aws_region
-      ANOMALY_THRESHOLD  = var.anomaly_threshold
-      SSM_EXIM_API_KEY   = "/mzclinic/cost/exim/api-key"
+      BUCKET                 = data.terraform_remote_state.s3.outputs.storage_bucket_name
+      ALERT_EMAIL            = var.alert_email
+      FROM_EMAIL             = "no-reply@mzclinic.cloud"
+      SES_REGION             = var.aws_region
+      ANOMALY_THRESHOLD      = var.anomaly_threshold
+      ANOMALY_MIN_CHANGE_KRW = tostring(var.anomaly_min_change_krw)
+      SSM_EXIM_API_KEY       = "/mzclinic/cost/exim/api-key"
     }
   }
 
@@ -751,7 +721,6 @@ resource "aws_iam_role_policy" "scheduler" {
         aws_lambda_function.aws_cost_collector.arn,
         aws_lambda_function.gcp_billing_collector.arn,
         aws_lambda_function.onprem_cost_calculator.arn,
-        aws_lambda_function.cost_to_kb.arn,
         aws_lambda_function.anomaly_detector.arn,
         aws_lambda_function.monthly_report.arn,
         aws_lambda_function.unused_resources_detector.arn,
@@ -790,6 +759,7 @@ resource "aws_lambda_function" "unused_resources_detector" {
       ALERT_EMAIL = var.alert_email
       FROM_EMAIL  = "no-reply@mzclinic.cloud"
       SES_REGION  = var.aws_region
+      RAW_BUCKET  = data.terraform_remote_state.s3.outputs.storage_bucket_name
     }
   }
 
@@ -857,21 +827,6 @@ resource "aws_scheduler_schedule" "onprem_cost_calculator" {
 
   target {
     arn      = aws_lambda_function.onprem_cost_calculator.arn
-    role_arn = aws_iam_role.scheduler.arn
-  }
-}
-
-resource "aws_scheduler_schedule" "cost_to_kb" {
-  name        = "aws-sch-cost-to-kb"
-  description = "Knowledge Base 업데이트 — 매일 02:00 KST"
-  group_name  = "default"
-
-  flexible_time_window { mode = "OFF" }
-  schedule_expression          = "cron(0 17 * * ? *)"
-  schedule_expression_timezone = "UTC"
-
-  target {
-    arn      = aws_lambda_function.cost_to_kb.arn
     role_arn = aws_iam_role.scheduler.arn
   }
 }

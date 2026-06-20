@@ -22,6 +22,8 @@ ANNUAL_BUDGET_KRW = int(os.environ.get("ANNUAL_BUDGET_KRW", "30000000"))
 SSM_EXIM_API_KEY = os.environ.get("SSM_EXIM_API_KEY", "")
 SSM_MSP_FEE = os.environ.get("SSM_MSP_FEE", "")
 
+_rate_cache: dict[str, float] = {}  # {날짜_문자열: 환율}
+
 
 def _get_msp_fee() -> int:
     """SSM에서 MSP 월 계약금 조회. 미설정 시 0 반환."""
@@ -40,6 +42,18 @@ def _get_usd_krw_rate(year: str, month: str, as_of: date | None = None) -> float
     주말/공휴일 데이터 없음 → 최대 7일 전까지 영업일 탐색.
     실패 시 fallback 1,400원 사용.
     """
+    if as_of:
+        start_day = as_of
+    else:
+        m = int(month)
+        y = int(year)
+        next_y, next_m = (y + 1, 1) if m == 12 else (y, m + 1)
+        start_day = date(next_y, next_m, 1) - timedelta(days=1)
+
+    cache_key = start_day.isoformat()
+    if cache_key in _rate_cache:
+        return _rate_cache[cache_key]
+
     if not SSM_EXIM_API_KEY:
         return 1400.0
 
@@ -48,15 +62,6 @@ def _get_usd_krw_rate(year: str, month: str, as_of: date | None = None) -> float
     except Exception as e:
         print(f"환율 API 키 조회 실패: {e}")
         return 1400.0
-
-    if as_of:
-        start_day = as_of
-    else:
-        # 해당 월 말일
-        m = int(month)
-        y = int(year)
-        next_y, next_m = (y + 1, 1) if m == 12 else (y, m + 1)
-        start_day = date(next_y, next_m, 1) - timedelta(days=1)
 
     for delta in range(7):
         d = start_day - timedelta(days=delta)
@@ -71,7 +76,9 @@ def _get_usd_krw_rate(year: str, month: str, as_of: date | None = None) -> float
                 continue
             usd = next((x for x in items if x.get("cur_unit") == "USD"), None)
             if usd:
-                return float(usd["deal_bas_r"].replace(",", ""))
+                rate = float(usd["deal_bas_r"].replace(",", ""))
+                _rate_cache[cache_key] = rate
+                return rate
         except Exception:
             continue
 
@@ -93,26 +100,45 @@ def _get_target_months() -> tuple[tuple[str, str], tuple[str, str], tuple[str, s
     return cur, prev, this
 
 
-def _load_aws_cost(year: str, month: str, usd_to_krw: float) -> dict:
+def _read_aws_csv(year: str, month: str) -> str | None:
+    """월별 파일 우선, 없으면 당월 최신 일별 파일로 폴백. 읽힌 CSV 본문 반환."""
     key = f"{RAW_PREFIX}/aws/{year}/{month}/aws_cost.csv"
     try:
-        body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read().decode("utf-8")
-        reader = csv.DictReader(io.StringIO(body))
-        rows = list(reader)
-        services_usd: dict[str, float] = {}
-        for r in rows:
-            name = r.get("ProductName", "")
-            if name:
-                services_usd[name] = services_usd.get(name, 0) + float(r.get("UnblendedCost", 0))
-        total_usd = sum(services_usd.values())
-        return {
-            "total": total_usd * usd_to_krw,
-            "services": {svc: cost * usd_to_krw for svc, cost in services_usd.items()},
-            "usd_rate": usd_to_krw,
-        }
-    except Exception as e:
-        print(f"AWS cost 로드 실패 ({key}): {e}")
-        return {"total": 0, "services": {}, "usd_rate": usd_to_krw}
+        return S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read().decode("utf-8")
+    except Exception:
+        pass
+    prefix = f"{RAW_PREFIX}/aws/{year}/{month}/"
+    resp = S3.list_objects_v2(Bucket=RAW_BUCKET, Prefix=prefix, Delimiter="/")
+    folders = sorted([cp["Prefix"] for cp in resp.get("CommonPrefixes", [])], reverse=True)
+    for folder in folders:
+        fallback_key = f"{folder}aws_cost.csv"
+        try:
+            body = S3.get_object(Bucket=RAW_BUCKET, Key=fallback_key)["Body"].read().decode("utf-8")
+            print(f"[FALLBACK] AWS 월별 파일 없음 → {fallback_key} 사용")
+            return body
+        except Exception:
+            continue
+    return None
+
+
+def _load_aws_cost(year: str, month: str, usd_to_krw: float) -> dict:
+    body = _read_aws_csv(year, month)
+    if not body:
+        print(f"AWS cost 로드 실패: {year}/{month} 월별·일별 파일 모두 없음")
+        return {"total": 0, "services": {}, "usd_rate": usd_to_krw, "missing": True}
+    rows = list(csv.DictReader(io.StringIO(body)))
+    services_usd: dict[str, float] = {}
+    for r in rows:
+        name = r.get("ProductName", "")
+        if name:
+            services_usd[name] = services_usd.get(name, 0) + float(r.get("UnblendedCost", 0))
+    total_usd = sum(services_usd.values())
+    return {
+        "total": total_usd * usd_to_krw,
+        "services": {svc: cost * usd_to_krw for svc, cost in services_usd.items()},
+        "usd_rate": usd_to_krw,
+        "missing": False,
+    }
 
 
 def _load_gcp_cost(year: str, month: str, usd_to_krw: float) -> dict:
@@ -132,20 +158,23 @@ def _load_gcp_cost(year: str, month: str, usd_to_krw: float) -> dict:
             "total": total_krw,
             "services": services_krw,
             "usd_rate": usd_to_krw,
+            "missing": False,
         }
     except Exception as e:
         print(f"GCP cost 로드 실패 ({key}): {e}")
-        return {"total": 0, "services": {}, "usd_rate": usd_to_krw}
+        return {"total": 0, "services": {}, "usd_rate": usd_to_krw, "missing": True}
 
 
 def _load_onprem_cost(year: str, month: str) -> dict:
     key = f"{RAW_PREFIX}/onprem/{year}/{month}/onprem_cost.json"
     try:
         body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read()
-        return json.loads(body)
+        data = json.loads(body)
+        data["missing"] = False
+        return data
     except Exception as e:
         print(f"OnPrem cost 로드 실패 ({key}): {e}")
-        return {"total_krw": 0, "items": {}, "capex": 0, "opex": 0}
+        return {"total_krw": 0, "items": {}, "capex": 0, "opex": 0, "missing": True}
 
 
 def _pct_change(current: float, previous: float) -> str:
@@ -188,16 +217,19 @@ def _build_chunks(
 
     # AWS 청크
     aws_label = f"[{year}년 {int(month)}월 AWS 비용 요약{partial_suffix}]"
-    aws_lines = [aws_label, f"총 비용: {_format_krw(aws['total'])}"]
-    if is_partial:
-        dim = _days_in_month(int(year), int(month))
-        daily = aws["total"] / today.day if today.day > 0 else 0
-        aws_lines.append(f"일평균 소진율: {_format_krw(daily)}/일 ({today.day}일 경과 / {dim}일)")
-        aws_lines.append(f"월말 예상 지출: {_format_krw(daily * dim)}")
-    if prev_aws and prev_aws["total"] > 0:
-        aws_lines.append(f"전월 대비: {_pct_change(aws['total'], prev_aws['total'])}")
-    for svc, cost in sorted(aws["services"].items(), key=lambda x: -x[1]):
-        line = f"- {svc}: {_format_krw(cost)}" if cost > 0 else f"- {svc}: 0원 (미청구)"
+    if aws.get("missing"):
+        aws_lines = [aws_label, "데이터 없음 (담당자 S3 업로드 미완료 — 이 항목은 계산에서 제외하세요)"]
+    else:
+        aws_lines = [aws_label, f"총 비용: {_format_krw(aws['total'])}"]
+        if is_partial:
+            dim = _days_in_month(int(year), int(month))
+            daily = aws["total"] / today.day if today.day > 0 else 0
+            aws_lines.append(f"일평균 소진율: {_format_krw(daily)}/일 ({today.day}일 경과 / {dim}일)")
+            aws_lines.append(f"월말 예상 지출: {_format_krw(daily * dim)}")
+        if prev_aws and prev_aws["total"] > 0:
+            aws_lines.append(f"전월 대비: {_pct_change(aws['total'], prev_aws['total'])}")
+        for svc, cost in sorted(aws["services"].items(), key=lambda x: -x[1]):
+            line = f"- {svc}: {_format_krw(cost)}" if cost > 0 else f"- {svc}: 0원 (미청구)"
             prev_cost = (prev_aws or {}).get("services", {}).get(svc, 0)
             if prev_cost > 0:
                 line += f" (전월 대비 {_pct_change(cost, prev_cost)})"
@@ -206,42 +238,48 @@ def _build_chunks(
 
     # GCP 청크
     gcp_label = f"[{year}년 {int(month)}월 GCP 비용 요약{partial_suffix}]"
-    gcp_lines = [gcp_label, f"총 비용: {_format_krw(gcp['total'])}"]
-    if is_partial:
-        dim = _days_in_month(int(year), int(month))
-        daily = gcp["total"] / today.day if today.day > 0 else 0
-        gcp_lines.append(f"일평균 소진율: {_format_krw(daily)}/일 ({today.day}일 경과 / {dim}일)")
-        gcp_lines.append(f"월말 예상 지출: {_format_krw(daily * dim)}")
-    if prev_gcp and prev_gcp["total"] > 0:
-        gcp_lines.append(f"전월 대비: {_pct_change(gcp['total'], prev_gcp['total'])}")
-    for svc, cost in sorted(gcp["services"].items(), key=lambda x: -x[1]):
-        line = f"- {svc}: {_format_krw(cost)}" if cost > 0 else f"- {svc}: 0원 (무료 티어 이내)"
-        prev_cost = (prev_gcp or {}).get("services", {}).get(svc, 0)
-        if prev_cost > 0:
-            line += f" (전월 대비 {_pct_change(cost, prev_cost)})"
-        gcp_lines.append(line)
+    if gcp.get("missing"):
+        gcp_lines = [gcp_label, "데이터 없음 (GCP 빌링 수집 실패 — 이 항목은 계산에서 제외하세요)"]
+    else:
+        gcp_lines = [gcp_label, f"총 비용: {_format_krw(gcp['total'])}"]
+        if is_partial:
+            dim = _days_in_month(int(year), int(month))
+            daily = gcp["total"] / today.day if today.day > 0 else 0
+            gcp_lines.append(f"일평균 소진율: {_format_krw(daily)}/일 ({today.day}일 경과 / {dim}일)")
+            gcp_lines.append(f"월말 예상 지출: {_format_krw(daily * dim)}")
+        if prev_gcp and prev_gcp["total"] > 0:
+            gcp_lines.append(f"전월 대비: {_pct_change(gcp['total'], prev_gcp['total'])}")
+        for svc, cost in sorted(gcp["services"].items(), key=lambda x: -x[1]):
+            line = f"- {svc}: {_format_krw(cost)}" if cost > 0 else f"- {svc}: 0원 (무료 티어 이내)"
+            prev_cost = (prev_gcp or {}).get("services", {}).get(svc, 0)
+            if prev_cost > 0:
+                line += f" (전월 대비 {_pct_change(cost, prev_cost)})"
+            gcp_lines.append(line)
     chunks.append((f"gcp/{year}/{month}/gcp_cost.txt", "\n".join(gcp_lines)))
 
     # 온프레미스 청크
     items = onprem.get("items", {})
     onprem_label = f"[{year}년 {int(month)}월 온프레미스 비용 요약{partial_suffix}]"
-    onprem_lines = [onprem_label, f"총 비용: {_format_krw(onprem['total_krw'])}"]
-    if is_partial:
-        onprem_lines.append("(온프레미스는 고정 월간 비용으로 당월 예상치와 실제 청구액이 동일합니다)")
-    if prev_onprem and prev_onprem.get("total_krw", 0) > 0:
-        onprem_lines.append(f"전월 대비: {_pct_change(onprem['total_krw'], prev_onprem['total_krw'])}")
-    onprem_lines += [
-        f"- 서버 감가상각 (CAPEX): {_format_krw(items.get('depreciation', 0))}",
-        f"- 전기료 (OPEX): {_format_krw(items.get('electricity', 0))}",
-        f"- 네트워크 회선 (OPEX): {_format_krw(items.get('network', 0))}",
-        f"- 운영 인건비 (OPEX): {_format_krw(items.get('labor', 0))}",
-        f"- VMware 라이선스 (OPEX): {_format_krw(items.get('vmware_license', 0))}",
-    ]
-    if onprem.get("total_krw"):
+    if onprem.get("missing"):
+        onprem_lines = [onprem_label, "데이터 없음 (온프레미스 비용 파일 미업로드 — 이 항목은 계산에서 제외하세요)"]
+    else:
+        onprem_lines = [onprem_label, f"총 비용: {_format_krw(onprem['total_krw'])}"]
+        if is_partial:
+            onprem_lines.append("(온프레미스는 고정 월간 비용으로 당월 예상치와 실제 청구액이 동일합니다)")
+        if prev_onprem and prev_onprem.get("total_krw", 0) > 0:
+            onprem_lines.append(f"전월 대비: {_pct_change(onprem['total_krw'], prev_onprem['total_krw'])}")
         onprem_lines += [
-            f"CAPEX 비율: {onprem['capex'] / onprem['total_krw'] * 100:.1f}%",
-            f"OPEX 비율: {onprem['opex'] / onprem['total_krw'] * 100:.1f}%",
+            f"- 서버 감가상각 (CAPEX): {_format_krw(items.get('depreciation', 0))}",
+            f"- 전기료 (OPEX): {_format_krw(items.get('electricity', 0))}",
+            f"- 네트워크 회선 (OPEX): {_format_krw(items.get('network', 0))}",
+            f"- 운영 인건비 (OPEX): {_format_krw(items.get('labor', 0))}",
+            f"- VMware 라이선스 (OPEX): {_format_krw(items.get('vmware_license', 0))}",
         ]
+        if onprem.get("total_krw"):
+            onprem_lines += [
+                f"CAPEX 비율: {onprem['capex'] / onprem['total_krw'] * 100:.1f}%",
+                f"OPEX 비율: {onprem['opex'] / onprem['total_krw'] * 100:.1f}%",
+            ]
     chunks.append((f"onprem/{year}/{month}/onprem_cost.txt", "\n".join(filter(None, onprem_lines))))
 
     # 전체 요약 청크
@@ -261,11 +299,11 @@ def _build_chunks(
     summary_label = f"[{year}년 {int(month)}월 전체 인프라 비용 요약{partial_suffix}]"
     summary_lines = [
         summary_label,
-        f"AWS: {_format_krw(aws['total'])}",
-        f"GCP: {_format_krw(gcp['total'])}",
-        f"온프레미스: {_format_krw(onprem['total_krw'])}",
+        f"AWS: {_format_krw(aws['total'])}" if not aws.get("missing") else "AWS: 데이터 없음",
+        f"GCP: {_format_krw(gcp['total'])}" if not gcp.get("missing") else "GCP: 데이터 없음",
+        f"온프레미스: {_format_krw(onprem['total_krw'])}" if not onprem.get("missing") else "온프레미스: 데이터 없음",
         f"MSP 운영비: {_format_krw(msp_fee)}" if msp_fee > 0 else "",
-        f"합계: {_format_krw(total)}",
+        f"합계: {_format_krw(total)} (데이터 없는 항목 제외)" if any(x.get("missing") for x in [aws, gcp, onprem]) else f"합계: {_format_krw(total)}",
         f"USD/KRW 적용 환율: {int(aws.get('usd_rate', 0)):,}원" if aws.get("usd_rate") else "",
     ]
     summary_lines = [line for line in summary_lines if line]
@@ -297,33 +335,89 @@ def _build_chunks(
 def _build_metadata_chunk() -> str:
     """보유 데이터 기간 인덱스 청크 생성 — Claude가 답할 수 있는 범위를 파악하는 데 사용"""
     paginator = S3.get_paginator("list_objects_v2")
-    monthly, dated = set(), []
 
-    for page in paginator.paginate(Bucket=RAW_BUCKET, Prefix=f"{RAW_PREFIX}/gcp/"):
-        for obj in page.get("Contents", []):
-            parts = obj["Key"].replace(f"{RAW_PREFIX}/gcp/", "").split("/")
-            if len(parts) == 2 and parts[-1] == "gcp_cost.csv":
-                monthly.add(f"{parts[0]}-{parts[1]}")
-            elif len(parts) == 3 and parts[-1] == "gcp_cost.csv":
-                dated.append(f"{parts[0]}-{parts[1]}-{parts[2]}")
+    # 경로 구조: {prefix}/{cloud}/{year}/{month}/file       → parts len=3 (월별)
+    #             {prefix}/{cloud}/{year}/{month}/{day}/file → parts len=4 (일별)
 
-    aws_months = set()
+    aws_months, aws_dates = set(), []
     for page in paginator.paginate(Bucket=RAW_BUCKET, Prefix=f"{RAW_PREFIX}/aws/"):
         for obj in page.get("Contents", []):
             parts = obj["Key"].replace(f"{RAW_PREFIX}/aws/", "").split("/")
-            if len(parts) == 2 and parts[-1] == "aws_cost.csv":
+            if len(parts) == 3 and parts[-1] == "aws_cost.csv":
                 aws_months.add(f"{parts[0]}-{parts[1]}")
+            elif len(parts) == 4 and parts[-1] == "aws_cost.csv":
+                aws_dates.append(f"{parts[0]}-{parts[1]}-{parts[2]}")
+
+    gcp_months, gcp_dates = set(), []
+    for page in paginator.paginate(Bucket=RAW_BUCKET, Prefix=f"{RAW_PREFIX}/gcp/"):
+        for obj in page.get("Contents", []):
+            parts = obj["Key"].replace(f"{RAW_PREFIX}/gcp/", "").split("/")
+            if len(parts) == 3 and parts[-1] == "gcp_cost.csv":
+                gcp_months.add(f"{parts[0]}-{parts[1]}")
+            elif len(parts) == 4 and parts[-1] == "gcp_cost.csv":
+                gcp_dates.append(f"{parts[0]}-{parts[1]}-{parts[2]}")
 
     today = date.today()
     lines = [
         f"[비용 데이터 보유 현황 - {today} 기준]",
         f"AWS 월별 데이터: {', '.join(sorted(aws_months)) or '없음'}",
-        f"GCP 월별 데이터: {', '.join(sorted(monthly)) or '없음'}",
-        f"GCP 일별 스냅샷: {', '.join(sorted(dated)) or '없음'}",
+        f"AWS 일별 스냅샷: {', '.join(sorted(aws_dates)) or '없음'}",
+        f"GCP 월별 데이터: {', '.join(sorted(gcp_months)) or '없음'}",
+        f"GCP 일별 스냅샷: {', '.join(sorted(gcp_dates)) or '없음'}",
         "온프레미스: AWS·GCP와 동일 월 보유",
-        "※ 일별 GCP 데이터는 해당 날짜 기준 월 누적 비용입니다.",
+        "※ 일별 데이터는 해당 날짜 기준 당월 누적 비용입니다.",
     ]
     return "\n".join(lines)
+
+
+def _build_dated_aws_chunk(year: str, month: str, day: str, usd_to_krw: float = 1400.0) -> str:
+    """날짜별 AWS raw CSV를 읽어 자연어 청크 반환"""
+    key = f"{RAW_PREFIX}/aws/{year}/{month}/{day}/aws_cost.csv"
+    try:
+        body = S3.get_object(Bucket=RAW_BUCKET, Key=key)["Body"].read().decode("utf-8")
+        rows = list(csv.DictReader(io.StringIO(body)))
+        if not rows:
+            return ""
+        services = {
+            r["ProductName"]: float(r.get("UnblendedCost", 0))
+            for r in rows if r.get("ProductName")
+        }
+        total_krw = sum(services.values()) * usd_to_krw
+        lines = [
+            f"[{year}년 {int(month)}월 {int(day)}일 기준 AWS 비용 현황 - {int(month)}월 누적]",
+            f"총 비용: {int(total_krw):,}원",
+        ]
+        for svc, usd in sorted(services.items(), key=lambda x: -x[1]):
+            krw = int(usd * usd_to_krw)
+            if krw > 0:
+                lines.append(f"- {svc}: {krw:,}원")
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"날짜별 AWS 청크 생성 실패 ({key}): {e}")
+        return ""
+
+
+def _process_dated_aws_chunks(usd_to_krw: float = 1400.0) -> int:
+    """날짜별 AWS raw 파일을 모두 청크로 변환해 저장"""
+    paginator = S3.get_paginator("list_objects_v2")
+    count = 0
+    prefix = f"{RAW_PREFIX}/aws/"
+    for page in paginator.paginate(Bucket=RAW_BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            parts = obj["Key"].replace(prefix, "").split("/")
+            if len(parts) != 4 or parts[-1] != "aws_cost.csv":
+                continue
+            year, month, day, _ = parts
+            if not (year.isdigit() and month.isdigit() and day.isdigit()):
+                continue
+            text = _build_dated_aws_chunk(year, month, day, usd_to_krw)
+            if not text:
+                continue
+            chunk_key = f"{CHUNKS_PREFIX}/aws/{year}/{month}/{day}/aws_cost.txt"
+            S3.put_object(Bucket=CHUNKS_BUCKET, Key=chunk_key, Body=text.encode("utf-8"), ContentType="text/plain")
+            print(f"날짜별 AWS 청크 저장: {chunk_key}")
+            count += 1
+    return count
 
 
 def _build_dated_gcp_chunk(year: str, month: str, day: str) -> str:
@@ -453,9 +547,15 @@ def lambda_handler(event, context):
         print(f"Chunk saved: s3://{CHUNKS_BUCKET}/{full_key}")
 
     dated_count = _process_dated_gcp_chunks()
+    dated_aws_count = _process_dated_aws_chunks(usd_to_krw=this_usd_to_krw)
 
     metadata = _build_metadata_chunk()
     S3.put_object(Bucket=CHUNKS_BUCKET, Key=f"{CHUNKS_PREFIX}/metadata/index.txt", Body=metadata.encode("utf-8"), ContentType="text/plain")
     print("메타데이터 청크 저장 완료")
 
-    return {"status": "ok", "chunk_count": len(chunks), "dated_gcp_chunk_count": dated_count}
+    return {
+        "status": "ok",
+        "chunk_count": len(chunks),
+        "dated_gcp_chunk_count": dated_count,
+        "dated_aws_chunk_count": dated_aws_count,
+    }

@@ -19,11 +19,30 @@ BUCKET      = os.environ["BUCKET"]
 RAW_PREFIX  = os.environ.get("RAW_PREFIX", "cost/cost-raw")
 ALERT_EMAIL = os.environ["ALERT_EMAIL"]
 FROM_EMAIL  = os.environ.get("FROM_EMAIL", ALERT_EMAIL)
-ANOMALY_THRESHOLD = float(os.environ.get("ANOMALY_THRESHOLD", "0.30"))
+ANOMALY_THRESHOLD        = float(os.environ.get("ANOMALY_THRESHOLD", "0.30"))
+ANOMALY_MIN_CHANGE_KRW   = int(os.environ.get("ANOMALY_MIN_CHANGE_KRW", "50000"))
 SSM_EXIM_API_KEY  = os.environ.get("SSM_EXIM_API_KEY", "")
+_RATE_CACHE_PARAM = "/mzclinic/cost/exim/usd-krw-cache"
+
+_rate_cache: dict = {}
 
 
 def _get_usd_krw_rate() -> float:
+    today_str = date.today().isoformat()
+
+    if _rate_cache.get("date") == today_str:
+        return _rate_cache["rate"]
+
+    try:
+        val = SSM.get_parameter(Name=_RATE_CACHE_PARAM)["Parameter"]["Value"]
+        rate_str, cached_date = val.rsplit(":", 1)
+        if cached_date == today_str:
+            rate = float(rate_str)
+            _rate_cache.update({"rate": rate, "date": today_str})
+            return rate
+    except Exception:
+        pass
+
     if not SSM_EXIM_API_KEY:
         return 1400.0
     try:
@@ -42,7 +61,13 @@ def _get_usd_krw_rate() -> float:
                 items = json.loads(resp.read())
             usd = next((x for x in items if x.get("cur_unit") == "USD"), None)
             if usd:
-                return float(usd["deal_bas_r"].replace(",", ""))
+                rate = float(usd["deal_bas_r"].replace(",", ""))
+                try:
+                    SSM.put_parameter(Name=_RATE_CACHE_PARAM, Value=f"{rate}:{today_str}", Type="String", Overwrite=True)
+                except Exception:
+                    pass
+                _rate_cache.update({"rate": rate, "date": today_str})
+                return rate
         except Exception:
             continue
     return 1400.0
@@ -59,19 +84,38 @@ def _get_months() -> tuple[tuple[str, str], tuple[str, str]]:
     return cur, prev
 
 
-def _load_aws_services(year: str, month: str, usd_to_krw: float) -> dict[str, float]:
+def _read_aws_csv(year: str, month: str) -> str | None:
+    """월별 파일 우선, 없으면 당월 최신 일별 파일로 폴백. 읽힌 CSV 본문 반환."""
+    key = f"{RAW_PREFIX}/aws/{year}/{month}/aws_cost.csv"
     try:
-        key = f"{RAW_PREFIX}/aws/{year}/{month}/aws_cost.csv"
-        body = S3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8")
-        reader = csv.DictReader(io.StringIO(body))
-        services_usd: dict[str, float] = {}
-        for r in reader:
-            name = r.get("ProductName", "")
-            if name:
-                services_usd[name] = services_usd.get(name, 0) + float(r.get("UnblendedCost", 0))
-        return {svc: round(cost * usd_to_krw) for svc, cost in services_usd.items()}
+        return S3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8")
     except Exception:
+        pass
+    prefix = f"{RAW_PREFIX}/aws/{year}/{month}/"
+    resp = S3.list_objects_v2(Bucket=BUCKET, Prefix=prefix, Delimiter="/")
+    folders = sorted([cp["Prefix"] for cp in resp.get("CommonPrefixes", [])], reverse=True)
+    for folder in folders:
+        fallback_key = f"{folder}aws_cost.csv"
+        try:
+            body = S3.get_object(Bucket=BUCKET, Key=fallback_key)["Body"].read().decode("utf-8")
+            print(f"[FALLBACK] AWS 월별 파일 없음 → {fallback_key} 사용")
+            return body
+        except Exception:
+            continue
+    return None
+
+
+def _load_aws_services(year: str, month: str, usd_to_krw: float) -> dict[str, float]:
+    body = _read_aws_csv(year, month)
+    if not body:
         return {}
+    reader = csv.DictReader(io.StringIO(body))
+    services_usd: dict[str, float] = {}
+    for r in reader:
+        name = r.get("ProductName", "")
+        if name:
+            services_usd[name] = services_usd.get(name, 0) + float(r.get("UnblendedCost", 0))
+    return {svc: round(cost * usd_to_krw) for svc, cost in services_usd.items()}
 
 
 def _load_gcp_services(year: str, month: str) -> dict[str, float]:
@@ -100,12 +144,14 @@ def _detect_anomalies(cur_costs: dict, prev_costs: dict) -> list[dict]:
         if prev_cost == 0:
             continue
         change_rate = (cur_cost - prev_cost) / prev_cost
-        if change_rate >= ANOMALY_THRESHOLD:
+        absolute_change = cur_cost - prev_cost
+        if change_rate >= ANOMALY_THRESHOLD and absolute_change >= ANOMALY_MIN_CHANGE_KRW:
             anomalies.append({
                 "service": service,
                 "prev_cost": prev_cost,
                 "cur_cost": cur_cost,
                 "change_rate": change_rate,
+                "absolute_change": absolute_change,
             })
     return sorted(anomalies, key=lambda x: -x["change_rate"])
 
@@ -118,6 +164,7 @@ def _build_alert_html(cur: tuple, prev: tuple, anomalies: list) -> str:
           <td style="padding:8px;border:1px solid #ddd">{a['service']}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right">{int(a['prev_cost']):,}원</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right">{int(a['cur_cost']):,}원</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;color:red;font-weight:bold">+{int(a['absolute_change']):,}원</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;color:red;font-weight:bold">+{a['change_rate']*100:.1f}%</td>
         </tr>"""
 
@@ -137,6 +184,7 @@ def _build_alert_html(cur: tuple, prev: tuple, anomalies: list) -> str:
           <th style="padding:8px;border:1px solid #ddd;text-align:left">서비스</th>
           <th style="padding:8px;border:1px solid #ddd;text-align:right">전월</th>
           <th style="padding:8px;border:1px solid #ddd;text-align:right">이번달</th>
+          <th style="padding:8px;border:1px solid #ddd;text-align:right">증가액</th>
           <th style="padding:8px;border:1px solid #ddd;text-align:right">증가율</th>
         </tr>
       </thead>

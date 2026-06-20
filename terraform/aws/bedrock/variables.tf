@@ -11,6 +11,12 @@ variable "anomaly_threshold" {
   default     = "0.30"
 }
 
+variable "anomaly_min_change_krw" {
+  description = "비용 이상 감지 최소 절대 증가액 (원) — 이 금액 미만 변동은 비율 무관 알림 제외"
+  type        = number
+  default     = 50000
+}
+
 variable "bedrock_region" {
   description = "Bedrock Knowledge Base 리전 (ap-south-2 미지원 → us-east-1)"
   type        = string
@@ -32,7 +38,7 @@ variable "alert_email" {
 variable "annual_budget_krw" {
   description = "연간 인프라 예산 (원)"
   type        = number
-  default     = 30000000
+  default     = 40000000
 }
 
 variable "gcp_billing_table_name" {
