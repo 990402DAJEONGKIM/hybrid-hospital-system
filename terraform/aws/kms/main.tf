@@ -192,16 +192,18 @@ locals {
       jsondecode(local.key_policy).Statement,
       [
       {
-        # 추가 260620 김강환 - Wazuh Lambda 자동복구 전용
+        # 수정 260620 김강환 - AutoScaling 표준 패턴과 동일하게 맞춤 (Encrypt, ReEncrypt* 추가)
         Sid    = "AllowWazuhLambdaRecoveryRole"
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role"
         }
         Action = [
+          "kms:Encrypt",
           "kms:Decrypt",
-          "kms:DescribeKey",
-          "kms:GenerateDataKey"
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       },
