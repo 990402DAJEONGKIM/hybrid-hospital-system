@@ -99,7 +99,7 @@ def _scenario1_rebuild(target_id):
                 'VolumeSize': 50,
                 'VolumeType': 'gp3',
                 'Encrypted': True,
-                'KmsKeyId': 'arn:aws:kms:ap-south-2:476293896981:key/6b772c60-db92-4a03-9e43-e84d6de9734c'
+                'KmsKeyId': 'arn:aws:kms:ap-south-2:476293896981:key/267b4de5-8708-427f-84b3-4f7abd554304'
             }
         }],
     )
