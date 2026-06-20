@@ -1,3 +1,4 @@
+# 강제 재배포용 더미 주석 - 260620 김강환
 import os
 import time
 import boto3
