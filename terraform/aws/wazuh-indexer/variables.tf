@@ -7,9 +7,9 @@ variable "wazuh_admin_password" {
 }
 
 variable "ami_id" {
-  description = "Wazuh Indexer Ubuntu 22.04 AMI ID (ap-south-2)"
+  description = "Wazuh Indexer Golden Image"
   type        = string
-  default     = "ami-0e13f22a9a802a6d3"
+  default     = "ami-065ef798ce818374e"
 }
 
 variable "indexer_private_ip" {
