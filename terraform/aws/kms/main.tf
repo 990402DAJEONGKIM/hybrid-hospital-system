@@ -191,21 +191,36 @@ locals {
     Statement = concat(
       jsondecode(local.key_policy).Statement,
       [
-        {
-          # 추가 260620 김강환 - Wazuh Lambda 자동복구 전용
-          Sid    = "AllowWazuhLambdaRecoveryRole"
-          Effect = "Allow"
-          Principal = {
-            AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role"
-          }
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey",
-            "kms:GenerateDataKey",
-            "kms:CreateGrant"
-          ]
-          Resource = "*"
+      {
+        # 추가 260620 김강환 - Wazuh Lambda 자동복구 전용
+        Sid    = "AllowWazuhLambdaRecoveryRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role"
         }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+      },
+      {
+        # 수정 260620 김강환 - CreateGrant는 AWS 리소스용 조건 명시 필요
+        Sid    = "AllowWazuhLambdaRecoveryCreateGrant"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role"
+        }
+        Action   = ["kms:CreateGrant"]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+         }
+        }
+
       ]
     )
   })
