@@ -37,6 +37,7 @@ def lambda_handler(event, context):
     state       = detail.get('state', '')
 
     print(f"[INFO] EC2 상태변화: {instance_id} → {state}")
+    print(f"DEMO: Wazuh 매니저 장애 감지 ({state})")
 
     if state not in ['stopped', 'terminated']:
         print("[INFO] stopped/terminated 아님. 종료.")
@@ -46,6 +47,7 @@ def lambda_handler(event, context):
     # terminated: 외부 강제종료 포함, IP로 찾을 인스턴스가 없으므로 바로 재구축
     if state == 'terminated':
         print("[ACTION] terminated 감지 → IP 반납 대기 (30초)")
+        print("DEMO: 자동 복구 시작 - 30초 후 재구축 진행")
         time.sleep(30)
         _scenario1_rebuild(None)
         return {"status": "SUCCESS"}
@@ -53,6 +55,7 @@ def lambda_handler(event, context):
     # stopped: IP로 기존 인스턴스 찾아서 terminate 후 재구축
     target_id = _get_instance_id_by_private_ip(PRIVATE_IP)
     print(f"[ACTION] stopped 감지 → 재구축 (target: {target_id})")
+    print("DEMO: 자동 복구 시작")
     _scenario1_rebuild(target_id)
     return {"status": "SUCCESS"}
 
@@ -77,6 +80,7 @@ def _scenario1_rebuild(target_id):
 
     ami_id = _get_latest_ami()
     print(f"[ACTION] AMI {ami_id}로 새 EC2 생성 중...")
+    print("DEMO: 새 서버 생성 중")
     resp = ec2.run_instances(
         ImageId=ami_id,
         InstanceType='t3.large',
@@ -105,6 +109,7 @@ def _scenario1_rebuild(target_id):
     )
     new_id = resp['Instances'][0]['InstanceId']
     print(f"[SUCCESS] 새 EC2 생성: {new_id}")
+    print(f"DEMO: 새 서버 생성 완료 ({new_id})")
 
     # 추가 260619 김강환 - running 상태 대기 후 SSM 조회
     print("[ACTION] EC2 running 상태 대기 중...")
@@ -114,14 +119,17 @@ def _scenario1_rebuild(target_id):
         WaiterConfig={'Delay': 5, 'MaxAttempts': 24}
     )
     print("[SUCCESS] EC2 running 확인")
+    print("DEMO: 새 서버 부팅 완료")
 
     try:
         _wait_ssm_online(new_id)
     except RuntimeError as e:
         print(f"[ERROR] SSM 대기 실패, 생성된 인스턴스 정리: {new_id}")
+        print("DEMO: 복구 실패 - 생성된 서버 정리 중")
         ec2.terminate_instances(InstanceIds=[new_id])
         raise
 
+    print("DEMO: 서버 연결 확인 완료, Wazuh 서비스 재기동 중")
     _run_ssm(new_id, [
         "systemctl restart wazuh-manager",
         "sleep 30",
@@ -129,9 +137,11 @@ def _scenario1_rebuild(target_id):
         "systemctl restart wazuh-dashboard"
     ])
     print("[SUCCESS] 시나리오 1 복구 완료")
+    print("DEMO: 자동 복구 완료 - Wazuh 정상 운영 재개")
 
 
 def _scenario2_restart_service(target_id):
+    print("DEMO: 서비스 재기동 중")
     _run_ssm(target_id, [
         "systemctl restart wazuh-manager",
         "sleep 30",
@@ -139,6 +149,7 @@ def _scenario2_restart_service(target_id):
         "systemctl restart wazuh-dashboard"
     ])
     print("[SUCCESS] 시나리오 2 복구 완료")
+    print("DEMO: 자동 복구 완료 - Wazuh 정상 운영 재개")
 
 
 # 수정 260619 김강환 - max_attempts 24→42 (4분→7분)
