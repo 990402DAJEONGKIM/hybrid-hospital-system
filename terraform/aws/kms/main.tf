@@ -192,11 +192,15 @@ locals {
       jsondecode(local.key_policy).Statement,
       [
       {
-        # 수정 260620 김강환 - AutoScaling 표준 패턴과 동일하게 맞춤 (Encrypt, ReEncrypt* 추가)
-        Sid    = "AllowWazuhLambdaRecoveryRole"
+        # 수정 260620 김강환 - 와주 + 인덱서 recovery role 통합
+        Sid    = "AllowWazuhRecoveryRoles"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role"
+          AWS = [
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role",
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-indexer-recovery-role",
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-monitoring-lambda-recovery-role"
+          ]
         }
         Action = [
           "kms:Encrypt",
@@ -208,20 +212,22 @@ locals {
         Resource = "*"
       },
       {
-        # 수정 260620 김강환 - CreateGrant는 AWS 리소스용 조건 명시 필요
-        Sid    = "AllowWazuhLambdaRecoveryCreateGrant"
+        Sid    = "AllowWazuhRecoveryRolesCreateGrant"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role"
+          AWS = [
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role",
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-indexer-recovery-role",
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-monitoring-lambda-recovery-role"
+          ]
         }
         Action   = ["kms:CreateGrant"]
         Resource = "*"
         Condition = {
-          Bool = {
-            "kms:GrantIsForAWSResource" = "true"
-          }
-         }
+          Bool = { "kms:GrantIsForAWSResource" = "true" }
         }
+      }
+        
 
       ]
     )
