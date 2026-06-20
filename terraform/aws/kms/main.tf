@@ -183,6 +183,33 @@ locals {
     ]
   )
 })
+  # EBS 키 전용 정책
+  # Wazuh Lambda 자동복구가 RunInstances 시 EBS 볼륨 암호화에 필요
+  # RDS/S3/SM/ECR 키에는 Lambda 권한 불필요 → 최소 권한 원칙 준수 (ISMS-P 2.5.3)
+  ebs_key_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      jsondecode(local.key_policy).Statement,
+      [
+        {
+          # 추가 260620 김강환 - Wazuh Lambda 자동복구 전용
+          Sid    = "AllowWazuhLambdaRecoveryRole"
+          Effect = "Allow"
+          Principal = {
+            AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-wazuh-lambda-recovery-role"
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey",
+            "kms:GenerateDataKey",
+            "kms:CreateGrant"
+          ]
+          Resource = "*"
+        }
+      ]
+    )
+  })
+
 }
 
 
@@ -224,7 +251,7 @@ resource "aws_kms_key" "ebs" {
   enable_key_rotation     = true
   rotation_period_in_days = var.key_rotation_period_days
   deletion_window_in_days = var.deletion_window_days
-  policy                  = local.key_policy
+  policy                  = local.ebs_key_policy
 
   tags = {
     Name    = "aws-kms-ebs-01"
@@ -236,6 +263,8 @@ resource "aws_kms_alias" "ebs" {
   name          = "alias/aws-kms-ebs-01"
   target_key_id = aws_kms_key.ebs.key_id
 }
+
+
 
 
 # ─────────────────────────────────────────────────────────
