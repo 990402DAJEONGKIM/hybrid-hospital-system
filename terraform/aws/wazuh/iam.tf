@@ -327,11 +327,13 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-recovery-policy" {
         Effect = "Allow"
         Action = [
           "kms:CreateGrant",
+          "kms:Encrypt",
           "kms:Decrypt",
-          "kms:DescribeKey",
-          "kms:GenerateDataKey"
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
-        Resource = data.terraform_remote_state.kms.outputs.ebs_kms_key_arn  # 수정 260620 김강환
+        Resource = data.terraform_remote_state.kms.outputs.ebs_kms_key_arn
       },
 
       {
