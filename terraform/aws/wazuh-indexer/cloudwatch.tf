@@ -75,7 +75,6 @@ resource "aws_cloudwatch_metric_alarm" "aws-wazuh-indexer-recover" {
 resource "aws_cloudwatch_event_rule" "aws-wazuh-indexer-ec2-stop" {
   name        = "aws-wazuh-indexer-ec2-stop"
   description = "Wazuh Indexer EC2 중지/종료 즉시 감지 — Lambda 재구축 트리거"
-  state       = "DISABLED"  # 추가
   event_pattern = jsonencode({
     source      = ["aws.ec2"]
     detail-type = ["EC2 Instance State-change Notification"]

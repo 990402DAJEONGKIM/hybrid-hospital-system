@@ -26,7 +26,7 @@ resource "aws_lambda_function" "aws-wazuh-indexer-recovery" {
       DATA_VOLUME_NAME = "aws-wazuh-indexer-data-01"
       DATA_DEVICE      = "/dev/nvme1n1"
       MOUNT_POINT      = "/mnt/wazuh-indexer-data"
-      AMI_NAME_PREFIX  = "aws-wazuh-indexer-"
+      AMI_NAME_PREFIX  = "aws-wazuh-indexer-lambda-ami"
       ACCOUNT_ID       = data.aws_caller_identity.current.account_id
     }
   }

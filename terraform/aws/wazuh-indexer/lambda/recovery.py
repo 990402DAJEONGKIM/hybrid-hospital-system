@@ -19,7 +19,7 @@ INSTANCE_NAME    = os.environ.get("INSTANCE_NAME", "aws-wazuh-indexer")
 DATA_VOLUME_NAME = os.environ.get("DATA_VOLUME_NAME", "aws-wazuh-indexer-data-01")
 DATA_DEVICE      = os.environ.get("DATA_DEVICE", "/dev/sdc")
 MOUNT_POINT      = os.environ.get("MOUNT_POINT", "/mnt/wazuh-indexer-data")
-AMI_NAME_PREFIX  = os.environ.get("AMI_NAME_PREFIX", "aws-wazuh-indexer-")
+AMI_NAME_PREFIX  = os.environ.get("AMI_NAME_PREFIX", "aws-wazuh-indexer-lambda-ami")
 ACCOUNT_ID       = os.environ["ACCOUNT_ID"]
 
 
