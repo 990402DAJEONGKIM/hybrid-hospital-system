@@ -331,7 +331,7 @@ resource "aws_iam_role_policy" "aws-wazuh-lambda-recovery-policy" {
           "kms:DescribeKey",
           "kms:GenerateDataKey"
         ]
-        Resource = "*"  # 수정 260619 김강환 - aws/ebs 기본 키는 ARN 특정 불가
+        Resource = data.terraform_remote_state.kms.outputs.ebs_kms_key_arn  # 수정 260620 김강환
       },
 
       {
