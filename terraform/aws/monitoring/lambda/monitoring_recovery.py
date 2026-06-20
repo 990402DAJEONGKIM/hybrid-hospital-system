@@ -20,7 +20,7 @@ INSTANCE_NAME    = os.environ.get("INSTANCE_NAME", "aws-monitoring-01")
 DATA_VOLUME_NAME = os.environ.get("DATA_VOLUME_NAME", "aws-monitoring-data-01")
 DATA_DEVICE      = os.environ.get("DATA_DEVICE", "/dev/nvme1n1")
 MOUNT_POINT      = os.environ.get("MOUNT_POINT", "/mnt/monitoring-data")
-AMI_NAME_PREFIX  = os.environ.get("AMI_NAME_PREFIX", "aws-monitoring-")
+AMI_NAME_PREFIX  = os.environ.get("AMI_NAME_PREFIX", "aws-monitoring-lambda-ami") #2026-06-21 김강환
 ACCOUNT_ID       = os.environ["ACCOUNT_ID"]
 
 

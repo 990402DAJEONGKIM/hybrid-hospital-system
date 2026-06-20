@@ -15,9 +15,9 @@ variable "base_domain" {
 }
 
 variable "ami_id" {
-  description = "Ubuntu 22.04 LTS AMI ID (ap-south-2)"
+  description = "Momitoring Golden Image"
   type        = string
-  default     = "ami-0eab39170eb2844c5"
+  default     = "ami-0bcd0d69502826c8c"
 }
 
 variable "monitoring_private_ip" {

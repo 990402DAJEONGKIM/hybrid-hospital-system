@@ -338,7 +338,31 @@ resource "aws_iam_role_policy" "aws-monitoring-lambda-recovery-policy" {
         Effect   = "Allow"
         Action   = ["iam:PassRole"]
         Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${aws_iam_instance_profile.aws-monitoring-profile.role}"
+      },
+      #2026-06-21 김강환 추가
+      {
+        Sid    = "KMSForEC2"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = data.terraform_remote_state.kms.outputs.ebs_kms_key_arn
+      },
+      {
+        Sid    = "KMSCreateGrantForEC2"
+        Effect = "Allow"
+        Action = ["kms:CreateGrant"]
+        Resource = data.terraform_remote_state.kms.outputs.ebs_kms_key_arn
+        Condition = {
+          Bool = { "kms:GrantIsForAWSResource" = "true" }
+        }
       }
+
+
     ]
   })
 }
