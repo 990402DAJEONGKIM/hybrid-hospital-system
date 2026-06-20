@@ -666,6 +666,12 @@ def lambda_handler(event, context):
     html_body    = _build_html(year, month, report_text)
     pdf_bytes    = _generate_pdf(year, month, report_text)
 
+    # 보고서 텍스트 → 벡터 생성 후 S3 저장 (DIY RAG)
+    try:
+        _save_vectors(year, month, report_text)
+    except Exception as e:
+        print(f"Vector save failed (non-fatal): {e}")
+
     # PDF → S3 보관
     s3_key = f"cost/cost-reports/{year}/{month}/infra_report_{year}_{month}.pdf"
     S3.put_object(
@@ -675,12 +681,6 @@ def lambda_handler(event, context):
         ContentType="application/pdf",
     )
     print(f"Report saved: s3://{STORAGE_BUCKET}/{s3_key} ({len(pdf_bytes)//1024}KB)")
-
-    # 보고서 텍스트 → 벡터 생성 후 S3 저장 (DIY RAG)
-    try:
-        _save_vectors(year, month, report_text)
-    except Exception as e:
-        print(f"Vector save failed (non-fatal): {e}")
 
     _send_email(year, month, html_body, pdf_bytes)
     print(f"Report sent: {year}-{month} → {ADMIN_EMAIL}")
