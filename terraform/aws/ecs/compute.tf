@@ -130,19 +130,6 @@ resource "aws_autoscaling_group" "ecs" {
     propagate_at_launch = true
   }
 
-  # Warm Pool — 콜드 스타트 해결
-  # Stopped 인스턴스를 미리 대기시켜 스케일 아웃 시 60~90초로 단축
-  # 비용: EBS $2.4/월만 과금 (인스턴스 시간 요금 없음)
-  warm_pool {
-    pool_state                  = "Stopped"
-    min_size                    = 1
-    max_group_prepared_capacity = 1
-
-    instance_reuse_policy {
-      reuse_on_scale_in = true
-    }
-  }
-
   # AMI 업데이트 시 EC2 인스턴스 자동 롤링 교체
   # Launch Template 변경(AMI 등) 감지 → 순차적으로 인스턴스 교체
   instance_refresh {
