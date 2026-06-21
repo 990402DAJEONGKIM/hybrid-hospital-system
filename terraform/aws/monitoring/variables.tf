@@ -17,7 +17,7 @@ variable "base_domain" {
 variable "ami_id" {
   description = "Momitoring Golden Image"
   type        = string
-  default     = "ami-0bcd0d69502826c8c"
+  default     = "ami-0314cae7928e1eedc"
 }
 
 variable "monitoring_private_ip" {

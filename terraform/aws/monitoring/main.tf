@@ -202,7 +202,6 @@ resource "aws_cloudwatch_metric_alarm" "aws-cw-prometheus-down-01" {
 resource "aws_cloudwatch_event_rule" "aws-monitoring-ec2-stop" {
   name        = "aws-monitoring-ec2-stop"
   description = "Monitoring EC2 중지/종료 즉시 감지 — Lambda 재구축 트리거"
-  state       = "DISABLED"  # 추가
 
   event_pattern = jsonencode({
     source      = ["aws.ec2"]
