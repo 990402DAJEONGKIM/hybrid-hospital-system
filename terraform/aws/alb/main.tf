@@ -224,7 +224,7 @@ resource "aws_lb_target_group" "aws-grafana-tg" {
   port        = 3000
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.main.id
-  target_type = "instance"
+  target_type = "ip" 
 
   health_check {
     path                = "/api/health"
@@ -244,7 +244,7 @@ resource "aws_lb_target_group" "aws-grafana-tg" {
 # ─────────────────────────────────────────────────────────
 resource "aws_lb_target_group_attachment" "aws-grafana-tg" {
   target_group_arn = aws_lb_target_group.aws-grafana-tg.arn
-  target_id        = data.terraform_remote_state.monitoring.outputs.monitoring_instance_id
+  target_id        = var.monitoring_private_ip 
   port             = 3000
 }
 

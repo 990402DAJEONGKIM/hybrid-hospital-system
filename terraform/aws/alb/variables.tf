@@ -14,3 +14,8 @@ variable "wazuh_manager_ip" {
   description = "Wazuh Manager Private IP"
   type        = string
 }
+
+variable "monitoring_private_ip" {
+  description = "Monitoring EC2 고정 Private IP - Grafana TG attachment용"
+  type        = string
+}
