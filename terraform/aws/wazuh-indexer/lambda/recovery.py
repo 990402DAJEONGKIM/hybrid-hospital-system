@@ -99,7 +99,9 @@ def _launch():
 
 def _attach(iid, vol_id):
     print("DEMO: 데이터 볼륨 재연결 중")
-    EC2.attach_volume(InstanceId=iid, VolumeId=vol_id, Device=DATA_DEVICE)
+    # 수정 260621 김강환 - AttachVolume API는 /dev/sdf 같은 전통적 이름만 허용.
+    # /dev/nvme1n1 같은 OS 인식용 이름은 mount 시점에만 사용.
+    EC2.attach_volume(InstanceId=iid, VolumeId=vol_id, Device="/dev/sdf")
     EC2.get_waiter("volume_in_use").wait(VolumeIds=[vol_id])
     print("DEMO: 데이터 볼륨 재연결 완료")
 
