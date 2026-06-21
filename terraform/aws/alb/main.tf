@@ -226,6 +226,10 @@ resource "aws_lb_target_group" "aws-grafana-tg" {
   vpc_id      = data.aws_vpc.main.id
   target_type = "ip" 
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   health_check {
     path                = "/api/health"
     protocol            = "HTTP"
