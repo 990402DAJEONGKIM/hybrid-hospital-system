@@ -360,7 +360,7 @@ resource "aws_lb_target_group" "keycloak" {
   port        = 80
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.main.id
-  target_type = "instance"
+  target_type = "ip"
 
   health_check {
     path                = "/"
@@ -382,7 +382,7 @@ resource "aws_lb_target_group" "keycloak" {
 
 resource "aws_lb_target_group_attachment" "keycloak" {
   target_group_arn = aws_lb_target_group.keycloak.arn
-  target_id        = aws_instance.aws-monitoring-01.id
+  target_id        = var.monitoring_private_ip  
   port             = 80
 }
 
