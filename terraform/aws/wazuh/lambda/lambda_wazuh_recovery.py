@@ -1,4 +1,5 @@
 # 강제 재배포용 더미 주석 - 260620 김강환
+# 수정 260621 김강환 - DEMO 로그 정리 (영상 촬영용, v2 스크립트와 동일 패턴)
 import os
 import time
 import boto3
@@ -37,17 +38,18 @@ def lambda_handler(event, context):
     state       = detail.get('state', '')
 
     print(f"[INFO] EC2 상태변화: {instance_id} → {state}")
-    print(f"DEMO: Wazuh 매니저 장애 감지 ({state})")
 
     if state not in ['stopped', 'terminated']:
         print("[INFO] stopped/terminated 아님. 종료.")
         return {"status": "SKIPPED"}
 
+    print(f"DEMO: Wazuh 매니저 장애 감지 ({state})")
+
     # 수정 260619 김강환
     # terminated: 외부 강제종료 포함, IP로 찾을 인스턴스가 없으므로 바로 재구축
     if state == 'terminated':
         print("[ACTION] terminated 감지 → IP 반납 대기 (30초)")
-        print("DEMO: 자동 복구 시작 - 30초 후 재구축 진행")
+        print("DEMO: 자동 복구 시작 - IP 반납 대기 중")
         time.sleep(30)
         _scenario1_rebuild(None)
         return {"status": "SUCCESS"}
@@ -65,6 +67,7 @@ def _scenario1_rebuild(target_id):
         try:
             ec2.terminate_instances(InstanceIds=[target_id])
             print(f"[ACTION] 인스턴스 종료 요청: {target_id}")
+            print("DEMO: 기존 서버 종료 중")
         except ClientError as e:
             print(f"[WARN] 종료 실패 (이미 종료됐을 수 있음): {e}")
 
@@ -75,6 +78,7 @@ def _scenario1_rebuild(target_id):
             WaiterConfig={'Delay': 5, 'MaxAttempts': 24}
         )
         print("[SUCCESS] 기존 인스턴스 종료 완료")
+        print("DEMO: 기존 서버 종료 완료")
         print("[ACTION] IP 반납 대기 중... (30초)")
         time.sleep(30)
 
@@ -113,6 +117,7 @@ def _scenario1_rebuild(target_id):
 
     # 추가 260619 김강환 - running 상태 대기 후 SSM 조회
     print("[ACTION] EC2 running 상태 대기 중...")
+    print("DEMO: 새 서버 부팅 대기 중")
     waiter = ec2.get_waiter('instance_running')
     waiter.wait(
         InstanceIds=[new_id],
@@ -122,14 +127,16 @@ def _scenario1_rebuild(target_id):
     print("DEMO: 새 서버 부팅 완료")
 
     try:
+        print("DEMO: 서버 연결 확인 중")
         _wait_ssm_online(new_id)
+        print("DEMO: 서버 연결 확인 완료")
     except RuntimeError as e:
         print(f"[ERROR] SSM 대기 실패, 생성된 인스턴스 정리: {new_id}")
         print("DEMO: 복구 실패 - 생성된 서버 정리 중")
         ec2.terminate_instances(InstanceIds=[new_id])
         raise
 
-    print("DEMO: 서버 연결 확인 완료, Wazuh 서비스 재기동 중")
+    print("DEMO: Wazuh 서비스 재기동 중")
     _run_ssm(new_id, [
         "systemctl restart wazuh-manager",
         "sleep 30",
