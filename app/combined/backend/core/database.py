@@ -10,8 +10,8 @@ DATABASE_READ_URL = os.getenv("DATABASE_READ_URL", DATABASE_URL)  # 미설정 �
 
 _sslmode = os.getenv("DB_SSLMODE", "require")
 _ssl     = {"sslmode": _sslmode} if _sslmode != "disable" else {}
-engine      = create_engine(DATABASE_URL,      connect_args=_ssl)
-read_engine = create_engine(DATABASE_READ_URL, connect_args=_ssl)
+engine      = create_engine(DATABASE_URL,      connect_args=_ssl, pool_size=20, max_overflow=30, pool_timeout=30)
+read_engine = create_engine(DATABASE_READ_URL, connect_args=_ssl, pool_size=20, max_overflow=30, pool_timeout=30)
 
 SessionLocal     = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 ReadSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=read_engine)
