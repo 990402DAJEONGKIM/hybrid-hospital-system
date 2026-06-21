@@ -18,22 +18,31 @@ def lambda_handler(event, context):
     instance_id = detail['EC2InstanceId']
     hook_name = detail['LifecycleHookName']
     asg_name = detail['AutoScalingGroupName']
+    origin = detail.get('Origin', 'AutoScalingGroup')
 
-    logger.info(f"Warm Pool → InService 전환 감지: {instance_id}")
+    logger.info(f"인스턴스 Launch 감지: {instance_id} (Origin={origin})")
 
     try:
-        resp = ssm.send_command(
-            InstanceIds=[instance_id],
-            DocumentName='AWS-RunShellScript',
-            Parameters={'commands': ['sudo systemctl restart ecs']}
-        )
-        logger.info(f"ECS 에이전트 재시작 명령 전송: {resp['Command']['CommandId']}")
+        if origin == 'WarmPool':
+            # Warm Pool 재기동: ECS 에이전트가 클러스터 재연결 안 하므로 재시작
+            resp = ssm.send_command(
+                InstanceIds=[instance_id],
+                DocumentName='AWS-RunShellScript',
+                Parameters={'commands': ['sudo systemctl restart ecs']}
+            )
+            logger.info(f"ECS 에이전트 재시작 명령 전송: {resp['Command']['CommandId']}")
+            time.sleep(10)
+        else:
+            # 신규 Launch: user_data가 ECS 에이전트 초기화 처리
+            # 등록까지 시간이 걸리므로 초기 대기
+            logger.info("신규 인스턴스 - user_data 초기화 대기 중")
+            time.sleep(30)
 
-        # ECS 에이전트 등록 대기 (5초 × 24회 = 최대 120초)
-        for _ in range(24):
+        # ECS 에이전트 등록 대기 (5초 × 48회 = 최대 240초)
+        for attempt in range(48):
             time.sleep(5)
             if _is_registered(instance_id):
-                logger.info(f"ECS 에이전트 등록 완료: {instance_id}")
+                logger.info(f"ECS 에이전트 등록 완료: {instance_id} (시도 {attempt + 1}회)")
                 _complete(hook_name, asg_name, instance_id, 'CONTINUE')
                 return
 
