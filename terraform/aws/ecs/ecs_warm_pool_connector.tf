@@ -93,7 +93,7 @@ resource "aws_lambda_function" "ecs_warm_pool_connector" {
   handler          = "lambda_function.lambda_handler"
   filename         = data.archive_file.ecs_warm_pool_connector.output_path
   source_code_hash = data.archive_file.ecs_warm_pool_connector.output_base64sha256
-  timeout          = 180
+  timeout          = 300
 
   environment {
     variables = {
@@ -109,7 +109,7 @@ resource "aws_autoscaling_lifecycle_hook" "warm_pool_launch" {
   name                   = "ecs-warm-pool-launch-hook"
   autoscaling_group_name = aws_autoscaling_group.ecs.name
   lifecycle_transition   = "autoscaling:EC2_INSTANCE_LAUNCHING"
-  heartbeat_timeout      = 300
+  heartbeat_timeout      = 360
   default_result         = "ABANDON"
 }
 
@@ -125,8 +125,6 @@ resource "aws_cloudwatch_event_rule" "warm_pool_launch" {
     detail-type = ["EC2 Instance-launch Lifecycle Action"]
     detail = {
       AutoScalingGroupName = [aws_autoscaling_group.ecs.name]
-      Origin               = ["WarmPool"]
-      Destination          = ["AutoScalingGroup"]
     }
   })
 
