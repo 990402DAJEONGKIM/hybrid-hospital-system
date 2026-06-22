@@ -80,6 +80,11 @@ data "aws_lb_target_group" "hospital" {
   name = "aws-hospital-tg"
 }
 
+# ALB — ALBRequestCountPerTarget 오토스케일링 메트릭 참조용
+data "aws_lb" "hospital" {
+  name = "aws-hospital-alb"
+}
+
 # monitoring EC2 Private IP — Alloy remote write 대상
 data "terraform_remote_state" "monitoring" {
   backend = "remote"
