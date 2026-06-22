@@ -126,8 +126,26 @@ def get_rds_admin_password() -> str:
     return json.loads(sm.get_secret_value(SecretId=secret_id)["SecretString"])["password"]
 
 
-def update_pglogical_node_interface(new_password: str, admin_password: str) -> None:
-    """Cloud SQL pglogical node_interface DSN 업데이트"""
+def update_pglogical_provider_interface(new_password: str, admin_password: str) -> None:
+    """
+    260622 박경수: 구독자(Cloud SQL)가 RDS(provider)에 붙는 rds_provider interface DSN을 새 비번으로 갱신.
+    [기존 버그] cloud_sql_subscriber 노드를 갱신해, 정작 RDS 접속용 rds_provider DSN이 옛 비번으로 방치됨
+               → 로테이션 후 구독자가 옛 비번으로 RDS 재접속 시도 → 'password authentication failed' 무한 반복.
+    [수정] 구독이 사용 중인 interface는 바로 drop 불가하므로
+           (1) 임시 이름으로 새 DSN interface 추가 → (2) 구독을 그 interface로 전환
+           → (3) 옛 interface 삭제 → (4) 임시를 원래 이름으로 되돌리기 → (5) 구독 재시작.
+    """
+    PROXY_IP   = os.environ.get("RDS_PROXY_IP", "10.10.1.37")   # HAProxy 경유 RDS 경로
+    PROXY_PORT = os.environ.get("RDS_PROXY_PORT", "5433")
+    PROVIDER_NODE = "rds_provider"
+    SUBSCRIPTION  = "rds_to_cloud_sql"
+    TMP_IF        = "rds_provider_rot"
+
+    new_dsn = (
+        f"host={PROXY_IP} port={PROXY_PORT} dbname=hospital "
+        f"user=pglogical_repl password={new_password} sslmode=require"
+    )
+
     conn = psycopg2.connect(
         host=CLOUD_SQL_IP, port=5432, user="hospital_app",
         password=admin_password, dbname="hospital",
@@ -136,33 +154,44 @@ def update_pglogical_node_interface(new_password: str, admin_password: str) -> N
     try:
         conn.autocommit = True
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT pglogical.alter_node_add_interface(
-                    node_name := 'cloud_sql_subscriber',
-                    interface_name := 'cloud_sql_subscriber',
-                    dsn := %s
+            # (1) 임시 이름으로 새 DSN interface 추가 (이미 있으면 드롭 후 재생성)
+            try:
+                cur.execute(
+                    "SELECT pglogical.alter_node_add_interface(%s, %s, %s)",
+                    (PROVIDER_NODE, TMP_IF, new_dsn),
                 )
-            """, (f"host={CLOUD_SQL_IP} port=5432 dbname=hospital user=pglogical_repl password={new_password} sslmode=require",))
-        logger.info("pglogical node_interface DSN 업데이트 완료")
-    except Exception as e:
-        if "already has interface" in str(e):
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT pglogical.alter_node_drop_interface(
-                        node_name := 'cloud_sql_subscriber',
-                        interface_name := 'cloud_sql_subscriber'
-                    )
-                """)
-                cur.execute("""
-                    SELECT pglogical.alter_node_add_interface(
-                        node_name := 'cloud_sql_subscriber',
-                        interface_name := 'cloud_sql_subscriber',
-                        dsn := %s
-                    )
-                """, (f"host={CLOUD_SQL_IP} port=5432 dbname=hospital user=pglogical_repl password={new_password} sslmode=require",))
-            logger.info("pglogical node_interface DSN 재생성 완료")
-        else:
-            raise
+            except psycopg2.Error:
+                cur.execute("SELECT pglogical.alter_subscription_interface(%s, %s)",
+                            (SUBSCRIPTION, "rds_provider"))   # 구독을 원래 if로 잠깐 되돌려 TMP 해제
+                cur.execute("SELECT pglogical.alter_node_drop_interface(%s, %s)",
+                            (PROVIDER_NODE, TMP_IF))
+                cur.execute("SELECT pglogical.alter_node_add_interface(%s, %s, %s)",
+                            (PROVIDER_NODE, TMP_IF, new_dsn))
+
+            # (2) 구독을 새 interface(TMP)로 전환
+            cur.execute("SELECT pglogical.alter_subscription_interface(%s, %s)",
+                        (SUBSCRIPTION, TMP_IF))
+
+            # (3) 옛 interface 삭제
+            try:
+                cur.execute("SELECT pglogical.alter_node_drop_interface(%s, %s)",
+                            (PROVIDER_NODE, "rds_provider"))
+            except psycopg2.Error:
+                pass  # 이미 없으면 무시
+
+            # (4) 새 DSN을 원래 이름(rds_provider)으로 재생성 후 구독 전환 → 이름 안정화
+            cur.execute("SELECT pglogical.alter_node_add_interface(%s, %s, %s)",
+                        (PROVIDER_NODE, "rds_provider", new_dsn))
+            cur.execute("SELECT pglogical.alter_subscription_interface(%s, %s)",
+                        (SUBSCRIPTION, "rds_provider"))
+            cur.execute("SELECT pglogical.alter_node_drop_interface(%s, %s)",
+                        (PROVIDER_NODE, TMP_IF))
+
+            # (5) 구독 재시작으로 새 DSN 즉시 반영
+            cur.execute("SELECT pglogical.alter_subscription_disable(%s, true)", (SUBSCRIPTION,))
+            cur.execute("SELECT pglogical.alter_subscription_enable(%s, true)", (SUBSCRIPTION,))
+
+        logger.info("rds_provider interface DSN 갱신 + 구독 전환/재시작 완료")
     finally:
         conn.close()
 
@@ -195,7 +224,7 @@ def rotate_passwords(request):
                 change_rds_password(username, new_password, rds_admin_password)
                 change_cloudsql_password(username, new_password, admin_password)
                 update_aws_secret(AWS_REPL_SECRET_ID, new_password)
-                update_pglogical_node_interface(new_password, admin_password)
+                update_pglogical_provider_interface(new_password, admin_password)  # 260622 박경수: cloud_sql_subscriber→rds_provider 교체
             else:
                 change_cloudsql_password(username, new_password, admin_password)
 
