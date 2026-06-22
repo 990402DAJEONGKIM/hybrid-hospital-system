@@ -39,8 +39,7 @@ resource "aws_iam_role_policy" "ecs_redeployer" {
         Effect = "Allow"
         Action = ["ecs:UpdateService"]
         Resource = [
-          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/aws-ecs-cluster-01/patient-service",
-          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/aws-ecs-cluster-01/staff-service",
+          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/aws-ecs-cluster-01/hospital-service",
         ]
       },
       {
@@ -64,11 +63,8 @@ resource "aws_lambda_function" "ecs_redeployer" {
 
   environment {
     variables = {
-      ECS_CLUSTER        = "aws-ecs-cluster-01"
-      PATIENT_SECRET_ARN = data.tfe_outputs.secrets.values.db_url_patient_secret_arn
-      PATIENT_SERVICE    = "patient-service"
-      READER_SECRET_ARN  = data.tfe_outputs.secrets.values.db_read_url_patient_secret_arn
-      HOSPITAL_SERVICE   = "hospital-service"
+      ECS_CLUSTER = "aws-ecs-cluster-01"
+      ECS_SERVICE = "hospital-service"
     }
   }
 
