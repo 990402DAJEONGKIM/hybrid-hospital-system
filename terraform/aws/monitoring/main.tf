@@ -2,6 +2,11 @@
 # 보안그룹 — Prometheus/Grafana EC2
 # ISMS-P 2.6.1 최소 허용 원칙
 # ─────────────────────────────────────────────────────────
+import {
+  to = aws_instance.aws-monitoring-01
+  id = "i-003ce133c6a668ae7"
+}
+
 resource "aws_security_group" "aws-monitoring-sg" {
   name        = "aws-monitoring-sg"
   description = "Prometheus + Grafana EC2 - app subnet"
