@@ -335,7 +335,7 @@ resource "google_compute_global_forwarding_rule" "dr_app" {
   name                  = "gcp-dr-staff-http"
   ip_address            = google_compute_global_address.dr_lb.id
   port_range            = "80"
-  target                = google_compute_target_http_proxy.dr_app.id
+  target                = google_compute_target_http_proxy.dr_app_redirect.id  # dr_app → dr_app_redirect
   load_balancing_scheme = "EXTERNAL_MANAGED"
 }
 
