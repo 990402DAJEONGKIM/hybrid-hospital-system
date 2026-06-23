@@ -1,5 +1,8 @@
 #instance.tf
-
+import {
+  to = aws_instance.aws-wazuh-01
+  id = "i-064cc9d2aee7f0a37"   # 위 명령 결과로 나온 ID
+}
 resource "aws_key_pair" "aws-wazuh-key" {
   key_name   = "aws-wazuh-key"
   public_key = var.ssh_public_key
