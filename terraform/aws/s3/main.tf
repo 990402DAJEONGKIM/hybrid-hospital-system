@@ -133,7 +133,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── VPC Flow Log (REJECT만) 365일 ───────────────────────
+  # ── VPC Flow Log (REJECT만) 365일. ───────────────────────
   rule {
     id     = "flowlogs-lifecycle"
     status = "Enabled"
@@ -156,7 +156,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── Wazuh DB 백업 7일 ────────────────────────────────────
+  # ── Wazuh DB 백업 7일 ───────────────────────────────────
   # wodle 수집 위치 추적용 .db 파일 — 재생성 가능
   rule {
     id     = "wazuh-db-backup-lifecycle"
@@ -195,6 +195,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     status = "Enabled"
     filter { prefix = "github-backup/source/" }
     expiration { days = var.github_backup_retention_days }
+    // 김다정, 2026.06.24 삭제: noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
   rule {
@@ -202,6 +203,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     status = "Enabled"
     filter { prefix = "github-backup/tfstate/" }
     expiration { days = var.github_backup_retention_days }
+    //김다정, 2026.06.24 삭제: noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
   rule {
@@ -209,6 +211,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     status = "Enabled"
     filter { prefix = "github-backup/logs/" }
     expiration { days = var.github_backup_log_retention_days }
+
+    //김다정, 2026.06.24 삭제: noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
   # RDS pgaudit 감사 로그 365일 (ISMS-P 2.9.1, 접근기록 1년 보존)- 260607 김강환
@@ -273,6 +277,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
+
+//김다정, 2026.06.24 추가: GitHub Actions 백업 365일 보존 후 삭제
   # ── Bedrock 비용 데이터 365일 ────────────────────────────
   rule {
     id     = "cost-raw-lifecycle"
