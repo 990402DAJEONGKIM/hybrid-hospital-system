@@ -16,6 +16,18 @@ variable "wazuh_log_glacier_days" {
   default     = 90
 }
 
+variable "security_log_glacier_days" {
+  description = "보안 감사 로그 Deep Archive 전환 기간(일)"
+  type        = number
+  default     = 90
+}
+
+variable "security_log_retention_days" {
+  description = "보안 감사 로그 최종 보존 기간(일) — 회사 정책 2년"
+  type        = number
+  default     = 730
+}
+
 #260526 st1 추가
 variable "db_dump_retention_days" {
   description = "DB 덤프 보존 기간 (일)"
@@ -46,17 +58,7 @@ variable "github_backup_log_retention_days" {
 }
 
 
-variable "flowlogs_retention_days" {
-  description = "VPC Flow Log 보존 기간 (일) — REJECT만 저장"
-  type        = number
-  default     = 365
-}
 
-variable "waf_retention_days" {
-  description = "WAF 로그 보존 기간 (일) — 이미 차단된 트래픽"
-  type        = number
-  default     = 90
-}
 
 variable "wazuh_db_backup_retention_days" {
   description = "Wazuh wodle DB 백업 보존 기간 (일) — 재생성 가능"

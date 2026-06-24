@@ -72,28 +72,28 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   bucket = aws_s3_bucket.storage.id
 
   # ── 보안 감사 로그 365일 (ISMS-P 2.9.1 필수) ────────────
-  # ── 보안 감사 로그 365일 (ISMS-P 2.9.1 필수) ────────────
+  # 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
   rule {
     id     = "cloudtrail-lifecycle"
     status = "Enabled"
     filter { prefix = "cloudtrail/" }
     transition {
-      days          = var.wazuh_log_glacier_days
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
-    expiration { days = var.wazuh_log_retention_days }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
-
   rule {
     id     = "guardduty-lifecycle"
     status = "Enabled"
     filter { prefix = "guardduty/" }
+    # 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
     transition {
-      days          = var.wazuh_log_glacier_days
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
-    expiration { days = var.wazuh_log_retention_days }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
@@ -125,38 +125,43 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     id     = "vpn-lifecycle"
     status = "Enabled"
     filter { prefix = "vpn/" }
+    # 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
     transition {
-      days          = var.wazuh_log_glacier_days
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
-    expiration { days = var.wazuh_log_retention_days }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── VPC Flow Log (REJECT만) 365일. ───────────────────────
+  # ── VPC Flow Log (REJECT만) 365일 ───────────────────────
   rule {
     id     = "flowlogs-lifecycle"
     status = "Enabled"
     filter { prefix = "flowlogs/" }
+    # 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
     transition {
-      days          = var.wazuh_log_glacier_days
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
-    expiration { days = var.flowlogs_retention_days }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── WAF 로그 90일 ────────────────────────────────────────
-  # WAF는 이미 차단된 트래픽 — 장기 보존 불필요
+  # ── WAF 로그 — 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
   rule {
     id     = "waf-lifecycle"
     status = "Enabled"
     filter { prefix = "waf/" }
-    expiration { days = var.waf_retention_days }
+    transition {
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
+    }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── Wazuh DB 백업 7일 ───────────────────────────────────
+  # ── Wazuh DB 백업 7일 ────────────────────────────────────
   # wodle 수집 위치 추적용 .db 파일 — 재생성 가능
   rule {
     id     = "wazuh-db-backup-lifecycle"
@@ -166,8 +171,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     noncurrent_version_expiration { noncurrent_days = 3 }
   }
 
-  # ── Wazuh Indexer 스냅샷 7일 ────────────────────────────
-  # alerts/archives/ 에 원본 있으므로 단기 보존
+  # ── Wazuh Indexer 스냅샷 — EBS 오염 시 즉시 복구용, Standard 유지 ──
   rule {
     id     = "wazuh-snapshots-lifecycle"
     status = "Enabled"
@@ -183,7 +187,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   filter { prefix = "db-dumps/" }
   transition {
     days          = var.db_dump_retention_days
-    storage_class = "GLACIER"
+    storage_class = "GLACIER_IR"
   }
   expiration { days = var.db_dump_expiration_days }
   noncurrent_version_expiration { noncurrent_days = 7 }
@@ -203,7 +207,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     status = "Enabled"
     filter { prefix = "github-backup/tfstate/" }
     expiration { days = var.github_backup_retention_days }
-    //김다정, 2026.06.24 삭제: noncurrent_version_expiration { noncurrent_days = 7 }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
   rule {
@@ -211,95 +215,96 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     status = "Enabled"
     filter { prefix = "github-backup/logs/" }
     expiration { days = var.github_backup_log_retention_days }
-
-    //김다정, 2026.06.24 삭제: noncurrent_version_expiration { noncurrent_days = 7 }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
-
-  # RDS pgaudit 감사 로그 365일 (ISMS-P 2.9.1, 접근기록 1년 보존)- 260607 김강환
+  
+  # RDS pgaudit 감사 로그 — 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
   rule {
     id     = "rds-lifecycle"
     status = "Enabled"
     filter { prefix = "rds/" }
     transition {
-      days          = var.wazuh_log_glacier_days
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
-    expiration { days = var.wazuh_log_retention_days }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
-# 온프레미스 감사 로그 365일 (ISMS-P 2.9.1) - 260608 김강환
+
+  # 온프레미스 감사 로그 — 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
   rule {
     id     = "onprem-audit-lifecycle"
     status = "Enabled"
     filter { prefix = "onprem/" }
     transition {
-      days          = var.wazuh_log_glacier_days
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
-    expiration { days = var.wazuh_log_retention_days }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
-  # ECS fastapi 감사 로그 365일 (ISMS-P 2.9.1) - 260608 김강환
+
+  # ECS fastapi 감사 로그 — 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
   rule {
     id     = "ecs-lifecycle"
     status = "Enabled"
     filter { prefix = "ecs/" }
     transition {
-      days          = var.wazuh_log_glacier_days
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
-    expiration { days = var.wazuh_log_retention_days }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # Lambda 로그 365일 보존 후 삭제, 90일 후 Glacier 전환
-  # ISMS-P 2.9.1: 감사 로그 1년 보존 의무 - 260610 김강환
+
+  # Lambda 로그 — 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
   rule {
     id     = "lambda-lifecycle"
     status = "Enabled"
     filter { prefix = "lambda/" }
     transition {
-      days          = var.wazuh_log_glacier_days   # 90일 후 Glacier IR 전환
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
-    expiration { days = var.wazuh_log_retention_days }          # 365일 후 삭제
-    noncurrent_version_expiration { noncurrent_days = 7 }       # 이전 버전 7일 후 삭제
-  }
-
-
-  # monitoring 대시보드 JSON + 초기화 스크립트 보존
-  # 365일 후 삭제, 재업로드로 갱신 가능 - 추가 260615 김강환
-  rule {
-    id     = "monitoring-lifecycle"
-    status = "Enabled"
-    filter { prefix = "monitoring/" }
-    expiration { days = 365 }
+    expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
 
-//김다정, 2026.06.24 추가: GitHub Actions 백업 365일 보존 후 삭제
-  # ── Bedrock 비용 데이터 365일 ────────────────────────────
+  # monitoring 운영 설정 파일(대시보드 JSON, 설치 스크립트) — EC2 재구축 시 재사용되는 인프라 구성요소
+  # 무기한 보존으로 변경, expiration 제거 - 260624 김강환
   rule {
-    id     = "cost-raw-lifecycle"
+    id     = "monitoring-config-lifecycle"
     status = "Enabled"
-    filter { prefix = "cost/cost-raw/" }
-    expiration { days = 365 }
+    filter { prefix = "monitoring/grafana/" }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
+    # Keycloak SSO 감사 로그 — 보안 로그 정책 90일 Deep Archive + 2년 보존 신규 추가 - 260624 김강환
   rule {
-    id     = "cost-reports-lifecycle"
+    id     = "monitoring-keycloak-audit-lifecycle"
     status = "Enabled"
-    filter { prefix = "cost/cost-reports/" }
-    expiration { days = 365 }
+    filter { prefix = "monitoring/keycloak/" }
+    transition {
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
+    }
+    expiration { days = var.security_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
+  }
+  rule {
+  id     = "monitoring-oauth2-audit-lifecycle"
+  status = "Enabled"
+  filter { prefix = "monitoring/oauth2-proxy/" }
+  transition {
+    days          = var.security_log_glacier_days
+    storage_class = "GLACIER"
+  }
+  expiration { days = var.security_log_retention_days }
+  noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  rule {
-    id     = "cost-vectors-lifecycle"
-    status = "Enabled"
-    filter { prefix = "cost/cost-vectors/" }
-    expiration { days = 365 }
-  }
 
 }
 
@@ -610,16 +615,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "aws-alb-logs-01" {
     status = "Enabled"
     filter {}
 
+    # 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
     transition {
-      days          = 90
-      storage_class = "GLACIER_IR"
+      days          = var.security_log_glacier_days
+      storage_class = "GLACIER"
     }
 
     expiration {
-      days = 365
+      days = var.security_log_retention_days
     }
+
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 }
+
 
 # ALB 로그 전달 허용 버킷 정책
 # logdelivery.elasticloadbalancing.amazonaws.com 서비스 주체 필요
