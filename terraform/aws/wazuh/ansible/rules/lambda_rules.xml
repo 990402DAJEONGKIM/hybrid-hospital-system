@@ -28,11 +28,12 @@
   </rule>
 
   <!-- Bedrock InvokeModel 실패 → 대시보드만 수정 260618 김강환 -->
-  <rule id="100840" level="7">
-    <if_sid>100830</if_sid>
-    <match>ValidationException|ThrottlingException|ServiceUnavailableException</match>
-    <description>Bedrock InvokeModel 실패 — 대시보드 기록</description>
-    <group>bedrock,error,aws,</group>
+  <!-- Vault OIDC public_keys 로테이션 — 무시 (added/deleted만) -->
+  <rule id="100084" level="0">
+    <if_sid>553,554</if_sid>
+    <field name="file" type="pcre2">vault-data/logical/.+/oidc_tokens/public_keys/</field>
+    <description>Vault OIDC 공개키 로테이션 — 무시</description>
+    <group>noise,</group>
   </rule>
 
 </group>

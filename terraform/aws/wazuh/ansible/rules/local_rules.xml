@@ -356,6 +356,46 @@
     <group>noise,</group>
   </rule>
 
+  <!-- 계정관리 명령 표준 잠금파일 억제 - 추가 260622 -->
+  <rule id="100073" level="0">
+    <if_sid>553,554</if_sid>
+    <field name="file" type="pcre2">/etc/(group|gshadow|passwd|shadow)\.lock$</field>
+    <description>계정관리 명령 표준 잠금파일 — 무시</description>
+    <group>noise,</group>
+  </rule>
+
+  <!-- ldconfig 캐시 갱신 억제 - 추가 260622 -->
+  <rule id="100078" level="0">
+    <if_sid>550,553,554</if_sid>
+    <field name="file">/etc/ld.so.cache</field>
+    <description>ldconfig 캐시 갱신 — 무시</description>
+    <group>noise,</group>
+  </rule>
+
+  <!-- 모니터링 에이전트(Alloy/Vector) 설정 배포 노이즈 억제 - 추가 260622 -->
+  <rule id="100080" level="0">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">/etc/alloy/|/etc/sysconfig/alloy|/etc/vector/|/etc/default/vector</field>
+    <description>모니터링 에이전트(Alloy/Vector) 설정 배포 — 무시</description>
+    <group>noise,</group>
+  </rule>
+
+  <!-- Vault Agent 동적 시크릿 갱신 노이즈 억제 - 추가 260622 -->
+  <rule id="100081" level="0">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">vault-agent/secrets/</field>
+    <description>Vault Agent 동적 시크릿 갱신 — 무시</description>
+    <group>noise,</group>
+  </rule>
+
+  <!-- /etc/alternatives 심볼릭 링크 노이즈 억제 - 패키지 설치/업데이트 시 update-alternatives가 자동 갱신 -->
+  <rule id="100082" level="0">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">/etc/alternatives/</field>
+    <description>update-alternatives 자동 갱신(패키지 설치/업데이트) — 무시</description>
+    <group>noise,</group>
+  </rule>
+
   <rule id="100121" level="0">
     <if_sid>5503</if_sid>
     <match>ssm-user</match>
@@ -398,7 +438,7 @@
 
 
 
-  
+
   <!-- 경로 제한 제거: FIM 감시 대상(/etc, /home/mspadmin) 전체에서 -->
   <!-- 60초 내 100회 이상 파일 추가 = 대량 암호화 패턴으로 판단 -->
   <!-- 대량 파일 암호화 — 랜섬웨어 핵심 패턴 - 수정 260616 김강환 -->
@@ -569,9 +609,9 @@
     <group>noise</group>
   </rule>
 
-  <!-- GCP OS Login 캐시 파일 갱신 억제 - 추가 260614 김강환 -->
+  <!-- GCP OS Login 캐시 파일 갱신 억제 - 수정 260622: modified 추가 -->
   <rule id="100549" level="0">
-    <if_sid>553,554</if_sid>
+    <if_sid>550,553,554</if_sid>
     <field name="file">/etc/oslogin_passwd.cache</field>
     <description>GCP OS Login 캐시 파일 정상 갱신 — 무시</description>
     <group>noise</group>
@@ -600,6 +640,14 @@
     <if_sid>80202</if_sid>
     <field name="aws.userAgent">dlm.amazonaws.com</field>
     <description>DLM 자동 스냅샷 태그 — 억제</description>
+    <group>noise,</group>
+  </rule>
+
+  <!-- ECS AutoScaling 자동 종료/정지 — 정상 인프라 동작 억제 추가 260622 김강환 -->
+  <rule id="80212" level="0">
+    <if_sid>80202</if_sid>
+    <field name="aws.userIdentity.sessionContext.sessionIssuer.userName">AWSServiceRoleForAutoScaling</field>
+    <description>ECS AutoScaling 자동 인스턴스 종료/정지 — 억제</description>
     <group>noise,</group>
   </rule>
 
