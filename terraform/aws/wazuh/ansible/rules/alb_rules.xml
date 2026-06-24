@@ -1,37 +1,65 @@
+ rules · XML
 <!-- =========================================================
-     lambda_rules.xml
-     AWS Lambda 실행 로그 탐지 룰
-
-     룰 ID 범위: 100830~100849
-     수정 260618 김강환: 디코더 기반으로 룰 재설계
-       [ERROR] → apache-errorlog(30101)
-       Task timed out → 디코더 없음(1002)
-
-     수집 경로: CloudWatch Logs → Wazuh wodle aws-s3 (5분마다)
-
+     alb_rules.xml
+     AWS ALB 액세스 로그 탐지 룰
+ 
+     룰 ID 범위: 100870~100879
+     수집 경로: S3 wodle → aws-k2p-alb-01 버킷
+ 
      ISMS-P 2.9.1 로그 관리
+     추가 260616 김강환
      ========================================================= -->
-
-<group name="lambda,aws,">
-
-  <!-- Lambda [ERROR] 탐지 → Slack 수정 260618 김강환 -->
-  <rule id="100830" level="12">
-    <if_sid>30101</if_sid>
-    <description>Lambda 실행 실패 탐지 — [ERROR]</description>
-    <group>lambda,error,aws,</group>
+ 
+<group name="alb,aws,">
+ 
+  <!-- ALB 액세스 로그 베이스 룰 -->
+  <rule id="100870" level="0">
+    <decoded_as>json</decoded_as>
+    <location>Wazuh-AWS</location>
+    <field name="aws.source">alb</field>
+    <description>ALB 액세스 로그</description>
+    <group>alb,aws,</group>
   </rule>
-  <!-- Lambda 타임아웃 탐지 → Slack 수정 260618 김강환 -->
-  <rule id="100831" level="12">
-    <decoded_as>lambda-timeout</decoded_as>
-    <description>Lambda 타임아웃</description>
-    <group>lambda,timeout,aws,</group>
+ 
+  <!-- ELB 헬스체크 억제 — 정상 동작 노이즈 제거 -->
+  <rule id="100871" level="0">
+    <if_sid>100870</if_sid>
+    <field name="aws.user_agent">ELB-HealthChecker</field>
+    <description>ALB 헬스체크 — 무시</description>
+    <group>noise,</group>
   </rule>
-  <!-- Bedrock InvokeModel 실패 → 대시보드만 수정 260618 김강환 -->
-  <rule id="100840" level="7">
-    <if_sid>100830</if_sid>
-    <match>ValidationException|ThrottlingException|ServiceUnavailableException</match>
-    <description>Bedrock InvokeModel 실패 — 대시보드 기록</description>
-    <group>bedrock,error,aws,</group>
+ 
+  <!-- 5xx 단건 — level 0 (대시보드 비노출, 폭증 카운터 역할) -->
+  <rule id="100872" level="0">
+    <if_sid>100870</if_sid>
+    <field name="aws.elb_status_code">^5</field>
+    <description>ALB 5xx 단건 — 무시</description>
+    <group>alb,error,</group>
   </rule>
-
+ 
+  <!-- 5xx 폭증 — 5분 내 50회 이상 → Slack -->
+  <rule id="100873" level="12" frequency="50" timeframe="300">
+    <if_matched_sid>100872</if_matched_sid>
+    <description>ALB 5xx 폭증 — 서비스 장애 의심 (5분 내 50회 이상)</description>
+    <group>alb,error,availability,</group>
+    <mitre><id>T1499</id></mitre>
+  </rule>
+ 
+  <!-- 동일 IP 대량 요청 — 1분 내 500회 이상 → Slack -->
+  <rule id="100874" level="12" frequency="500" timeframe="60">
+    <if_matched_sid>100870</if_matched_sid>
+    <same_field>aws.client_ip</same_field>
+    <description>ALB DDoS 의심 — 동일 IP 대량 요청 (1분 내 500회 이상) IP: $(aws.client_ip)</description>
+    <group>alb,ddos,attack,</group>
+    <mitre><id>T1499</id></mitre>
+  </rule>
+ 
+  <!-- ALB 헬스체크 WAF 403 억제 — 정상 동작 노이즈 제거 추가 260617 김강환 -->
+  <rule id="100875" level="0">
+    <if_sid>80328</if_sid>
+    <field name="aws.user_agent" type="pcre2">ELB-HealthChecker</field>
+    <description>ALB 헬스체크 WAF 403 억제</description>
+    <group>noise,</group>
+  </rule>
+ 
 </group>

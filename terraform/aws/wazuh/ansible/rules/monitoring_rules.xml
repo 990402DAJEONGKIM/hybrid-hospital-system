@@ -77,7 +77,13 @@
     <description>토큰 갱신 실패 — 정상 세션 만료 억제</description>
     <group>noise,</group>
   </rule>
-
+  <!-- OIDC 토큰 교환 400 억제 — 인증코드 타이밍 이슈, 정상 흐름 추가 260622 김강환 -->
+  <rule id="100824" level="0">
+    <if_sid>100821</if_sid>
+    <field name="data.url">/realms/mzclinic/protocol/openid-connect/token</field>
+    <description>Keycloak OIDC 토큰 교환 400 — 인증코드 타이밍 이슈 억제</description>
+    <group>noise,</group>
+  </rule>
 
 
   <!-- =========================================================

@@ -155,23 +155,28 @@
     <group>noise</group>
   </rule>
 
-  <!-- vault-data/sys/token/ added/deleted 무시 -->
-  <!-- 이유: FastAPI가 Vault에 로그인할 때마다 토큰 파일 생성, 만료 시 삭제 -->
-  <!-- modified는 탐지 유지 — 토큰 파일 내용 변조는 이상 징후 -->
-  <rule id="100051" level="0">
+  <!-- vault-data/sys/expire/id/auth/approle/login/ added/deleted 무시 -->
+  <!-- 이유: AppRole 로그인 시 lease 파일 생성, 만료 시 삭제 -->
+  <!-- modified는 탐지 유지 -->
+  <rule id="100054" level="0">
     <if_sid>553,554</if_sid>
-    <field name="file" type="pcre2">vault-data/sys/token/(id|accessor)/</field>
-    <description>Vault 토큰 발급/만료 정상 동작 — 무시</description>
+    <field name="file" type="pcre2">vault-data/sys/expire/id/auth/approle/login/</field>
+    <description>Vault AppRole 로그인 lease 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
 
-  <!-- vault-data/sys/expire/token/ added/deleted 무시 -->
-  <!-- 이유: 토큰 lease 생성/만료 시 Vault 내부적으로 파일 생성/삭제 -->
-  <!-- modified는 탐지 유지 -->
+
+
+
+
+  <!-- vault-data/sys/expire/token/ added/deleted/modified 무시 -->
+  <!-- 수정 260622: modified(550)도 노이즈로 추가 — lease 갱신 빈도가 높아 -->
+  <!-- 대시보드 노이즈가 됨. 토큰 비활성화(sys/audit/file 삭제 등)는 -->
+  <!-- 100047이 별도로 잡고 있으므로 보안 공백 없음 -->
   <rule id="100052" level="0">
-    <if_sid>553,554</if_sid>
+    <if_sid>550,553,554</if_sid>
     <field name="file" type="pcre2">vault-data/sys/expire/token/</field>
-    <description>Vault 토큰 lease 생성/만료 정상 동작 — 무시</description>
+    <description>Vault 토큰 lease 생성/만료/갱신 정상 동작 — 무시</description>
     <group>noise</group>
   </rule>
 
