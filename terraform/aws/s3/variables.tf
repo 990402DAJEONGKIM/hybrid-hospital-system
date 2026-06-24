@@ -34,13 +34,15 @@ variable "db_dump_expiration_days" {
 variable "github_backup_retention_days" {
   description = "GitHub 백업 보존 기간 (일) — source/, tfstate/"
   type        = number
-  default     = 90
+  //김다정, 2026.06.24 변경: 7일로 변경
+  default     = 7
 }
 
 variable "github_backup_log_retention_days" {
-  description = "GitHub 백업 증적 로그 보존 기간 (일) — ISMS-P 2.9.1"
+  description = "GitHub 백업 증적 로그 보존 기간 (일)"
   type        = number
-  default     = 365
+  //김다정, 2026.06.24 변경: 7일로 변경
+  default     = 7
 }
 
 

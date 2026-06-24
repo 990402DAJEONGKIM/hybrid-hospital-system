@@ -189,13 +189,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── GitHub 백업 소스/tfstate 90일 ────────────────────────
+  # ── GitHub 백업 소스/tfstate/logs 7일 ───────────────────
   rule {
     id     = "github-backup-source-lifecycle"
     status = "Enabled"
     filter { prefix = "github-backup/source/" }
     expiration { days = var.github_backup_retention_days }
-    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
   rule {
@@ -203,16 +202,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     status = "Enabled"
     filter { prefix = "github-backup/tfstate/" }
     expiration { days = var.github_backup_retention_days }
-    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── GitHub 증적 로그 365일 (ISMS-P 2.9.1) ───────────────
   rule {
     id     = "github-backup-logs-lifecycle"
     status = "Enabled"
     filter { prefix = "github-backup/logs/" }
     expiration { days = var.github_backup_log_retention_days }
-    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
   # RDS pgaudit 감사 로그 365일 (ISMS-P 2.9.1, 접근기록 1년 보존)- 260607 김강환
@@ -277,6 +273,27 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
+  # ── Bedrock 비용 데이터 365일 ────────────────────────────
+  rule {
+    id     = "cost-raw-lifecycle"
+    status = "Enabled"
+    filter { prefix = "cost/cost-raw/" }
+    expiration { days = 365 }
+  }
+
+  rule {
+    id     = "cost-reports-lifecycle"
+    status = "Enabled"
+    filter { prefix = "cost/cost-reports/" }
+    expiration { days = 365 }
+  }
+
+  rule {
+    id     = "cost-vectors-lifecycle"
+    status = "Enabled"
+    filter { prefix = "cost/cost-vectors/" }
+    expiration { days = 365 }
+  }
 
 }
 
