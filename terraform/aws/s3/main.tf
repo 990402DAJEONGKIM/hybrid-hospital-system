@@ -134,7 +134,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── VPC Flow Log (REJECT만) 2년 ───────────────────────
+  # ── VPC Flow Log (REJECT만) 365일 ───────────────────────
   rule {
     id     = "flowlogs-lifecycle"
     status = "Enabled"
@@ -160,7 +160,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
-  
+
   # ── Wazuh DB 백업 7일 ────────────────────────────────────
   # wodle 수집 위치 추적용 .db 파일 — 재생성 가능
   rule {
@@ -193,13 +193,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── GitHub 백업 소스/tfstate 90일 ────────────────────────
+  # ── GitHub 백업 소스/tfstate/logs 7일 ───────────────────
   rule {
     id     = "github-backup-source-lifecycle"
     status = "Enabled"
     filter { prefix = "github-backup/source/" }
     expiration { days = var.github_backup_retention_days }
-    noncurrent_version_expiration { noncurrent_days = 7 }
+    // 김다정, 2026.06.24 삭제: noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
   rule {
@@ -207,15 +207,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     status = "Enabled"
     filter { prefix = "github-backup/tfstate/" }
     expiration { days = var.github_backup_retention_days }
-
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
 
-  # ── GitHub 증적 로그 365일 (ISMS-P 2.9.1) ───────────────
   rule {
     id     = "github-backup-logs-lifecycle"
     status = "Enabled"
     filter { prefix = "github-backup/logs/" }
     expiration { days = var.github_backup_log_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 7 }
   }
   
   # RDS pgaudit 감사 로그 — 보안 로그 정책 90일 Deep Archive + 2년 보존으로 변경 - 260624 김강환
@@ -293,53 +293,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
     expiration { days = var.security_log_retention_days }
     noncurrent_version_expiration { noncurrent_days = 7 }
   }
-
-  # OAuth2-Proxy 감사 로그 — 보안 로그 정책 90일 Deep Archive + 2년 보존 신규 추가 - 260624 김강환
   rule {
-    id     = "monitoring-oauth2-audit-lifecycle"
-    status = "Enabled"
-    filter { prefix = "monitoring/oauth2-proxy/" }
-    transition {
-      days          = var.security_log_glacier_days
-      storage_class = "GLACIER"
-    }
-    expiration { days = var.security_log_retention_days }
-    noncurrent_version_expiration { noncurrent_days = 7 }
+  id     = "monitoring-oauth2-audit-lifecycle"
+  status = "Enabled"
+  filter { prefix = "monitoring/oauth2-proxy/" }
+  transition {
+    days          = var.security_log_glacier_days
+    storage_class = "GLACIER"
   }
-  //김다정, 2026.06.24 추가: GitHub Actions 백업 365일 보존 후 삭제
-  # ── Bedrock 비용 데이터 365일 ────────────────────────────
-  rule {
-    id     = "cost-raw-lifecycle"
-    status = "Enabled"
-    filter { prefix = "cost/cost-raw/" }
-    expiration { days = 365 }
+  expiration { days = var.security_log_retention_days }
+  noncurrent_version_expiration { noncurrent_days = 7 }
   }
-
-  rule {
-    id     = "cost-reports-lifecycle"
-    status = "Enabled"
-    filter { prefix = "cost/cost-reports/" }
-    expiration { days = 365 }
-  }
-
-  rule {
-    id     = "cost-vectors-lifecycle"
-    status = "Enabled"
-    filter { prefix = "cost/cost-vectors/" }
-    expiration { days = 365 }
-  }
-
-
-
-
 
 
 }
-
-
-
-
-
 
 
 
