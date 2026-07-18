@@ -7,7 +7,7 @@ hospital-hybrid-infrastructure/
 │   └── workflows/          # GitHub Actions (CI/CD) 워크플로우 정의
 ├── terraform/              # 인프라 코드 (IaC)
 │   ├── modules/            # 공통 재사용 모듈 (VPC, SG, IAM 등)
-│   ├── aws/                # AWS 인프라 (EKS, RDS, S3, WAF 등)
+│   ├── aws/                # AWS 인프라 (EKS, RDS, S3, WAF, Wazuh 등)
 │   ├── gcp/                # GCP 인프라 (Cold Standby DR, Cloud Storage 등)
 │   └── onprem/             # On-Premise (VMware, EMR 서버, Wazuh Manager 등)
 ├── app/                    # 병원 웹 사이트 소스 코드 (Dockerize 대상)
